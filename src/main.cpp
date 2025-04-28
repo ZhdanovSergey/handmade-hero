@@ -1,24 +1,72 @@
 #include <windows.h>
 
-LRESULT MainWindowCallback(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
-	switch (message) {		
+static HBITMAP bitmapHandle;
+static HDC bitmapDeviceContext;
+static BITMAPINFO bitmapInfo;
+static void *bitmapMemory;
+
+static void Win32ResizeDIBSection(int width, int height) {
+	if (bitmapHandle) {
+		DeleteObject(bitmapHandle);
+	}
+	
+	if (!bitmapDeviceContext) {
+		bitmapDeviceContext = CreateCompatibleDC(0);
+	}
+
+	// TODO: how to init const fields once?
+	BITMAPINFOHEADER bmiHeader = bitmapInfo.bmiHeader;
+	bmiHeader.biSize = sizeof(bmiHeader);
+	bmiHeader.biWidth = width;
+	bmiHeader.biHeight = height;
+	bmiHeader.biPlanes = 1;
+	bmiHeader.biBitCount = 32;
+	bmiHeader.biCompression = BI_RGB;
+
+	bitmapHandle = CreateDIBSection(
+		bitmapDeviceContext, &bitmapInfo,
+		DIB_RGB_COLORS, &bitmapMemory,
+		0, 0
+	);
+}
+
+static void Win32UpdateWindow(HDC deviceContext, int x, int y, int width, int height) {
+	StretchDIBits(
+		deviceContext,
+		x, y, width, height,
+		x, y, width, height,
+		bitmapMemory, &bitmapInfo,
+		DIB_RGB_COLORS, SRCCOPY
+	);
+}
+
+LRESULT Win32MainWindowCallback(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
+	switch (message) {
+		case WM_SIZE: {
+			RECT clientRect;
+			GetClientRect(window, &clientRect);
+			int width = clientRect.right - clientRect.left;
+			int height = clientRect.bottom - clientRect.top;
+			Win32ResizeDIBSection(width, height);
+		} break;
+
 		case WM_PAINT: {
 			PAINTSTRUCT paintStruct;
+			RECT rcPaint = paintStruct.rcPaint;
 			HDC deviceContext = BeginPaint(window, &paintStruct);
 
-			RECT rcPaint = paintStruct.rcPaint;
-			PatBlt(
+			Win32UpdateWindow(
 				deviceContext,
-				rcPaint.left,
-				rcPaint.top,
+				rcPaint.left, rcPaint.top,
 				rcPaint.right - rcPaint.left,
-				rcPaint.bottom - rcPaint.top,
-				BLACKNESS
+				rcPaint.bottom - rcPaint.top
 			);
 
 			EndPaint(window, &paintStruct);
 		} break;
 
+		// TODO: check why close button not working before we move or resize window
+		case WM_CLOSE:
 		case WM_DESTROY: {
 			PostQuitMessage(0);
 		} break;
@@ -35,7 +83,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	WNDCLASSA windowClass = {};
 	windowClass.lpszClassName = "HandmadeHeroWindowClass";
 	windowClass.hInstance = hInstance;
-	windowClass.lpfnWndProc = MainWindowCallback;
+	windowClass.lpfnWndProc = Win32MainWindowCallback;
 
 	RegisterClassA(&windowClass);
 
@@ -50,13 +98,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		MSG message;
 		BOOL messageResult = GetMessageA(&message, windowHandle, 0, 0);
 
-		if (messageResult > 0) {
-			TranslateMessage(&message);
-			DispatchMessageA(&message);
-		} else {
-			break;
+		if (messageResult <= 0) {
+			return 0;
 		}
-	}
 
-	return 0;
+		TranslateMessage(&message);
+		DispatchMessageA(&message);
+	}
 }
