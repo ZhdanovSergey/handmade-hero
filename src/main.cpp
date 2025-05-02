@@ -1,74 +1,75 @@
+#include <stdint.h>
 #include <windows.h>
 
-static HBITMAP bitmapHandle;
-static HDC bitmapDeviceContext;
-static BITMAPINFO bitmapInfo;
-static void *bitmapMemory;
+bool isAppRunning = true;
+BITMAPINFO bitmapInfo = {};
+int bitmapWidth = 0;
+int bitmapHeight = 0;
+void *bitmapMemory = nullptr;
 
-static void Win32ResizeDIBSection(int width, int height) {
-	if (bitmapHandle) {
-		DeleteObject(bitmapHandle);
+void RenderGradient(const int blueOffset, const int greenOffset) {
+	auto *pixel = (uint32_t *) bitmapMemory;
+
+	for (auto y = 0; y < bitmapHeight; y++) {
+		for (auto x = 0; x < bitmapWidth; x++) {
+			uint8_t green = y + greenOffset;
+			uint8_t blue = x + blueOffset;
+			*pixel++ = (uint32_t) ((green << 8) | blue);
+		}
 	}
-	
-	if (!bitmapDeviceContext) {
-		bitmapDeviceContext = CreateCompatibleDC(0);
+}
+
+void Win32ResizeDIBSection(const RECT *clientRect) {
+	if (bitmapMemory) {
+		VirtualFree(bitmapMemory, NULL, MEM_RELEASE);
+	} else {
+		bitmapInfo.bmiHeader.biSize = sizeof(bitmapInfo.bmiHeader);
+		bitmapInfo.bmiHeader.biPlanes = 1;
+		bitmapInfo.bmiHeader.biBitCount = 32;
+		bitmapInfo.bmiHeader.biCompression = BI_RGB;
 	}
 
-	// TODO: how to init const fields once?
-	BITMAPINFOHEADER bmiHeader = bitmapInfo.bmiHeader;
-	bmiHeader.biSize = sizeof(bmiHeader);
-	bmiHeader.biWidth = width;
-	bmiHeader.biHeight = height;
-	bmiHeader.biPlanes = 1;
-	bmiHeader.biBitCount = 32;
-	bmiHeader.biCompression = BI_RGB;
+	bitmapWidth = clientRect->right - clientRect->left;
+	bitmapHeight = clientRect->bottom - clientRect->top;
 
-	bitmapHandle = CreateDIBSection(
-		bitmapDeviceContext, &bitmapInfo,
-		DIB_RGB_COLORS, &bitmapMemory,
-		0, 0
+	bitmapInfo.bmiHeader.biWidth = bitmapWidth;
+	bitmapInfo.bmiHeader.biHeight = - bitmapHeight;
+
+	const auto bytesPerPixel = 4;
+	const auto bitmapMemorySize = bytesPerPixel * bitmapWidth * bitmapHeight;
+	bitmapMemory = VirtualAlloc(NULL, bitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
+}
+
+void Win32UpdateWindow(const HDC deviceContext, const RECT *paintRect) {
+	const auto paintWidth = paintRect->right - paintRect->left;
+	const auto paintHeight = paintRect->bottom - paintRect->top;
+
+	StretchDIBits(deviceContext,
+		NULL, NULL, bitmapWidth, bitmapHeight,
+		NULL, NULL, paintWidth, paintHeight,
+		bitmapMemory, &bitmapInfo, DIB_RGB_COLORS, SRCCOPY
 	);
 }
 
-static void Win32UpdateWindow(HDC deviceContext, int x, int y, int width, int height) {
-	StretchDIBits(
-		deviceContext,
-		x, y, width, height,
-		x, y, width, height,
-		bitmapMemory, &bitmapInfo,
-		DIB_RGB_COLORS, SRCCOPY
-	);
-}
-
-LRESULT Win32MainWindowCallback(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT Win32MainWindowCallback(const HWND window, const UINT message, const WPARAM wParam, const LPARAM lParam) {
 	switch (message) {
 		case WM_SIZE: {
 			RECT clientRect;
 			GetClientRect(window, &clientRect);
-			int width = clientRect.right - clientRect.left;
-			int height = clientRect.bottom - clientRect.top;
-			Win32ResizeDIBSection(width, height);
+			Win32ResizeDIBSection(&clientRect);
 		} break;
 
 		case WM_PAINT: {
 			PAINTSTRUCT paintStruct;
-			RECT rcPaint = paintStruct.rcPaint;
-			HDC deviceContext = BeginPaint(window, &paintStruct);
-
-			Win32UpdateWindow(
-				deviceContext,
-				rcPaint.left, rcPaint.top,
-				rcPaint.right - rcPaint.left,
-				rcPaint.bottom - rcPaint.top
-			);
-
+			const auto deviceContext = BeginPaint(window, &paintStruct);
+			Win32UpdateWindow(deviceContext, &paintStruct.rcPaint);
 			EndPaint(window, &paintStruct);
 		} break;
 
-		// TODO: check why close button not working before we move or resize window
 		case WM_CLOSE:
-		case WM_DESTROY: {
-			PostQuitMessage(0);
+		case WM_DESTROY:
+		case WM_QUIT: {
+			isAppRunning = false;
 		} break;
 
 		default: {
@@ -76,33 +77,46 @@ LRESULT Win32MainWindowCallback(HWND window, UINT message, WPARAM wParam, LPARAM
 		};
 	}
 
-	return 0;
+	return NULL;
 }
 
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
-	WNDCLASSA windowClass = {};
-	windowClass.lpszClassName = "HandmadeHeroWindowClass";
-	windowClass.hInstance = hInstance;
-	windowClass.lpfnWndProc = Win32MainWindowCallback;
+int wWinMain(const HINSTANCE hInstance, const HINSTANCE hPrevInstance, const PWSTR pCmdLine, const int nCmdShow) {
+	const WNDCLASSA windowClass = {
+		.lpfnWndProc = Win32MainWindowCallback,
+		.hInstance = hInstance,
+		.lpszClassName = "HandmadeHeroWindowClass",
+	};
 
 	RegisterClassA(&windowClass);
 
-	HWND windowHandle = CreateWindowExA(
-		0, windowClass.lpszClassName, "Handmade Hero",
-		WS_TILEDWINDOW | WS_VISIBLE,
+	const auto windowName = "Handmade Hero";
+	const auto style = WS_TILEDWINDOW | WS_VISIBLE;
+	const auto window = CreateWindowExA(
+		NULL, windowClass.lpszClassName, windowName, style,
 		CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-		0, 0, hInstance, 0
+		NULL, NULL, hInstance, NULL
 	);
 
-	while (true) {
-		MSG message;
-		BOOL messageResult = GetMessageA(&message, windowHandle, 0, 0);
+	auto blueOffset = 0;
 
-		if (messageResult <= 0) {
-			return 0;
+	while (isAppRunning) {
+		RenderGradient(blueOffset, 0);
+		blueOffset++;
+
+		auto deviceContext = GetDC(window);
+		RECT clientRect;
+		GetClientRect(window, &clientRect);
+		Win32UpdateWindow(deviceContext, &clientRect);
+		ReleaseDC(window, deviceContext);
+
+		MSG message;
+		if (!PeekMessageA(&message, window, NULL, NULL, PM_REMOVE)) {
+			continue;
 		}
 
 		TranslateMessage(&message);
 		DispatchMessageA(&message);
 	}
+
+	return NULL;
 }
