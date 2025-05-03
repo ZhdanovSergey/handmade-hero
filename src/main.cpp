@@ -1,74 +1,90 @@
 #include <stdint.h>
 #include <windows.h>
 
+struct ScreenBuffer {
+	BITMAPINFO bitmapInfo = {
+		.bmiHeader = {
+			.biSize = sizeof(BITMAPINFOHEADER),
+			.biPlanes = 1,
+			.biBitCount = 32,
+			.biCompression = BI_RGB,
+		},
+	};
+
+	void* memory = nullptr;
+
+	int getWidth() {
+		return this->bitmapInfo.bmiHeader.biWidth;
+	}
+
+	void setWidth(int width) {
+		this->bitmapInfo.bmiHeader.biWidth = width;
+	}
+
+	int getHeight() {
+		return abs(this->bitmapInfo.bmiHeader.biHeight);
+	}
+
+	void setHeight(int height) {
+		this->bitmapInfo.bmiHeader.biHeight = - height;
+	}
+
+	int getMemorySize() {
+		const int bytesPerPixel = this->bitmapInfo.bmiHeader.biBitCount / 8;
+		return bytesPerPixel * this->getWidth() * this->getHeight();
+	}
+};
+
 bool isAppRunning = true;
-BITMAPINFO bitmapInfo = {};
-int bitmapWidth = 0;
-int bitmapHeight = 0;
-void *bitmapMemory = nullptr;
+ScreenBuffer screenBuffer = {};
 
 void RenderGradient(const int blueOffset, const int greenOffset) {
-	auto *pixel = (uint32_t *) bitmapMemory;
+	auto pixel = (uint32_t*) screenBuffer.memory;
 
-	for (auto y = 0; y < bitmapHeight; y++) {
-		for (auto x = 0; x < bitmapWidth; x++) {
-			uint8_t green = y + greenOffset;
-			uint8_t blue = x + blueOffset;
-			*pixel++ = (uint32_t) ((green << 8) | blue);
+	for (int y = 0; y < screenBuffer.getHeight(); y++) {
+		for (int x = 0; x < screenBuffer.getWidth(); x++) {
+			uint32_t green = (uint8_t) (y + greenOffset);
+			uint32_t blue = (uint8_t) (x + blueOffset);
+			*pixel++ = ((green << 8) | blue);
 		}
 	}
 }
 
-void Win32ResizeDIBSection(const RECT *clientRect) {
-	if (bitmapMemory) {
-		VirtualFree(bitmapMemory, NULL, MEM_RELEASE);
-	} else {
-		bitmapInfo.bmiHeader.biSize = sizeof(bitmapInfo.bmiHeader);
-		bitmapInfo.bmiHeader.biPlanes = 1;
-		bitmapInfo.bmiHeader.biBitCount = 32;
-		bitmapInfo.bmiHeader.biCompression = BI_RGB;
+void ResizeScreenBuffer(const int width, const int height) {
+	if (screenBuffer.memory) {
+		VirtualFree(screenBuffer.memory, 0, MEM_RELEASE);
 	}
 
-	bitmapWidth = clientRect->right - clientRect->left;
-	bitmapHeight = clientRect->bottom - clientRect->top;
-
-	bitmapInfo.bmiHeader.biWidth = bitmapWidth;
-	bitmapInfo.bmiHeader.biHeight = - bitmapHeight;
-
-	const auto bytesPerPixel = 4;
-	const auto bitmapMemorySize = bytesPerPixel * bitmapWidth * bitmapHeight;
-	bitmapMemory = VirtualAlloc(NULL, bitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
+	screenBuffer.setWidth(width);
+	screenBuffer.setHeight(height);
+	screenBuffer.memory = VirtualAlloc(nullptr, screenBuffer.getMemorySize(), MEM_COMMIT, PAGE_READWRITE);
 }
 
-void Win32UpdateWindow(const HDC deviceContext, const RECT *paintRect) {
-	const auto paintWidth = paintRect->right - paintRect->left;
-	const auto paintHeight = paintRect->bottom - paintRect->top;
-
+void DisplayScreenBuffer(const HWND window, const HDC deviceContext) {
+	RECT clientRect;
+	GetClientRect(window, &clientRect);
+	const int windowWidth = clientRect.right - clientRect.left;
+	const int windowHeight = clientRect.bottom - clientRect.top;
+	
 	StretchDIBits(deviceContext,
-		NULL, NULL, bitmapWidth, bitmapHeight,
-		NULL, NULL, paintWidth, paintHeight,
-		bitmapMemory, &bitmapInfo, DIB_RGB_COLORS, SRCCOPY
+		0, 0, windowWidth, windowHeight,
+		0, 0, screenBuffer.getWidth(), screenBuffer.getHeight(),
+		screenBuffer.memory, &screenBuffer.bitmapInfo,
+		DIB_RGB_COLORS, SRCCOPY
 	);
 }
 
-LRESULT Win32MainWindowCallback(const HWND window, const UINT message, const WPARAM wParam, const LPARAM lParam) {
+LRESULT MainWindowCallback(const HWND window, const UINT message, const WPARAM wParam, const LPARAM lParam) {
 	switch (message) {
-		case WM_SIZE: {
-			RECT clientRect;
-			GetClientRect(window, &clientRect);
-			Win32ResizeDIBSection(&clientRect);
-		} break;
-
 		case WM_PAINT: {
-			PAINTSTRUCT paintStruct;
-			const auto deviceContext = BeginPaint(window, &paintStruct);
-			Win32UpdateWindow(deviceContext, &paintStruct.rcPaint);
-			EndPaint(window, &paintStruct);
+			PAINTSTRUCT paint;
+			const HDC deviceContext = BeginPaint(window, &paint);
+			DisplayScreenBuffer(window, deviceContext);
+			EndPaint(window, &paint);
 		} break;
 
 		case WM_CLOSE:
-		case WM_DESTROY:
-		case WM_QUIT: {
+		case WM_DESTROY: {
 			isAppRunning = false;
 		} break;
 
@@ -77,46 +93,45 @@ LRESULT Win32MainWindowCallback(const HWND window, const UINT message, const WPA
 		};
 	}
 
-	return NULL;
+	return 0;
 }
 
-int wWinMain(const HINSTANCE hInstance, const HINSTANCE hPrevInstance, const PWSTR pCmdLine, const int nCmdShow) {
+int wWinMain(const HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
 	const WNDCLASSA windowClass = {
-		.lpfnWndProc = Win32MainWindowCallback,
+		.style = CS_HREDRAW | CS_OWNDC | CS_VREDRAW,
+		.lpfnWndProc = MainWindowCallback,
 		.hInstance = hInstance,
 		.lpszClassName = "HandmadeHeroWindowClass",
 	};
 
 	RegisterClassA(&windowClass);
 
+	const int windowWidth = 1280;
+	const int windowHeight = 720;
+
 	const auto windowName = "Handmade Hero";
 	const auto style = WS_TILEDWINDOW | WS_VISIBLE;
-	const auto window = CreateWindowExA(
-		NULL, windowClass.lpszClassName, windowName, style,
-		CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-		NULL, NULL, hInstance, NULL
+	const HWND window = CreateWindowExA(
+		0, windowClass.lpszClassName, windowName, style,
+		CW_USEDEFAULT, CW_USEDEFAULT, windowWidth, windowHeight,
+		nullptr, nullptr, hInstance, nullptr
 	);
 
-	auto blueOffset = 0;
+	const HDC deviceContext = GetDC(window);
+	ResizeScreenBuffer(windowWidth, windowHeight);
+	int blueOffset = 0;
 
 	while (isAppRunning) {
-		RenderGradient(blueOffset, 0);
-		blueOffset++;
-
-		auto deviceContext = GetDC(window);
-		RECT clientRect;
-		GetClientRect(window, &clientRect);
-		Win32UpdateWindow(deviceContext, &clientRect);
-		ReleaseDC(window, deviceContext);
-
 		MSG message;
-		if (!PeekMessageA(&message, window, NULL, NULL, PM_REMOVE)) {
-			continue;
+		while (PeekMessageA(&message, window, 0, 0, PM_REMOVE)) {
+			TranslateMessage(&message);
+			DispatchMessageA(&message);
 		}
-
-		TranslateMessage(&message);
-		DispatchMessageA(&message);
+		
+		RenderGradient(blueOffset, 0);
+		DisplayScreenBuffer(window, deviceContext);
+		blueOffset++;
 	}
 
-	return NULL;
+	return 0;
 }
