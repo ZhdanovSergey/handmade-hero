@@ -1,33 +1,6 @@
 #include <stdint.h>
 #include <windows.h>
-
-// GAMEPAD INPUT
-// -------------------------------------------------------------------------------------------
-// #include <xinput.h>
-
-// typedef DWORD XInputGetStateType(DWORD userIndex, XINPUT_STATE* state);
-// typedef DWORD XInputSetStateType(DWORD userIndex, XINPUT_VIBRATION* vibration);
-
-// DWORD XInputGetStateStub(DWORD, XINPUT_STATE*) {
-// 	return 0;
-// }
-
-// DWORD XInputSetStateStub(DWORD, XINPUT_VIBRATION*) {
-// 	return 0;
-// }
-
-// XInputGetStateType* XInputGetState_ = XInputGetStateStub;
-// XInputSetStateType* XInputSetState_ = XInputSetStateStub;
-
-// #define XInputGetState XInputGetState_
-// #define XInputSetState XInputSetState_
-
-// void LoadXInputLibrary() {
-// 	HMODULE xInputLibrary = LoadLibraryA("xinput1_3.dll");
-// 	XInputGetState = (XInputGetStateType*) GetProcAddress(xInputLibrary, "XInputGetState");
-// 	XInputSetState = (XInputSetStateType*) GetProcAddress(xInputLibrary, "XInputSetState");
-// }
-// -------------------------------------------------------------------------------------------
+#include <dsound.h>
 
 struct ScreenBuffer {
 	BITMAPINFO bitmapInfo = {
@@ -38,6 +11,8 @@ struct ScreenBuffer {
 			.biCompression = BI_RGB,
 		},
 	};
+
+	private: char __padding[4]; public:
 
 	void* memory = nullptr;
 
@@ -57,14 +32,77 @@ struct ScreenBuffer {
 		this->bitmapInfo.bmiHeader.biHeight = - height;
 	}
 
-	int getMemorySize() {
+	u_int getMemorySize() {
 		int bytesPerPixel = this->bitmapInfo.bmiHeader.biBitCount / 8;
-		return bytesPerPixel * this->getWidth() * this->getHeight();
+		return (u_int) abs(bytesPerPixel * this->getWidth() * this->getHeight());
 	}
 };
 
 bool isAppRunning = true;
 ScreenBuffer screenBuffer = {};
+
+void InitDirectSound(HWND window) {
+	const u_int numberOfChannels = 2;
+	const u_int bitsPerSample = 16;
+	const u_int samplesPerSecond = 48000;
+	constexpr u_int blockAlign = numberOfChannels * bitsPerSample / 8;
+	constexpr u_int bytesPerSecond = samplesPerSecond * blockAlign;
+
+	HMODULE dSoundLibrary = LoadLibraryA("dsound.dll");
+
+	if (!dSoundLibrary) {
+		return;
+	}
+
+	typedef HRESULT DirectSoundCreateType(LPCGUID, LPDIRECTSOUND*, LPUNKNOWN);
+	#pragma warning(suppress: 4191)
+	auto directSoundCreate = (DirectSoundCreateType*) GetProcAddress(dSoundLibrary, "DirectSoundCreate");
+
+	if (!directSoundCreate) {
+		return;
+	}
+
+	LPDIRECTSOUND directSound;
+	if (!SUCCEEDED(directSoundCreate(nullptr, &directSound, 0))) {
+		return;
+	}
+
+	directSound->SetCooperativeLevel(window, DSSCL_PRIORITY);
+
+	WAVEFORMATEX waveFormat = {
+		.wFormatTag = WAVE_FORMAT_PCM,
+		.nChannels = numberOfChannels,
+		.nSamplesPerSec = samplesPerSecond,
+		.nAvgBytesPerSec = bytesPerSecond,
+		.nBlockAlign = blockAlign,
+		.wBitsPerSample = bitsPerSample
+	};
+
+	DSBUFFERDESC primaryBufferDesc = {
+		.dwSize = sizeof(DSBUFFERDESC),
+		.dwFlags = DSBCAPS_PRIMARYBUFFER
+	};
+
+	LPDIRECTSOUNDBUFFER primaryBuffer;
+	if (!SUCCEEDED(directSound->CreateSoundBuffer(&primaryBufferDesc, &primaryBuffer, 0))) {
+		return;
+	};
+
+	if (!SUCCEEDED(primaryBuffer->SetFormat(&waveFormat))) {
+		return;
+	}
+
+	DSBUFFERDESC secondaryBufferDesc = {
+		.dwSize = sizeof(DSBUFFERDESC),
+		.dwBufferBytes = bytesPerSecond,
+		.lpwfxFormat = &waveFormat
+	};
+
+	LPDIRECTSOUNDBUFFER secondaryBuffer;
+	if (!SUCCEEDED(directSound->CreateSoundBuffer(&secondaryBufferDesc, &secondaryBuffer, 0))) {
+		return;
+	};
+}
 
 void RenderGradient(int blueOffset, int greenOffset) {
 	auto pixel = (uint32_t*) screenBuffer.memory;
@@ -73,7 +111,7 @@ void RenderGradient(int blueOffset, int greenOffset) {
 		for (int x = 0; x < screenBuffer.getWidth(); x++) {
 			auto green = (uint8_t) (y + greenOffset);
 			auto blue = (uint8_t) (x + blueOffset);
-			*pixel++ = ((green << 8) | blue);
+			*pixel++ = (uint32_t) ((green << 8) | blue);
 		}
 	}
 }
@@ -85,7 +123,7 @@ void ResizeScreenBuffer(int width, int height) {
 
 	screenBuffer.setWidth(width);
 	screenBuffer.setHeight(height);
-	screenBuffer.memory = VirtualAlloc(nullptr, screenBuffer.getMemorySize(), MEM_COMMIT, PAGE_READWRITE);
+	screenBuffer.memory = VirtualAlloc(nullptr, screenBuffer.getMemorySize(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 }
 
 void DisplayScreenBuffer(HWND window, HDC deviceContext) {
@@ -113,9 +151,7 @@ LRESULT MainWindowCallback(HWND window, UINT message, WPARAM wParam, LPARAM lPar
 		} break;
 
 		case WM_KEYUP:
-		case WM_KEYDOWN:
-		case WM_SYSKEYUP:
-		case WM_SYSKEYDOWN: {
+		case WM_KEYDOWN: {
 			bool isKeyDown = !(lParam & (1 << 31));
 			bool wasKeyDown = lParam & (1 << 30);
 
@@ -157,6 +193,9 @@ LRESULT MainWindowCallback(HWND window, UINT message, WPARAM wParam, LPARAM lPar
 }
 
 int wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
+	const int windowWidth = 1280;
+	const int windowHeight = 720;
+
 	WNDCLASSA windowClass = {
 		.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW,
 		.lpfnWndProc = MainWindowCallback,
@@ -166,41 +205,19 @@ int wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
 
 	RegisterClassA(&windowClass);
 
-	int windowWidth = 1280;
-	int windowHeight = 720;
-	LPCSTR windowName = "Handmade Hero";
-	DWORD style = WS_TILEDWINDOW | WS_VISIBLE;
-
 	HWND window = CreateWindowExA(
-		0, windowClass.lpszClassName, windowName, style,
+		0, windowClass.lpszClassName, "Handmade Hero", WS_TILEDWINDOW | WS_VISIBLE,
 		CW_USEDEFAULT, CW_USEDEFAULT, windowWidth, windowHeight,
 		nullptr, nullptr, hInstance, nullptr
 	);
+
+	InitDirectSound(window);
 
 	HDC deviceContext = GetDC(window);
 	ResizeScreenBuffer(windowWidth, windowHeight);
 	int blueOffset = 0;
 
-	// GAMEPAD INPUT
-	// -------------------------------------------------------------------------------------------
-	// LoadXInputLibrary();
-	// -------------------------------------------------------------------------------------------
-
-	while (isAppRunning) {
-		// GAMEPAD INPUT
-		// -------------------------------------------------------------------------------------------
-		// for (DWORD controllerIndex = 0; controllerIndex < XUSER_MAX_COUNT; controllerIndex++ ) {
-		// 	XINPUT_STATE controllerState;
-		// 	XInputGetState(controllerIndex, &controllerState);
-		// 	XINPUT_GAMEPAD* gamepad = &controllerState.Gamepad;
-
-		// 	bool up = gamepad->wButtons & XINPUT_GAMEPAD_DPAD_UP;
-		// 	bool down = gamepad->wButtons & XINPUT_GAMEPAD_DPAD_DOWN;
-		// 	bool left = gamepad->wButtons & XINPUT_GAMEPAD_DPAD_LEFT;
-		// 	bool right = gamepad->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT;
-		// }
-		// -------------------------------------------------------------------------------------------
-		
+	while (isAppRunning) {		
 		MSG message;
 		while (PeekMessageA(&message, window, 0, 0, PM_REMOVE)) {
 			TranslateMessage(&message);
