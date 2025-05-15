@@ -1,4 +1,3 @@
-#include <stdint.h>
 #include <windows.h>
 #include <dsound.h>
 
@@ -16,47 +15,50 @@ struct ScreenBuffer {
 
 	void* memory = nullptr;
 
-	int getWidth() {
-		return this->bitmapInfo.bmiHeader.biWidth;
+	void setWidth(u_int width) {
+		bitmapInfo.bmiHeader.biWidth = static_cast<LONG>(width);
 	}
 
-	void setWidth(int width) {
-		this->bitmapInfo.bmiHeader.biWidth = width;
+	u_int getWidth() {
+		return static_cast<u_int>(bitmapInfo.bmiHeader.biWidth);
 	}
 
-	int getHeight() {
-		return - this->bitmapInfo.bmiHeader.biHeight;
+	void setHeight(u_int height) {
+		// biHeight is negative in order to top-left pixel been first in bitmap
+		bitmapInfo.bmiHeader.biHeight = - static_cast<LONG>(height);
 	}
 
-	void setHeight(int height) {
-		this->bitmapInfo.bmiHeader.biHeight = - height;
+	u_int getHeight() {
+		LONG positiveHeight = abs(bitmapInfo.bmiHeader.biHeight);
+		return static_cast<u_int>(positiveHeight);
 	}
 
 	u_int getMemorySize() {
-		int bytesPerPixel = this->bitmapInfo.bmiHeader.biBitCount / 8;
-		return (u_int) abs(bytesPerPixel * this->getWidth() * this->getHeight());
+		u_int bytesPerPixel = bitmapInfo.bmiHeader.biBitCount / 8u;
+		return bytesPerPixel * getWidth() * getHeight();
 	}
 };
 
 bool isAppRunning = true;
 ScreenBuffer screenBuffer = {};
 
+const u_int soundSamplesPerSecond = 48000;
+constexpr u_int soundBytesPerSample = sizeof(short) * 2;
+constexpr u_int soundBufferSize = soundSamplesPerSecond * soundBytesPerSample;
+IDirectSoundBuffer* soundBuffer = nullptr;
+
+// I`m trying to find bug here, so some vars declared as static for now
 void InitDirectSound(HWND window) {
-	const u_int numberOfChannels = 2;
-	const u_int bitsPerSample = 16;
-	const u_int samplesPerSecond = 48000;
-	constexpr u_int blockAlign = numberOfChannels * bitsPerSample / 8;
-	constexpr u_int bytesPerSecond = samplesPerSecond * blockAlign;
+	typedef HRESULT DirectSoundCreate(LPCGUID, LPDIRECTSOUND*, LPUNKNOWN);
+	HMODULE directSoundLibrary = LoadLibraryA("dsound.dll");
 
-	HMODULE dSoundLibrary = LoadLibraryA("dsound.dll");
-
-	if (!dSoundLibrary) {
+	if (!directSoundLibrary) {
 		return;
 	}
 
-	typedef HRESULT DirectSoundCreateType(LPCGUID, LPDIRECTSOUND*, LPUNKNOWN);
 	#pragma warning(suppress: 4191)
-	auto directSoundCreate = (DirectSoundCreateType*) GetProcAddress(dSoundLibrary, "DirectSoundCreate");
+	DirectSoundCreate* directSoundCreate = reinterpret_cast<DirectSoundCreate*>
+		(GetProcAddress(directSoundLibrary, "DirectSoundCreate"));
 
 	if (!directSoundCreate) {
 		return;
@@ -69,14 +71,14 @@ void InitDirectSound(HWND window) {
 
 	directSound->SetCooperativeLevel(window, DSSCL_PRIORITY);
 
-	WAVEFORMATEX waveFormat = {
-		.wFormatTag = WAVE_FORMAT_PCM,
-		.nChannels = numberOfChannels,
-		.nSamplesPerSec = samplesPerSecond,
-		.nAvgBytesPerSec = bytesPerSecond,
-		.nBlockAlign = blockAlign,
-		.wBitsPerSample = bitsPerSample
-	};
+	// fields order does not match dependecies order
+	static WAVEFORMATEX waveFormat = {};
+	waveFormat.wFormatTag = WAVE_FORMAT_PCM;
+	waveFormat.nChannels = 2;
+	waveFormat.nSamplesPerSec = soundSamplesPerSecond;
+	waveFormat.wBitsPerSample = 16;
+	waveFormat.nBlockAlign = waveFormat.nChannels * waveFormat.wBitsPerSample / 8u;
+	waveFormat.nAvgBytesPerSec = waveFormat.nSamplesPerSec * waveFormat.nBlockAlign;
 
 	DSBUFFERDESC primaryBufferDesc = {
 		.dwSize = sizeof(DSBUFFERDESC),
@@ -92,38 +94,39 @@ void InitDirectSound(HWND window) {
 		return;
 	}
 
-	DSBUFFERDESC secondaryBufferDesc = {
+	static DSBUFFERDESC soundBufferDesc = {
 		.dwSize = sizeof(DSBUFFERDESC),
-		.dwBufferBytes = bytesPerSecond,
+		.dwBufferBytes = soundBufferSize,
 		.lpwfxFormat = &waveFormat
 	};
 
-	LPDIRECTSOUNDBUFFER secondaryBuffer;
-	if (!SUCCEEDED(directSound->CreateSoundBuffer(&secondaryBufferDesc, &secondaryBuffer, 0))) {
+	if (!SUCCEEDED(directSound->CreateSoundBuffer(&soundBufferDesc, &soundBuffer, 0))) {
 		return;
 	};
 }
 
-void RenderGradient(int blueOffset, int greenOffset) {
-	auto pixel = (uint32_t*) screenBuffer.memory;
+void RenderGradient(u_int blueOffset, u_int greenOffset) {
+	u_int* pixel = static_cast<u_int*>(screenBuffer.memory);
 
-	for (int y = 0; y < screenBuffer.getHeight(); y++) {
-		for (int x = 0; x < screenBuffer.getWidth(); x++) {
-			auto green = (uint8_t) (y + greenOffset);
-			auto blue = (uint8_t) (x + blueOffset);
-			*pixel++ = (uint32_t) ((green << 8) | blue);
+	for (u_int y = 0; y < screenBuffer.getHeight(); y++) {
+		for (u_int x = 0; x < screenBuffer.getWidth(); x++) {
+			u_int green = (y + greenOffset) & UCHAR_MAX;
+			u_int blue = (x + blueOffset) & UCHAR_MAX;
+			*pixel++ = (green << 8) | blue; // padding red green blue
 		}
 	}
 }
 
-void ResizeScreenBuffer(int width, int height) {
+void ResizeScreenBuffer(u_int width, u_int height) {
 	if (screenBuffer.memory) {
 		VirtualFree(screenBuffer.memory, 0, MEM_RELEASE);
 	}
 
 	screenBuffer.setWidth(width);
 	screenBuffer.setHeight(height);
-	screenBuffer.memory = VirtualAlloc(nullptr, screenBuffer.getMemorySize(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	
+	SIZE_T memorySize = screenBuffer.getMemorySize();
+	screenBuffer.memory = VirtualAlloc(nullptr, memorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 }
 
 void DisplayScreenBuffer(HWND window, HDC deviceContext) {
@@ -132,10 +135,12 @@ void DisplayScreenBuffer(HWND window, HDC deviceContext) {
 
 	int clientWidth = clientRect.right - clientRect.left;
 	int clientHeight = clientRect.bottom - clientRect.top;
+	int screenWidth = static_cast<int>(screenBuffer.getWidth());
+	int screenHeight = static_cast<int>(screenBuffer.getHeight());
 
 	StretchDIBits(deviceContext,
 		0, 0, clientWidth, clientHeight,
-		0, 0, screenBuffer.getWidth(), screenBuffer.getHeight(),
+		0, 0, screenWidth, screenHeight,
 		screenBuffer.memory, &screenBuffer.bitmapInfo,
 		DIB_RGB_COLORS, SRCCOPY
 	);
@@ -152,8 +157,8 @@ LRESULT MainWindowCallback(HWND window, UINT message, WPARAM wParam, LPARAM lPar
 
 		case WM_KEYUP:
 		case WM_KEYDOWN: {
-			bool isKeyDown = !(lParam & (1 << 31));
-			bool wasKeyDown = lParam & (1 << 30);
+			bool isKeyDown = !(lParam & (1u << 31));
+			bool wasKeyDown = lParam & (1u << 30);
 
 			if (!isKeyDown || wasKeyDown) {
 				return 0;
@@ -161,19 +166,19 @@ LRESULT MainWindowCallback(HWND window, UINT message, WPARAM wParam, LPARAM lPar
 
 			switch (wParam) {
 				case VK_UP: {
-					OutputDebugStringA("VK_UP \n");
+					OutputDebugStringA("VK_UP\n");
 				} break;
 
 				case VK_DOWN: {
-					OutputDebugStringA("VK_DOWN \n");
+					OutputDebugStringA("VK_DOWN\n");
 				} break;
 
 				case VK_LEFT: {
-					OutputDebugStringA("VK_LEFT \n");
+					OutputDebugStringA("VK_LEFT\n");
 				} break;
 
 				case VK_RIGHT: {
-					OutputDebugStringA("VK_RIGHT \n");
+					OutputDebugStringA("VK_RIGHT\n");
 				} break;
 			}
 
@@ -192,9 +197,9 @@ LRESULT MainWindowCallback(HWND window, UINT message, WPARAM wParam, LPARAM lPar
 	return 0;
 }
 
-int wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
-	const int windowWidth = 1280;
-	const int windowHeight = 720;
+int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int) {
+	const u_int windowWidth = 1280;
+	const u_int windowHeight = 720;
 
 	WNDCLASSA windowClass = {
 		.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW,
@@ -215,18 +220,85 @@ int wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
 
 	HDC deviceContext = GetDC(window);
 	ResizeScreenBuffer(windowWidth, windowHeight);
-	int blueOffset = 0;
 
-	while (isAppRunning) {		
+	const u_int soundFrequency = 250;
+	const short soundVolume = 1000;
+	constexpr u_int soundWavePeriod = soundSamplesPerSecond / soundFrequency;
+	constexpr u_int soundWaveHalfPeriod = soundWavePeriod / 2;
+
+	bool isSoundPlaying = false;
+	u_int runningSampleIndex = 0;
+	u_int blueOffset = 0;
+
+	while (isAppRunning) {
 		MSG message;
-		while (PeekMessageA(&message, window, 0, 0, PM_REMOVE)) {
+		BOOL peekMessageResult = PeekMessageA(&message, window, 0, 0, PM_REMOVE);
+
+		while (peekMessageResult) {
 			TranslateMessage(&message);
 			DispatchMessageA(&message);
+			peekMessageResult = PeekMessageA(&message, window, 0, 0, PM_REMOVE);
 		}
 		
 		RenderGradient(blueOffset, 0);
 		DisplayScreenBuffer(window, deviceContext);
 		blueOffset++;
+
+		DWORD playCursor;
+		DWORD writeCursor;
+		if (!soundBuffer || !SUCCEEDED(soundBuffer->GetCurrentPosition(&playCursor, &writeCursor))) {
+			continue;
+		}
+
+		DWORD byteToLock = runningSampleIndex * soundBytesPerSample % soundBufferSize;
+		DWORD bytesToWrite = 0;
+
+		if (byteToLock == playCursor) {
+			bytesToWrite = soundBufferSize;
+		}else if (byteToLock > playCursor) {
+			bytesToWrite = soundBufferSize - byteToLock;
+			bytesToWrite += playCursor;
+		} else {
+			bytesToWrite = playCursor - byteToLock;
+		}
+
+		void* region1;
+		DWORD region1Size;
+		void* region2;
+		DWORD region2Size;
+
+		HRESULT lockResult = soundBuffer->Lock(byteToLock, bytesToWrite, &region1, &region1Size, &region2, &region2Size, 0);
+		if (!SUCCEEDED(lockResult)) {
+			continue;
+		}
+
+		short* sampleOut = static_cast<short*>(region1);
+		u_int region1SizeSamples = region1Size / soundBytesPerSample;
+
+		for (u_int sampleIndex = 0; sampleIndex < region1SizeSamples; sampleIndex++) {
+			short sampleValue = ((runningSampleIndex / soundWaveHalfPeriod) % 2) ? soundVolume : - soundVolume;
+			*sampleOut++ = sampleValue;
+			*sampleOut++ = sampleValue;
+			runningSampleIndex++;
+		}
+
+		sampleOut = static_cast<short*>(region2);
+		u_int region2SizeSamples = region2Size / soundBytesPerSample;
+
+		for (u_int sampleIndex = 0; sampleIndex < region2SizeSamples; sampleIndex++) {
+			short sampleValue = ((runningSampleIndex / soundWaveHalfPeriod) % 2) ? soundVolume : - soundVolume;
+			*sampleOut++ = sampleValue;
+			*sampleOut++ = sampleValue;
+			runningSampleIndex++;
+		}
+
+		soundBuffer->Unlock(region1, region1Size, region2, region2Size);
+
+		if (!isSoundPlaying) {
+			isSoundPlaying = true;
+			// TODO: address sanitizer catch some problems after Play call, but I can`t fix it by now
+			soundBuffer->Play(0, 0, DSBPLAY_LOOPING);
+		}
 	}
 
 	return 0;
