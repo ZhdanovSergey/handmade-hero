@@ -1,5 +1,24 @@
+#define _ALLOW_RTCc_IN_STL
+
+#include <stdint.h>
 #include <windows.h>
 #include <dsound.h>
+#include <math.h>
+
+typedef int8_t int8;
+typedef int16_t int16;
+typedef int32_t int32;
+typedef int64_t int64;
+
+typedef uint8_t uint8;
+typedef uint16_t uint16;
+typedef uint32_t uint32;
+typedef uint64_t uint64;
+
+typedef float real32;
+typedef double real64;
+
+const real32 PI = 3.14159265359f; // math.h will go soon
 
 struct ScreenBuffer {
 	BITMAPINFO bitmapInfo = {
@@ -15,39 +34,43 @@ struct ScreenBuffer {
 
 	void* memory = nullptr;
 
-	void setWidth(u_int width) {
+	void setWidth(uint32 width) {
 		bitmapInfo.bmiHeader.biWidth = static_cast<LONG>(width);
 	}
 
-	u_int getWidth() {
-		return static_cast<u_int>(bitmapInfo.bmiHeader.biWidth);
+	uint32 getWidth() {
+		return static_cast<uint32>(bitmapInfo.bmiHeader.biWidth);
 	}
 
-	void setHeight(u_int height) {
+	void setHeight(uint32 height) {
 		// biHeight is negative in order to top-left pixel been first in bitmap
 		bitmapInfo.bmiHeader.biHeight = - static_cast<LONG>(height);
 	}
 
-	u_int getHeight() {
+	uint32 getHeight() {
 		LONG positiveHeight = abs(bitmapInfo.bmiHeader.biHeight);
-		return static_cast<u_int>(positiveHeight);
+		return static_cast<uint32>(positiveHeight);
 	}
 
-	u_int getMemorySize() {
-		u_int bytesPerPixel = bitmapInfo.bmiHeader.biBitCount / 8u;
+	uint32 getMemorySize() {
+		uint32 bytesPerPixel = bitmapInfo.bmiHeader.biBitCount / 8u;
 		return bytesPerPixel * getWidth() * getHeight();
 	}
 };
 
+WAVEFORMATEX soundWaveFormat = {
+	.wFormatTag = WAVE_FORMAT_PCM,
+	.nChannels = 2,
+	.nSamplesPerSec = 48000,
+	.nAvgBytesPerSec = sizeof(uint16) * soundWaveFormat.nChannels * soundWaveFormat.nSamplesPerSec,
+	.nBlockAlign = sizeof(uint16) * soundWaveFormat.nChannels,
+	.wBitsPerSample = sizeof(uint16) * 8,
+};
+
 bool isAppRunning = true;
 ScreenBuffer screenBuffer = {};
-
-const u_int soundSamplesPerSecond = 48000;
-constexpr u_int soundBytesPerSample = sizeof(short) * 2;
-constexpr u_int soundBufferSize = soundSamplesPerSecond * soundBytesPerSample;
 IDirectSoundBuffer* soundBuffer = nullptr;
 
-// I`m trying to find bug here, so some vars declared as static for now
 void InitDirectSound(HWND window) {
 	typedef HRESULT DirectSoundCreate(LPCGUID, LPDIRECTSOUND*, LPUNKNOWN);
 	HMODULE directSoundLibrary = LoadLibraryA("dsound.dll");
@@ -64,40 +87,31 @@ void InitDirectSound(HWND window) {
 		return;
 	}
 
-	LPDIRECTSOUND directSound;
+	IDirectSound* directSound;
 	if (!SUCCEEDED(directSoundCreate(nullptr, &directSound, 0))) {
 		return;
 	}
 
 	directSound->SetCooperativeLevel(window, DSSCL_PRIORITY);
 
-	// fields order does not match dependecies order
-	static WAVEFORMATEX waveFormat = {};
-	waveFormat.wFormatTag = WAVE_FORMAT_PCM;
-	waveFormat.nChannels = 2;
-	waveFormat.nSamplesPerSec = soundSamplesPerSecond;
-	waveFormat.wBitsPerSample = 16;
-	waveFormat.nBlockAlign = waveFormat.nChannels * waveFormat.wBitsPerSample / 8u;
-	waveFormat.nAvgBytesPerSec = waveFormat.nSamplesPerSec * waveFormat.nBlockAlign;
-
 	DSBUFFERDESC primaryBufferDesc = {
 		.dwSize = sizeof(DSBUFFERDESC),
 		.dwFlags = DSBCAPS_PRIMARYBUFFER
 	};
 
-	LPDIRECTSOUNDBUFFER primaryBuffer;
+	IDirectSoundBuffer* primaryBuffer;
 	if (!SUCCEEDED(directSound->CreateSoundBuffer(&primaryBufferDesc, &primaryBuffer, 0))) {
 		return;
 	};
 
-	if (!SUCCEEDED(primaryBuffer->SetFormat(&waveFormat))) {
+	if (!SUCCEEDED(primaryBuffer->SetFormat(&soundWaveFormat))) {
 		return;
 	}
 
-	static DSBUFFERDESC soundBufferDesc = {
+	DSBUFFERDESC soundBufferDesc = {
 		.dwSize = sizeof(DSBUFFERDESC),
-		.dwBufferBytes = soundBufferSize,
-		.lpwfxFormat = &waveFormat
+		.dwBufferBytes = soundWaveFormat.nAvgBytesPerSec,
+		.lpwfxFormat = &soundWaveFormat
 	};
 
 	if (!SUCCEEDED(directSound->CreateSoundBuffer(&soundBufferDesc, &soundBuffer, 0))) {
@@ -105,19 +119,55 @@ void InitDirectSound(HWND window) {
 	};
 }
 
-void RenderGradient(u_int blueOffset, u_int greenOffset) {
-	u_int* pixel = static_cast<u_int*>(screenBuffer.memory);
+uint32 FillSoundSubRegion(void* region, DWORD regionSize, uint32 runningSampleIndex) {
+	const uint32 frequency = 261;
+	const uint32 volume = 5000;
 
-	for (u_int y = 0; y < screenBuffer.getHeight(); y++) {
-		for (u_int x = 0; x < screenBuffer.getWidth(); x++) {
-			u_int green = (y + greenOffset) & UCHAR_MAX;
-			u_int blue = (x + blueOffset) & UCHAR_MAX;
+	uint32 wavePeriodSamples = soundWaveFormat.nSamplesPerSec / frequency;
+	uint32 regionSizeSamples = regionSize / soundWaveFormat.nBlockAlign;
+
+	int16* sampleOut = static_cast<int16*>(region);
+
+	for (uint32 sampleIndex = 0; sampleIndex < regionSizeSamples; sampleIndex++) {
+		real32 sineValue = 2.0f * PI * static_cast<real32>(runningSampleIndex) / static_cast<real32>(wavePeriodSamples);
+		int16 sampleValue = static_cast<int16>(sinf(sineValue) * volume);
+		*sampleOut++ = sampleValue;
+		*sampleOut++ = sampleValue;
+		runningSampleIndex++;
+	}
+
+	return runningSampleIndex;
+}
+
+uint32 FillSoundBuffer(DWORD byteToLock, DWORD bytesToWrite, uint32 runningSampleIndex) {
+	void* region1;
+	DWORD region1Size;
+	void* region2;
+	DWORD region2Size;
+	if (!SUCCEEDED(soundBuffer->Lock(byteToLock, bytesToWrite, &region1, &region1Size, &region2, &region2Size, 0))) {
+		return runningSampleIndex;
+	}
+
+	runningSampleIndex = FillSoundSubRegion(region1, region1Size, runningSampleIndex);
+	runningSampleIndex = FillSoundSubRegion(region2, region2Size, runningSampleIndex);
+
+	soundBuffer->Unlock(region1, region1Size, region2, region2Size);
+	return runningSampleIndex;
+}
+
+void RenderGradient(uint32 blueOffset, uint32 greenOffset) {
+	uint32* pixel = static_cast<uint32*>(screenBuffer.memory);
+
+	for (uint32 y = 0; y < screenBuffer.getHeight(); y++) {
+		for (uint32 x = 0; x < screenBuffer.getWidth(); x++) {
+			uint32 green = (y + greenOffset) & UINT8_MAX;
+			uint32 blue = (x + blueOffset) & UINT8_MAX;
 			*pixel++ = (green << 8) | blue; // padding red green blue
 		}
 	}
 }
 
-void ResizeScreenBuffer(u_int width, u_int height) {
+void ResizeScreenBuffer(uint32 width, uint32 height) {
 	if (screenBuffer.memory) {
 		VirtualFree(screenBuffer.memory, 0, MEM_RELEASE);
 	}
@@ -198,8 +248,8 @@ LRESULT MainWindowCallback(HWND window, UINT message, WPARAM wParam, LPARAM lPar
 }
 
 int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int) {
-	const u_int windowWidth = 1280;
-	const u_int windowHeight = 720;
+	const uint32 windowWidth = 1280;
+	const uint32 windowHeight = 720;
 
 	WNDCLASSA windowClass = {
 		.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW,
@@ -221,14 +271,14 @@ int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int
 	HDC deviceContext = GetDC(window);
 	ResizeScreenBuffer(windowWidth, windowHeight);
 
-	const u_int soundFrequency = 250;
-	const short soundVolume = 1000;
-	constexpr u_int soundWavePeriod = soundSamplesPerSecond / soundFrequency;
-	constexpr u_int soundWaveHalfPeriod = soundWavePeriod / 2;
+	uint32 blueOffset = 0;
+	uint32 runningSampleIndex = 0;
 
-	bool isSoundPlaying = false;
-	u_int runningSampleIndex = 0;
-	u_int blueOffset = 0;
+	runningSampleIndex = FillSoundBuffer(0, soundWaveFormat.nAvgBytesPerSec, runningSampleIndex);
+	soundBuffer->Play(0, 0, DSBPLAY_LOOPING);
+	// address sanitizer crashes program after Play() call, it seems to be known DirectSound problem
+	// https://stackoverflow.com/questions/72511236/directsound-crashes-due-to-a-read-access-violation-when-calling-idirectsoundbuff
+	// if I want to use address sanitizer, probably should switch to XAudio2
 
 	while (isAppRunning) {
 		MSG message;
@@ -250,55 +300,15 @@ int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int
 			continue;
 		}
 
-		DWORD byteToLock = runningSampleIndex * soundBytesPerSample % soundBufferSize;
-		DWORD bytesToWrite = 0;
+		DWORD byteToLock = (runningSampleIndex * soundWaveFormat.nBlockAlign) % soundWaveFormat.nAvgBytesPerSec;
+		DWORD bytesToWrite = byteToLock > playCursor ? soundWaveFormat.nAvgBytesPerSec : 0;
+		bytesToWrite += playCursor - byteToLock;
 
 		if (byteToLock == playCursor) {
-			bytesToWrite = soundBufferSize;
-		}else if (byteToLock > playCursor) {
-			bytesToWrite = soundBufferSize - byteToLock;
-			bytesToWrite += playCursor;
-		} else {
-			bytesToWrite = playCursor - byteToLock;
+			OutputDebugStringA("equal");
 		}
 
-		void* region1;
-		DWORD region1Size;
-		void* region2;
-		DWORD region2Size;
-
-		HRESULT lockResult = soundBuffer->Lock(byteToLock, bytesToWrite, &region1, &region1Size, &region2, &region2Size, 0);
-		if (!SUCCEEDED(lockResult)) {
-			continue;
-		}
-
-		short* sampleOut = static_cast<short*>(region1);
-		u_int region1SizeSamples = region1Size / soundBytesPerSample;
-
-		for (u_int sampleIndex = 0; sampleIndex < region1SizeSamples; sampleIndex++) {
-			short sampleValue = ((runningSampleIndex / soundWaveHalfPeriod) % 2) ? soundVolume : - soundVolume;
-			*sampleOut++ = sampleValue;
-			*sampleOut++ = sampleValue;
-			runningSampleIndex++;
-		}
-
-		sampleOut = static_cast<short*>(region2);
-		u_int region2SizeSamples = region2Size / soundBytesPerSample;
-
-		for (u_int sampleIndex = 0; sampleIndex < region2SizeSamples; sampleIndex++) {
-			short sampleValue = ((runningSampleIndex / soundWaveHalfPeriod) % 2) ? soundVolume : - soundVolume;
-			*sampleOut++ = sampleValue;
-			*sampleOut++ = sampleValue;
-			runningSampleIndex++;
-		}
-
-		soundBuffer->Unlock(region1, region1Size, region2, region2Size);
-
-		if (!isSoundPlaying) {
-			isSoundPlaying = true;
-			// TODO: address sanitizer catch some problems after Play call, but I can`t fix it by now
-			soundBuffer->Play(0, 0, DSBPLAY_LOOPING);
-		}
+		runningSampleIndex = FillSoundBuffer(byteToLock, bytesToWrite, runningSampleIndex);
 	}
 
 	return 0;
