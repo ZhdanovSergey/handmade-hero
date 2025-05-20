@@ -275,10 +275,19 @@ int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int
 	uint32 runningSampleIndex = 0;
 
 	runningSampleIndex = FillSoundBuffer(0, soundWaveFormat.nAvgBytesPerSec, runningSampleIndex);
-	soundBuffer->Play(0, 0, DSBPLAY_LOOPING);
+
 	// address sanitizer crashes program after Play() call, it seems to be known DirectSound problem
 	// https://stackoverflow.com/questions/72511236/directsound-crashes-due-to-a-read-access-violation-when-calling-idirectsoundbuff
-	// if I want to use address sanitizer, probably should switch to XAudio2
+	// TODO: try to switch sound to XAudio2 after day 020, and check if address sanitizer problem go away
+	soundBuffer->Play(0, 0, DSBPLAY_LOOPING);
+
+	LARGE_INTEGER perfFrequency;
+	QueryPerformanceFrequency(&perfFrequency);
+
+	LARGE_INTEGER startPerfCounter;
+	QueryPerformanceCounter(&startPerfCounter);
+
+	uint64 startCycleCounter = __rdtsc();
 
 	while (isAppRunning) {
 		MSG message;
@@ -304,11 +313,25 @@ int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int
 		DWORD bytesToWrite = byteToLock > playCursor ? soundWaveFormat.nAvgBytesPerSec : 0;
 		bytesToWrite += playCursor - byteToLock;
 
-		if (byteToLock == playCursor) {
-			OutputDebugStringA("equal");
-		}
-
 		runningSampleIndex = FillSoundBuffer(byteToLock, bytesToWrite, runningSampleIndex);
+
+		uint64 endCycleCounter = __rdtsc();
+		uint64 cycleCounterElapsed = endCycleCounter - startCycleCounter;
+
+		LARGE_INTEGER endPerfCounter;
+		QueryPerformanceCounter(&endPerfCounter);
+		int64 perfCounterElapsed = endPerfCounter.QuadPart - startPerfCounter.QuadPart;
+
+		int32 framesPerSecond = static_cast<int32>(perfFrequency.QuadPart / perfCounterElapsed);
+		int32 millisecondsPerFrame = static_cast<int32>(1000 * perfCounterElapsed / perfFrequency.QuadPart);
+		int32 megaCyclesPerFrame = static_cast<int32>(cycleCounterElapsed / (1000 * 1000));
+
+		char outputBuffer[256];
+		wsprintfA(outputBuffer, "%d f/s, %d ms/f, %d Mc/f\n", framesPerSecond, millisecondsPerFrame, megaCyclesPerFrame);
+		OutputDebugStringA(outputBuffer);
+
+		startPerfCounter = endPerfCounter;
+		startCycleCounter = endCycleCounter;
 	}
 
 	return 0;
