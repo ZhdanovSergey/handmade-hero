@@ -1,12 +1,8 @@
-#define _ALLOW_RTCc_IN_STL
-#define _USE_MATH_DEFINES
-
-#include "int.h"
+#include "globals.h"
 #include "main.cpp"
 
 #include <windows.h>
 #include <dsound.h>
-#include <math.h>
 
 struct Win32ScreenBuffer {
 	BITMAPINFO bitmapInfo = {
@@ -49,6 +45,8 @@ struct Win32ScreenBuffer {
 // TODO: since we import everything here, I should probably get rid of global vars
 bool isAppRunning = true;
 Win32ScreenBuffer win32ScreenBuffer = {};
+
+// TODO: wrap sound stuff in a struct
 IDirectSoundBuffer* win32SoundBuffer = nullptr;
 WAVEFORMATEX soundWaveFormat = {
 	.wFormatTag = WAVE_FORMAT_PCM,
@@ -58,6 +56,7 @@ WAVEFORMATEX soundWaveFormat = {
 	.nBlockAlign = sizeof(uint16) * soundWaveFormat.nChannels,
 	.wBitsPerSample = sizeof(uint16) * 8,
 };
+DWORD soundLatencySamples = soundWaveFormat.nSamplesPerSec / 15u;
 
 static void Win32InitDirectSound(HWND window) {
 	typedef HRESULT DirectSoundCreate(LPCGUID, LPDIRECTSOUND*, LPUNKNOWN);
@@ -107,35 +106,56 @@ static void Win32InitDirectSound(HWND window) {
 	};
 }
 
-static void Win32FillSoundSubRegion(void* region, DWORD regionSize, uint32* runningSampleIndex) {
-	const uint32 frequency = 261;
-	const uint32 volume = 5000;
-
-	uint32 wavePeriodSamples = soundWaveFormat.nSamplesPerSec / frequency;
-	uint32 regionSizeSamples = regionSize / soundWaveFormat.nBlockAlign;
-
-	int16* sampleOut = static_cast<int16*>(region);
-
-	for (uint32 sampleIndex = 0; sampleIndex < regionSizeSamples; sampleIndex++) {
-		real64 sineValue = 2.0 * M_PI * static_cast<real64>(*runningSampleIndex) / static_cast<real64>(wavePeriodSamples);
-		int16 sampleValue = static_cast<int16>(sin(sineValue) * volume);
-		*sampleOut++ = sampleValue;
-		*sampleOut++ = sampleValue;
-		(*runningSampleIndex)++;
-	}
-}
-
-static void Win32FillSoundBuffer(DWORD writeCursor, DWORD bytesToWrite, uint32* runningSampleIndex) {
+static void Win32FillSoundBuffer(SoundBuffer* source, DWORD lockCursor, DWORD bytesToWrite, uint32* runningSampleIndex) {
 	void* region1;
 	DWORD region1Size;
 	void* region2;
 	DWORD region2Size;
-	if (!SUCCEEDED(win32SoundBuffer->Lock(writeCursor, bytesToWrite, &region1, &region1Size, &region2, &region2Size, 0))) {
+	if (!SUCCEEDED(win32SoundBuffer->Lock(lockCursor, bytesToWrite, &region1, &region1Size, &region2, &region2Size, 0))) {
 		return;
 	}
 
-	Win32FillSoundSubRegion(region1, region1Size, runningSampleIndex);
-	Win32FillSoundSubRegion(region2, region2Size, runningSampleIndex);
+	int16* sourceSamples = source->samples;
+
+	uint32 region1SizeSamples = region1Size / soundWaveFormat.nBlockAlign;
+	int16* destSamples = static_cast<int16*>(region1);
+
+	for (uint32 i = 0; i < region1SizeSamples; i++) {
+		*destSamples++ = *sourceSamples++;
+		*destSamples++ = *sourceSamples++;
+		(*runningSampleIndex)++;
+	}
+
+	uint32 region2SizeSamples = region2Size / soundWaveFormat.nBlockAlign;
+	destSamples = static_cast<int16*>(region2);
+
+	for (uint32 i = 0; i < region2SizeSamples; i++) {
+		*destSamples++ = *sourceSamples++;
+		*destSamples++ = *sourceSamples++;
+		(*runningSampleIndex)++;
+	}
+
+	win32SoundBuffer->Unlock(region1, region1Size, region2, region2Size);
+}
+
+static void Win32ClearSoundBuffer() {
+	void* region1;
+	DWORD region1Size;
+	void* region2;
+	DWORD region2Size;
+	if (!SUCCEEDED(win32SoundBuffer->Lock(0, soundWaveFormat.nAvgBytesPerSec, &region1, &region1Size, &region2, &region2Size, 0))) {
+		return;
+	}
+
+	uint8* regionToClean = static_cast<uint8*>(region1);
+	for (uint32 i = 0; i < region1Size; i++) {
+		*regionToClean++ = 0;
+	}
+
+	regionToClean = static_cast<uint8*>(region2);
+	for (uint32 i = 0; i < region2Size; i++) {
+		*regionToClean++ = 0;
+	}
 
 	win32SoundBuffer->Unlock(region1, region1Size, region2, region2Size);
 }
@@ -239,27 +259,26 @@ int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int
 		nullptr, nullptr, hInstance, nullptr
 	);
 
-	Win32InitDirectSound(window);
-
 	HDC deviceContext = GetDC(window);
 	Win32ResizeScreenBuffer(windowWidth, windowHeight);
-
-	uint32 runningSampleIndex = 0;
-
-	Win32FillSoundBuffer(0, soundWaveFormat.nAvgBytesPerSec, &runningSampleIndex);
-
-	// address sanitizer crashes program after Play() call, it seems to be known DirectSound problem
-	// https://stackoverflow.com/questions/72511236/directsound-crashes-due-to-a-read-access-violation-when-calling-idirectsoundbuff
-	// TODO: try to switch sound to XAudio2 after day 020, and check if address sanitizer problem go away
+	Win32InitDirectSound(window);
+	Win32ClearSoundBuffer();
 	win32SoundBuffer->Play(0, 0, DSBPLAY_LOOPING);
+	// TODO: address sanitizer crashes program after Play() call, it seems to be known DirectSound problem
+	// https://stackoverflow.com/questions/72511236/directsound-crashes-due-to-a-read-access-violation-when-calling-idirectsoundbuff
+	// try to switch sound to XAudio2 after day 020, and check if address sanitizer problem go away
+
+	int16* soundSamples =  static_cast<int16*>(
+		VirtualAlloc(nullptr, soundWaveFormat.nAvgBytesPerSec, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)
+	);
 
 	LARGE_INTEGER perfFrequency;
 	QueryPerformanceFrequency(&perfFrequency);
-
 	LARGE_INTEGER startPerfCounter;
 	QueryPerformanceCounter(&startPerfCounter);
-
 	uint64 startCycleCounter = __rdtsc();
+
+	uint32 runningSampleIndex = 0;
 
 	while (isAppRunning) {
 		MSG message;
@@ -276,37 +295,40 @@ int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int
 			.width = win32ScreenBuffer.getWidth(),
 			.height = win32ScreenBuffer.getHeight()
 		};
-		
-		GameUpdateAndRender(&screenBuffer);
-		Win32DisplayScreenBuffer(window, deviceContext);
 
 		DWORD playCursor;
 		DWORD writeCursor;
-		if (!win32SoundBuffer || !SUCCEEDED(win32SoundBuffer->GetCurrentPosition(&playCursor, &writeCursor))) {
-			continue;
+		DWORD lockCursor = 0;
+		DWORD bytesToWrite = 0;
+		if (win32SoundBuffer && SUCCEEDED(win32SoundBuffer->GetCurrentPosition(&playCursor, &writeCursor))) {
+			// TODO: it seems like we rewriting memory under playCursor because of soundLatencySamples right now
+			DWORD targetCursor = (playCursor + soundLatencySamples * soundWaveFormat.nBlockAlign) % soundWaveFormat.nAvgBytesPerSec;
+			lockCursor = (runningSampleIndex * soundWaveFormat.nBlockAlign) % soundWaveFormat.nAvgBytesPerSec;
+			bytesToWrite = lockCursor > targetCursor ? soundWaveFormat.nAvgBytesPerSec : 0;
+			bytesToWrite += targetCursor - lockCursor;
 		}
 
-		writeCursor = (runningSampleIndex * soundWaveFormat.nBlockAlign) % soundWaveFormat.nAvgBytesPerSec;
-		DWORD bytesToWrite = writeCursor > playCursor ? soundWaveFormat.nAvgBytesPerSec : 0;
-		bytesToWrite += playCursor - writeCursor;
+		SoundBuffer soundBuffer = {
+			.samples = soundSamples,
+			.samplesPerSecond = soundWaveFormat.nSamplesPerSec,
+			.samplesCount = bytesToWrite / soundWaveFormat.nBlockAlign,
+		};
 
-		Win32FillSoundBuffer(writeCursor, bytesToWrite, &runningSampleIndex);
+		GameUpdateAndRender(&screenBuffer, &soundBuffer);
+		Win32DisplayScreenBuffer(window, deviceContext);
+		Win32FillSoundBuffer(&soundBuffer, lockCursor, bytesToWrite, &runningSampleIndex);
 
 		uint64 endCycleCounter = __rdtsc();
 		uint64 cycleCounterElapsed = endCycleCounter - startCycleCounter;
-
 		LARGE_INTEGER endPerfCounter;
 		QueryPerformanceCounter(&endPerfCounter);
 		int64 perfCounterElapsed = endPerfCounter.QuadPart - startPerfCounter.QuadPart;
-
 		int32 framesPerSecond = static_cast<int32>(perfFrequency.QuadPart / perfCounterElapsed);
 		int32 millisecondsPerFrame = static_cast<int32>(1000 * perfCounterElapsed / perfFrequency.QuadPart);
 		int32 megaCyclesPerFrame = static_cast<int32>(cycleCounterElapsed / (1000 * 1000));
-
 		char outputBuffer[256];
 		wsprintfA(outputBuffer, "%d f/s, %d ms/f, %d Mc/f\n", framesPerSecond, millisecondsPerFrame, megaCyclesPerFrame);
 		OutputDebugStringA(outputBuffer);
-
 		startPerfCounter = endPerfCounter;
 		startCycleCounter = endCycleCounter;
 	}

@@ -1,5 +1,8 @@
-#if !defined(INT_H)
+#if !defined(GLOBALS_H)
 
+#define _ALLOW_RTCc_IN_STL
+
+#include <math.h>
 #include <stdint.h>
 
 typedef int8_t int8;
@@ -15,5 +18,8 @@ typedef uint64_t uint64;
 typedef float real32;
 typedef double real64;
 
-#define INT_H
+const real32 PI32 = 3.14159265359f;
+const real64 PI64 = 3.14159265358979323846;
+
+#define GLOBALS_H
 #endif
