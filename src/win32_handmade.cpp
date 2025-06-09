@@ -7,63 +7,61 @@
 struct Screen {
 	BITMAPINFO bitmapInfo = {
 		.bmiHeader = {
-			.biSize = sizeof(BITMAPINFOHEADER),
+			.biSize = sizeof(bitmapInfo.bmiHeader),
 			.biPlanes = 1,
 			.biBitCount = 32,
 			.biCompression = BI_RGB,
 		},
 	};
 
-	private: uint8 __padding[4]; public:
+	u8 __padding[4];
 
-	void* memory; // uint32
+	void* memory;
 
-	void setWidth(uint32 width) {
-		bitmapInfo.bmiHeader.biWidth = static_cast<LONG>(width);
+	void setWidth(u16 width) {
+		bitmapInfo.bmiHeader.biWidth = width;
 	}
 
-	uint32 getWidth() {
-		return static_cast<uint32>(bitmapInfo.bmiHeader.biWidth);
+	u16 getWidth() {
+		return static_cast<u16>(bitmapInfo.bmiHeader.biWidth);
 	}
 
-	void setHeight(uint32 height) {
+	void setHeight(u16 height) {
 		// biHeight is negative in order to top-left pixel been first in bitmap
-		bitmapInfo.bmiHeader.biHeight = - static_cast<LONG>(height);
+		bitmapInfo.bmiHeader.biHeight = - height;
 	}
 
-	uint32 getHeight() {
-		LONG positiveHeight = abs(bitmapInfo.bmiHeader.biHeight);
-		return static_cast<uint32>(positiveHeight);
+	u16 getHeight() {
+		long positiveHeight = abs(bitmapInfo.bmiHeader.biHeight);
+		return static_cast<u16>(positiveHeight);
 	}
 
-	uint32 getMemorySize() {
-		uint32 bytesPerPixel = bitmapInfo.bmiHeader.biBitCount / 8u;
-		return bytesPerPixel * getWidth() * getHeight();
+	u64 getMemorySize() {
+		return bitmapInfo.bmiHeader.biBitCount / 8u * getWidth() * getHeight();
 	}
 };
 
 struct Sound {
-	IDirectSoundBuffer* buffer = nullptr;
-	
 	WAVEFORMATEX waveFormat = {
 		.wFormatTag = WAVE_FORMAT_PCM,
 		.nChannels = 2,
 		.nSamplesPerSec = 48000,
-		.nAvgBytesPerSec = sizeof(uint16) * waveFormat.nChannels * waveFormat.nSamplesPerSec,
-		.nBlockAlign = sizeof(uint16) * waveFormat.nChannels,
-		.wBitsPerSample = sizeof(uint16) * 8,
+		.nAvgBytesPerSec = sizeof(u16) * waveFormat.nChannels * waveFormat.nSamplesPerSec,
+		.nBlockAlign = sizeof(u16) * waveFormat.nChannels,
+		.wBitsPerSample = sizeof(u16) * 8,
 	};
 
-	private: uint8 __padding[2]; public:
+	u8 __padding[2];
 
 	DWORD latencySamples = waveFormat.nSamplesPerSec / 15u;
+	IDirectSoundBuffer* buffer;
 };
 
-bool isAppRunning = true;
+static bool isAppRunning = true;
 
 // TODO: move to winmain and attach related methods
-Screen screen = {};
-Sound sound = {};
+static Screen screen = {};
+static Sound sound = {};
 
 static void InitDirectSound(HWND window) {
 	typedef HRESULT DirectSoundCreate(LPCGUID, LPDIRECTSOUND*, LPUNKNOWN);
@@ -113,7 +111,7 @@ static void InitDirectSound(HWND window) {
 	};
 }
 
-static void FillSoundBuffer(Game::SoundBuffer* source, DWORD lockCursor, DWORD bytesToWrite, uint32* runningSampleIndex) {
+static void FillSoundBuffer(Game::SoundBuffer* source, DWORD lockCursor, DWORD bytesToWrite, u32* runningSampleIndex) {
 	void* region1;
 	DWORD region1Size;
 	void* region2;
@@ -122,21 +120,21 @@ static void FillSoundBuffer(Game::SoundBuffer* source, DWORD lockCursor, DWORD b
 		return;
 	}
 
-	int16* sourceSamples = source->samples;
+	s16* sourceSamples = source->samples;
 
-	uint32 region1SizeSamples = region1Size / sound.waveFormat.nBlockAlign;
-	int16* destSamples = static_cast<int16*>(region1);
+	u32 region1SizeSamples = region1Size / sound.waveFormat.nBlockAlign;
+	s16* destSamples = static_cast<s16*>(region1);
 
-	for (uint32 i = 0; i < region1SizeSamples; i++) {
+	for (u32 i = 0; i < region1SizeSamples; i++) {
 		*destSamples++ = *sourceSamples++;
 		*destSamples++ = *sourceSamples++;
 		(*runningSampleIndex)++;
 	}
 
-	uint32 region2SizeSamples = region2Size / sound.waveFormat.nBlockAlign;
-	destSamples = static_cast<int16*>(region2);
+	u32 region2SizeSamples = region2Size / sound.waveFormat.nBlockAlign;
+	destSamples = static_cast<s16*>(region2);
 
-	for (uint32 i = 0; i < region2SizeSamples; i++) {
+	for (u32 i = 0; i < region2SizeSamples; i++) {
 		*destSamples++ = *sourceSamples++;
 		*destSamples++ = *sourceSamples++;
 		(*runningSampleIndex)++;
@@ -154,20 +152,20 @@ static void ClearSoundBuffer() {
 		return;
 	}
 
-	uint8* regionToClean = static_cast<uint8*>(region1);
-	for (uint32 i = 0; i < region1Size; i++) {
+	u8* regionToClean = static_cast<u8*>(region1);
+	for (u32 i = 0; i < region1Size; i++) {
 		*regionToClean++ = 0;
 	}
 
-	regionToClean = static_cast<uint8*>(region2);
-	for (uint32 i = 0; i < region2Size; i++) {
+	regionToClean = static_cast<u8*>(region2);
+	for (u32 i = 0; i < region2Size; i++) {
 		*regionToClean++ = 0;
 	}
 
 	sound.buffer->Unlock(region1, region1Size, region2, region2Size);
 }
 
-static void ResizeScreenBuffer(uint32 width, uint32 height) {
+static void ResizeScreenBuffer(u16 width, u16 height) {
 	if (screen.memory) {
 		VirtualFree(screen.memory, 0, MEM_RELEASE);
 	}
@@ -175,8 +173,7 @@ static void ResizeScreenBuffer(uint32 width, uint32 height) {
 	screen.setWidth(width);
 	screen.setHeight(height);
 	
-	SIZE_T memorySize = screen.getMemorySize();
-	screen.memory = VirtualAlloc(nullptr, memorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	screen.memory = VirtualAlloc(nullptr, screen.getMemorySize(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 }
 
 static void DisplayScreenBuffer(HWND window, HDC deviceContext) {
@@ -185,12 +182,10 @@ static void DisplayScreenBuffer(HWND window, HDC deviceContext) {
 
 	int clientWidth = clientRect.right - clientRect.left;
 	int clientHeight = clientRect.bottom - clientRect.top;
-	int screenWidth = static_cast<int>(screen.getWidth());
-	int screenHeight = static_cast<int>(screen.getHeight());
 
 	StretchDIBits(deviceContext,
 		0, 0, clientWidth, clientHeight,
-		0, 0, screenWidth, screenHeight,
+		0, 0, screen.getWidth(), screen.getHeight(),
 		screen.memory, &screen.bitmapInfo,
 		DIB_RGB_COLORS, SRCCOPY
 	);
@@ -248,8 +243,8 @@ static LRESULT MainWindowCallback(HWND window, UINT message, WPARAM wParam, LPAR
 }
 
 int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int) {
-	const uint32 windowWidth = 1280;
-	const uint32 windowHeight = 720;
+	const u16 windowWidth = 1280;
+	const u16 windowHeight = 720;
 
 	WNDCLASSA windowClass = {
 		.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW,
@@ -268,24 +263,38 @@ int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int
 
 	HDC deviceContext = GetDC(window);
 	ResizeScreenBuffer(windowWidth, windowHeight);
+
 	InitDirectSound(window);
 	ClearSoundBuffer();
-	sound.buffer->Play(0, 0, DSBPLAY_LOOPING);
 	// TODO: address sanitizer crashes program after Play() call, it seems to be known DirectSound problem
 	// https://stackoverflow.com/questions/72511236/directsound-crashes-due-to-a-read-access-violation-when-calling-idirectsoundbuff
 	// try to switch sound to XAudio2 after day 025, and check if address sanitizer problem goes away
+	sound.buffer->Play(0, 0, DSBPLAY_LOOPING);
 
-	int16* soundSamples =  static_cast<int16*>(
+	s16* soundSamples =  static_cast<s16*>(
 		VirtualAlloc(nullptr, sound.waveFormat.nAvgBytesPerSec, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)
 	);
 
-	LARGE_INTEGER perfFrequency;
-	QueryPerformanceFrequency(&perfFrequency);
-	LARGE_INTEGER startPerfCounter;
-	QueryPerformanceCounter(&startPerfCounter);
-	uint64 startCycleCounter = __rdtsc();
+	Game::Memory gameMemory = {
+		.permanentStorageSize = Megabytes(64),
+		.transientStorageSize = Megabytes(4096),
+		// TODO: use single VirtualAlloc for both storages
+		// TODO: set baseAddress based on compilation flag
+		.permanentStorage = VirtualAlloc(nullptr, gameMemory.permanentStorageSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE),
+		.transientStorage = VirtualAlloc(nullptr, gameMemory.transientStorageSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)
+	};
 
-	uint32 runningSampleIndex = 0;
+	if (!gameMemory.permanentStorage || !gameMemory.transientStorage) {
+		return 0;
+	}
+
+	// LARGE_INTEGER perfFrequency;
+	// QueryPerformanceFrequency(&perfFrequency);
+	// LARGE_INTEGER startPerfCounter;
+	// QueryPerformanceCounter(&startPerfCounter);
+	// u64 startCycleCounter = __rdtsc();
+
+	u32 runningSampleIndex = 0;
 
 	while (isAppRunning) {
 		MSG message;
@@ -298,9 +307,9 @@ int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int
 		}
 
 		Game::ScreenBuffer gameScreenBuffer = {
-			.memory = static_cast<uint32*>(screen.memory),
 			.width = screen.getWidth(),
-			.height = screen.getHeight()
+			.height = screen.getHeight(),
+			.memory = static_cast<u32*>(screen.memory),
 		};
 
 		DWORD playCursor;
@@ -316,28 +325,28 @@ int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int
 		}
 
 		Game::SoundBuffer gameSoundBuffer = {
-			.samples = soundSamples,
 			.samplesPerSecond = sound.waveFormat.nSamplesPerSec,
-			.samplesCount = bytesToWrite / sound.waveFormat.nBlockAlign,
+			.samplesToWrite = bytesToWrite / sound.waveFormat.nBlockAlign,
+			.samples = soundSamples,
 		};
 
-		Game::UpdateAndRender(&gameScreenBuffer, &gameSoundBuffer);
+		Game::UpdateAndRender(&gameMemory, &gameScreenBuffer, &gameSoundBuffer);
 		DisplayScreenBuffer(window, deviceContext);
 		FillSoundBuffer(&gameSoundBuffer, lockCursor, bytesToWrite, &runningSampleIndex);
 
-		uint64 endCycleCounter = __rdtsc();
-		uint64 cycleCounterElapsed = endCycleCounter - startCycleCounter;
-		LARGE_INTEGER endPerfCounter;
-		QueryPerformanceCounter(&endPerfCounter);
-		int64 perfCounterElapsed = endPerfCounter.QuadPart - startPerfCounter.QuadPart;
-		int32 framesPerSecond = static_cast<int32>(perfFrequency.QuadPart / perfCounterElapsed);
-		int32 millisecondsPerFrame = static_cast<int32>(1000 * perfCounterElapsed / perfFrequency.QuadPart);
-		int32 megaCyclesPerFrame = static_cast<int32>(cycleCounterElapsed / (1000 * 1000));
-		char outputBuffer[256];
-		wsprintfA(outputBuffer, "%d f/s, %d ms/f, %d Mc/f\n", framesPerSecond, millisecondsPerFrame, megaCyclesPerFrame);
-		OutputDebugStringA(outputBuffer);
-		startPerfCounter = endPerfCounter;
-		startCycleCounter = endCycleCounter;
+		// u64 endCycleCounter = __rdtsc();
+		// u64 cycleCounterElapsed = endCycleCounter - startCycleCounter;
+		// LARGE_INTEGER endPerfCounter;
+		// QueryPerformanceCounter(&endPerfCounter);
+		// s64 perfCounterElapsed = endPerfCounter.QuadPart - startPerfCounter.QuadPart;
+		// s32 framesPerSecond = static_cast<s32>(perfFrequency.QuadPart / perfCounterElapsed);
+		// s32 millisecondsPerFrame = static_cast<s32>(1000 * perfCounterElapsed / perfFrequency.QuadPart);
+		// s32 megaCyclesPerFrame = static_cast<s32>(cycleCounterElapsed / (1000 * 1000));
+		// char outputBuffer[256];
+		// wsprintfA(outputBuffer, "%d f/s, %d ms/f, %d Mc/f\n", framesPerSecond, millisecondsPerFrame, megaCyclesPerFrame);
+		// OutputDebugStringA(outputBuffer);
+		// startPerfCounter = endPerfCounter;
+		// startCycleCounter = endCycleCounter;
 	}
 
 	return 0;
