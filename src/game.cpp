@@ -1,5 +1,7 @@
 #include "globals.h"
-#include <assert.h>
+
+// TODO: delete when sinf will go away
+#include <math.h>
 
 namespace Game {
 	struct ScreenBuffer {
@@ -50,14 +52,13 @@ namespace Game {
 			s16 sampleValue = static_cast<s16>(sinf(gameState->tSine) * volume);
 			*sampleOut++ = sampleValue;
 			*sampleOut++ = sampleValue;
-			gameState->tSine += 2.0f * pi32 / samplesPerWavePeriod;
+			gameState->tSine += 2.0f * PI32 / samplesPerWavePeriod;
 		}
 	}
 
 	// TODO: use unified user input even without controller support
 	static void UpdateAndRender(Memory* memory, ScreenBuffer* screenBuffer, SoundBuffer* soundBuffer) {
-		// TODO: use custom assert
-		assert(sizeof(GameState) <= memory->permanentStorageSize);
+		Assert(sizeof(GameState) <= memory->permanentStorageSize);
 
 		GameState* gameState = static_cast<GameState*>(memory->permanentStorage);
 

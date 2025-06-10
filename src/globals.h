@@ -2,7 +2,6 @@
 
 #define _ALLOW_RTCc_IN_STL
 
-#include <math.h>
 #include <stdint.h>
 
 typedef int8_t s8;
@@ -18,10 +17,15 @@ typedef uint64_t u64;
 typedef float f32;
 typedef double f64;
 
-const f32 pi32 = 3.14159265359f;
-const f64 pi64 = 3.14159265358979323846;
-
-#define ArrayCount(array) (sizeof(array) / sizeof((array)[0]))
+const f32 PI32 = 3.14159265359f;
+const f64 PI64 = 3.14159265358979323846;
 
 #define Kilobytes(value) ((value) * 1024ull)
 #define Megabytes(value) (Kilobytes(value) * 1024ull)
+#define ArrayCount(array) (sizeof(array) / sizeof((array)[0]))
+
+#if HANDMADE_SLOW
+#define Assert(expression) if (!(expression)) { * (int*) nullptr = 0; }
+#else
+#define Assert(expression)
+#endif

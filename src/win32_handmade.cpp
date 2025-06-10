@@ -275,16 +275,20 @@ int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int
 		VirtualAlloc(nullptr, sound.waveFormat.nAvgBytesPerSec, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)
 	);
 
+	#if HANDMADE_INTERNAL
+	LPVOID gameMemoryBaseAddress = reinterpret_cast<LPVOID>(Megabytes(1024 * 1024));
+	#else
+	LPVOID gameMemoryBaseAddress = 0;
+	#endif
+
 	Game::Memory gameMemory = {
 		.permanentStorageSize = Megabytes(64),
 		.transientStorageSize = Megabytes(4096),
-		// TODO: use single VirtualAlloc for both storages
-		// TODO: set baseAddress based on compilation flag
-		.permanentStorage = VirtualAlloc(nullptr, gameMemory.permanentStorageSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE),
-		.transientStorage = VirtualAlloc(nullptr, gameMemory.transientStorageSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)
+		.permanentStorage = VirtualAlloc(gameMemoryBaseAddress, gameMemory.permanentStorageSize + gameMemory.transientStorageSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE),
+		.transientStorage = static_cast<u8*>(gameMemory.permanentStorage) + gameMemory.permanentStorageSize
 	};
 
-	if (!gameMemory.permanentStorage || !gameMemory.transientStorage) {
+	if (!gameMemory.permanentStorage) {
 		return 0;
 	}
 
