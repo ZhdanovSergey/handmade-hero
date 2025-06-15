@@ -1,8 +1,12 @@
 #pragma once
 
-#define _ALLOW_RTCc_IN_STL
+#if !HANDMADE_SLOW
+    #define NDEBUG
+#endif
 
-#include <stdint.h>
+#include <cassert>
+#include <cmath>
+#include <cstdint>
 
 typedef int8_t s8;
 typedef int16_t s16;
@@ -17,15 +21,27 @@ typedef uint64_t u64;
 typedef float f32;
 typedef double f64;
 
-const f32 PI32 = 3.14159265359f;
-const f64 PI64 = 3.14159265358979323846;
+static const f64 pi64 = 3.141592653589793;
+static const f32 pi32 = static_cast<f32>(pi64);
 
-#define Kilobytes(value) ((value) * 1024ull)
-#define Megabytes(value) (Kilobytes(value) * 1024ull)
-#define ArrayCount(array) (sizeof(array) / sizeof((array)[0]))
+static constexpr u64 operator ""_KB(u64 value) { return value << 10; }
+static constexpr u64 operator ""_MB(u64 value) { return value << 20; }
+static constexpr u64 operator ""_GB(u64 value) { return value << 30; }
 
-#if HANDMADE_SLOW
-#define Assert(expression) if (!(expression)) { * (int*) nullptr = 0; }
-#else
-#define Assert(expression)
-#endif
+static inline u32 SafeTruncateToU32(s64 value) {
+    assert(value >= 0 && value <= UINT32_MAX);
+    return static_cast<u32>(value);
+}
+
+// TODO: consider use of std::string and std::byte everywhere
+namespace Platform {
+    struct ReadEntireFileResult {
+        u32 memorySize;
+        std::byte __padding[4];
+        void* memory;
+    };
+
+    static ReadEntireFileResult ReadEntireFile(const char* fileName);
+    static void FreeFileMemory(void* memory);
+    static bool WriteEntireFile(const char* fileName, const void* memory, u32 memorySize);
+}
