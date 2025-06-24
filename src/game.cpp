@@ -12,21 +12,21 @@ namespace Game {
 	};
 
 	static void OutputSound(GameState* gameState, SoundBuffer* soundBuffer) {
-		const u32 frequency = 261;
-		const f32 volume = 5000.0f;
+		constexpr u32 frequency = 261;
+		constexpr f32 volume = 5000.0f;
 
 		f32 samplesPerWavePeriod = static_cast<f32>(soundBuffer->samplesPerSecond / frequency);
 		s16* sampleOut = soundBuffer->samples;
 
 		for (u32 i = 0; i < soundBuffer->samplesToWrite; i++) {
-			s16 sampleValue = static_cast<s16>(sinf(gameState->tSine) * volume);
+			s16 sampleValue = static_cast<s16>(std::sin(gameState->tSine) * volume);
 			*sampleOut++ = sampleValue;
 			*sampleOut++ = sampleValue;
 			gameState->tSine += 2.0f * pi32 / samplesPerWavePeriod;
 		}
 	}
 
-	// TODO: use unified user input even without controller support
+	// TODO FEAT: use unified user input even without controller support
 	static void UpdateAndRender(Memory* memory, ScreenBuffer* screenBuffer, SoundBuffer* soundBuffer) {
 		assert(sizeof(GameState) <= memory->permanentStorageSize);
 

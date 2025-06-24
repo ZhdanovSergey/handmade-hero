@@ -4,6 +4,8 @@
     #define NDEBUG
 #endif
 
+#define _USE_MATH_DEFINES
+
 #include <cassert>
 #include <cmath>
 #include <cstdint>
@@ -21,19 +23,18 @@ typedef uint64_t u64;
 typedef float f32;
 typedef double f64;
 
-static const f64 pi64 = 3.141592653589793;
-static const f32 pi32 = static_cast<f32>(pi64);
+static constexpr f64 pi64 = M_PI;
+static constexpr f32 pi32 = static_cast<f32>(pi64);
 
-static constexpr u64 operator ""_KB(u64 value) { return value << 10; }
-static constexpr u64 operator ""_MB(u64 value) { return value << 20; }
-static constexpr u64 operator ""_GB(u64 value) { return value << 30; }
+#define KB(value) static_cast<size_t>((value##ull) << 10)
+#define MB(value) static_cast<size_t>((value##ull) << 20)
+#define GB(value) static_cast<size_t>((value##ull) << 30)
 
 static inline u32 SafeTruncateToU32(s64 value) {
     assert(value >= 0 && value <= UINT32_MAX);
     return static_cast<u32>(value);
 }
 
-// TODO: consider use of std::string and std::byte everywhere
 namespace Platform {
     struct ReadEntireFileResult {
         u32 memorySize;

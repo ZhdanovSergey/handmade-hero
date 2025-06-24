@@ -18,8 +18,8 @@ namespace Game {
 	struct Memory {
 		bool isInitialized;
 		std::byte __padding[7];
-		u64 permanentStorageSize;
-		u64 transientStorageSize;
+		size_t permanentStorageSize;
+		size_t transientStorageSize;
 		void* permanentStorage;
 		void* transientStorage;
 	};
