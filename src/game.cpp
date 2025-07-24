@@ -1,11 +1,42 @@
-#include "game.h"
+#include "game.hpp"
 
 namespace Game {
-	static void RenderGradient(ScreenBuffer* screenBuffer) {
+	static void UpdateAndRender(Input* input, Memory* memory, ScreenBuffer* screenBuffer, SoundBuffer* soundBuffer) {
+		assert(sizeof(GameState) <= memory->permanentStorageSize);
+
+		GameState* gameState = static_cast<GameState*>(memory->permanentStorage);
+
+		if (!memory->isInitialized)
+			memory->isInitialized = true;
+
+		auto readFileResult = Platform::ReadEntireFile(__FILE__);
+
+		if (readFileResult.memory) {
+			Platform::WriteEntireFile("test.out", readFileResult.memory, readFileResult.memorySize);
+			Platform::FreeFileMemory(readFileResult.memory);
+		}
+
+		if (input->moveUp.isEndedPressed)
+			gameState->greenOffset--;
+
+		if (input->moveDown.isEndedPressed)
+			gameState->greenOffset++;
+
+		if (input->moveRight.isEndedPressed)
+			gameState->blueOffset++;
+
+		if (input->moveLeft.isEndedPressed)
+			gameState->blueOffset--;
+
+		RenderGradient(gameState, screenBuffer);
+		OutputSound(gameState, soundBuffer);
+	};
+
+	static void RenderGradient(GameState* gameState, ScreenBuffer* screenBuffer) {
 		for (u32 y = 0; y < screenBuffer->height; y++) {
 			for (u32 x = 0; x < screenBuffer->width; x++) {
-				u32 green = y & UINT8_MAX;
-				u32 blue = x & UINT8_MAX;
+				u32 green = (y + gameState->greenOffset) & UINT8_MAX;
+				u32 blue = (x + gameState->blueOffset) & UINT8_MAX;
 				*(screenBuffer->memory)++ = (green << 8) | blue; // padding red green blue
 			}
 		}
@@ -25,25 +56,4 @@ namespace Game {
 			gameState->tSine += 2.0f * pi32 / samplesPerWavePeriod;
 		}
 	}
-
-	// TODO FEAT: use unified user input even without controller support
-	static void UpdateAndRender(Memory* memory, ScreenBuffer* screenBuffer, SoundBuffer* soundBuffer) {
-		assert(sizeof(GameState) <= memory->permanentStorageSize);
-
-		GameState* gameState = static_cast<GameState*>(memory->permanentStorage);
-
-		if (!memory->isInitialized) {
-			memory->isInitialized = true;
-		}
-
-		auto readFileResult = Platform::ReadEntireFile(__FILE__);
-
-		if (readFileResult.memory) {
-			Platform::WriteEntireFile("test.out", readFileResult.memory, readFileResult.memorySize);
-			Platform::FreeFileMemory(readFileResult.memory);
-		}
-
-		RenderGradient(screenBuffer);
-		OutputSound(gameState, soundBuffer);
-	};
 }

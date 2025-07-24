@@ -1,4 +1,4 @@
-#include "globals.h"
+#include "globals.hpp"
 #include "game.cpp"
 
 #include <windows.h>
@@ -14,7 +14,7 @@ struct Screen {
 		},
 	};
 
-	std::byte __padding[4];
+	PADDING_4
 
 	void* memory;
 
@@ -51,9 +51,9 @@ struct Sound {
 		.wBitsPerSample = sizeof(s16) * 8,
 	};
 
-	std::byte __padding[2];
+	PADDING_2
 	
-	std::byte __padding2[4];
+	PADDING_4
 	// DWORD latencySamples = waveFormat.nSamplesPerSec / 15u;
 
 	IDirectSoundBuffer* buffer;
@@ -164,38 +164,16 @@ static LRESULT CALLBACK MainWindowCallback(HWND window, UINT message, WPARAM wPa
 			EndPaint(window, &paint);
 		} break;
 
-		case WM_KEYUP:
-		case WM_KEYDOWN: {
-			bool isKeyDown = !(lParam & (1u << 31));
-			bool wasKeyDown = lParam & (1u << 30);
-
-			if (!isKeyDown || wasKeyDown) {
-				return 0;
-			}
-
-			switch (wParam) {
-				case VK_UP: {
-					OutputDebugStringA("VK_UP\n");
-				} break;
-
-				case VK_DOWN: {
-					OutputDebugStringA("VK_DOWN\n");
-				} break;
-
-				case VK_LEFT: {
-					OutputDebugStringA("VK_LEFT\n");
-				} break;
-
-				case VK_RIGHT: {
-					OutputDebugStringA("VK_RIGHT\n");
-				} break;
-			}
-
-		} break;
-
 		case WM_CLOSE:
 		case WM_DESTROY: {
 			isAppRunning = false;
+		} break;
+
+		case WM_KEYUP:
+		case WM_KEYDOWN:
+		case WM_SYSKEYUP:
+		case WM_SYSKEYDOWN: {
+			assert(!"Keyboard input came in through non-dispatched message!");
 		} break;
 
 		default: {
@@ -206,6 +184,81 @@ static LRESULT CALLBACK MainWindowCallback(HWND window, UINT message, WPARAM wPa
 	return 0;
 }
 
+static void ProcessPendingMessages(Game::Input* pGameInput) {
+	pGameInput->ResetTransitionsCount();
+
+	MSG message;
+	while (PeekMessageA(&message, NULL, NULL, NULL, PM_REMOVE)) {
+		switch (message.message) {
+			case WM_QUIT: {
+				isAppRunning = false;
+			} break;
+			case WM_KEYUP:
+			case WM_KEYDOWN:
+			case WM_SYSKEYUP:
+			case WM_SYSKEYDOWN: {
+				bool wasKeyPressed = message.lParam & (1u << 30);
+				bool isKeyPressed = !(message.lParam & (1u << 31));
+
+				if (wasKeyPressed == isKeyPressed)
+					continue;
+
+				Game::ButtonState* pButtonState;
+
+				switch (message.wParam) {
+					case VK_RETURN: {
+						pButtonState = &pGameInput->start;
+					} break;
+					case VK_ESCAPE: {
+						pButtonState = &pGameInput->back;
+					} break;
+					case VK_UP: {
+						pButtonState = &pGameInput->moveUp;
+					} break;
+					case VK_DOWN: {
+						pButtonState = &pGameInput->moveDown;
+					} break;
+					case VK_LEFT: {
+						pButtonState = &pGameInput->moveLeft;
+					} break;
+					case VK_RIGHT: {
+						pButtonState = &pGameInput->moveRight;
+					} break;
+					case 'W': {
+						pButtonState = &pGameInput->actionUp;
+					} break;
+					case 'S': {
+						pButtonState = &pGameInput->actionDown;
+					} break;
+					case 'A': {
+						pButtonState = &pGameInput->actionLeft;
+					} break;
+					case 'D': {
+						pButtonState = &pGameInput->actionRight;
+					} break;
+					case 'Q': {
+						pButtonState = &pGameInput->leftShoulder;
+					} break;
+					case 'E': {
+						pButtonState = &pGameInput->rightShoulder;
+					} break;
+					default: {
+						continue;
+					}
+				}
+
+				pButtonState->isEndedPressed = isKeyPressed;
+				pButtonState->transitionsCount++;
+			} break;
+			default: {
+				TranslateMessage(&message);
+				DispatchMessageA(&message);
+			}
+		}
+	}
+}
+
+// TODO REF: add header file and reorder functions top-down
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int) {
 	static_assert(HANDMADE_DEV || !HANDMADE_SLOW);
 
@@ -247,20 +300,22 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 
 	void* gameMemoryBaseAddress = nullptr;
 	if constexpr (HANDMADE_DEV) {
-		gameMemoryBaseAddress = reinterpret_cast<void*>(GB(1024));
+		gameMemoryBaseAddress = reinterpret_cast<void*>(1024_GB);
 	}
 
-	constexpr size_t gameMemorySize = GB(1);
+	constexpr size_t gameMemorySize = 1_GB;
 	void* gameMemoryStorage = VirtualAlloc(gameMemoryBaseAddress, gameMemorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 	if (!gameMemoryStorage)
 		return 0;
 
 	Game::Memory gameMemory = {
-		.permanentStorageSize = MB(64),
+		.permanentStorageSize = 64_MB,
 		.transientStorageSize = gameMemorySize - gameMemory.permanentStorageSize,
 		.permanentStorage = gameMemoryStorage,
 		.transientStorage = static_cast<std::byte*>(gameMemory.permanentStorage) + gameMemory.permanentStorageSize
 	};
+
+	Game::Input gameInput = {};
 
 	// LARGE_INTEGER perfFrequency;
 	// QueryPerformanceFrequency(&perfFrequency);
@@ -271,11 +326,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 	u32 runningSampleIndex = 0;
 
 	while (isAppRunning) {
-		MSG message;
-		while (PeekMessageA(&message, window, NULL, NULL, PM_REMOVE)) {
-			TranslateMessage(&message);
-			DispatchMessageA(&message);
-		}
+		ProcessPendingMessages(&gameInput);
 
 		Game::ScreenBuffer gameScreenBuffer = {
 			.width = screen.getWidth(),
@@ -304,7 +355,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 			.samples = soundSamples,
 		};
 
-		Game::UpdateAndRender(&gameMemory, &gameScreenBuffer, &gameSoundBuffer);
+		Game::UpdateAndRender(&gameInput, &gameMemory, &gameScreenBuffer, &gameSoundBuffer);
 		DisplayScreenBuffer(window, deviceContext);
 		FillSoundBuffer(&gameSoundBuffer, lockCursor, bytesToWrite, &runningSampleIndex);
 
