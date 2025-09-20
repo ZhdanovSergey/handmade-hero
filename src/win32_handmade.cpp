@@ -184,8 +184,8 @@ static LRESULT CALLBACK MainWindowCallback(HWND window, UINT message, WPARAM wPa
 	return 0;
 }
 
-static void ProcessPendingMessages(Game::Input* pGameInput) {
-	pGameInput->ResetTransitionsCount();
+static void ProcessPendingMessages(Game::Input* gameInput) {
+	gameInput->ResetTransitionsCount();
 
 	MSG message;
 	while (PeekMessageA(&message, NULL, NULL, NULL, PM_REMOVE)) {
@@ -203,52 +203,52 @@ static void ProcessPendingMessages(Game::Input* pGameInput) {
 				if (wasKeyPressed == isKeyPressed)
 					continue;
 
-				Game::ButtonState* pButtonState;
+				Game::ButtonState* buttonState;
 
 				switch (message.wParam) {
 					case VK_RETURN: {
-						pButtonState = &pGameInput->start;
+						buttonState = &gameInput->start;
 					} break;
 					case VK_ESCAPE: {
-						pButtonState = &pGameInput->back;
+						buttonState = &gameInput->back;
 					} break;
 					case VK_UP: {
-						pButtonState = &pGameInput->moveUp;
+						buttonState = &gameInput->moveUp;
 					} break;
 					case VK_DOWN: {
-						pButtonState = &pGameInput->moveDown;
+						buttonState = &gameInput->moveDown;
 					} break;
 					case VK_LEFT: {
-						pButtonState = &pGameInput->moveLeft;
+						buttonState = &gameInput->moveLeft;
 					} break;
 					case VK_RIGHT: {
-						pButtonState = &pGameInput->moveRight;
+						buttonState = &gameInput->moveRight;
 					} break;
 					case 'W': {
-						pButtonState = &pGameInput->actionUp;
+						buttonState = &gameInput->actionUp;
 					} break;
 					case 'S': {
-						pButtonState = &pGameInput->actionDown;
+						buttonState = &gameInput->actionDown;
 					} break;
 					case 'A': {
-						pButtonState = &pGameInput->actionLeft;
+						buttonState = &gameInput->actionLeft;
 					} break;
 					case 'D': {
-						pButtonState = &pGameInput->actionRight;
+						buttonState = &gameInput->actionRight;
 					} break;
 					case 'Q': {
-						pButtonState = &pGameInput->leftShoulder;
+						buttonState = &gameInput->leftShoulder;
 					} break;
 					case 'E': {
-						pButtonState = &pGameInput->rightShoulder;
+						buttonState = &gameInput->rightShoulder;
 					} break;
 					default: {
 						continue;
 					}
 				}
 
-				pButtonState->isEndedPressed = isKeyPressed;
-				pButtonState->transitionsCount++;
+				buttonState->isEndedPressed = isKeyPressed;
+				buttonState->transitionsCount++;
 			} break;
 			default: {
 				TranslateMessage(&message);

@@ -1,6 +1,5 @@
 #pragma once
 
-// TODO REF: prefix pointers with p
 // TODO FEAT: move to clang
 // TODO FEAT: revive windows xp build
 
