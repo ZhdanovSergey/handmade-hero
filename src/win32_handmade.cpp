@@ -77,7 +77,7 @@ static void InitDirectSound(HWND window) {
 		return;
 
 	IDirectSound* directSound;
-	if (!SUCCEEDED(directSoundCreate(nullptr, &directSound, nullptr)))
+	if (!SUCCEEDED(directSoundCreate(0, &directSound, 0)))
 		return;
 
 	if (!SUCCEEDED(directSound->SetCooperativeLevel(window, DSSCL_PRIORITY)))
@@ -89,7 +89,7 @@ static void InitDirectSound(HWND window) {
 	};
 
 	IDirectSoundBuffer* primaryBuffer;
-	if (!SUCCEEDED(directSound->CreateSoundBuffer(&primaryBufferDesc, &primaryBuffer, nullptr)))
+	if (!SUCCEEDED(directSound->CreateSoundBuffer(&primaryBufferDesc, &primaryBuffer, 0)))
 		return;
 
 	if (!SUCCEEDED(primaryBuffer->SetFormat(&sound.waveFormat)))
@@ -100,12 +100,12 @@ static void InitDirectSound(HWND window) {
 		.dwBufferBytes = sound.waveFormat.nAvgBytesPerSec,
 		.lpwfxFormat = &sound.waveFormat
 	};
-	directSound->CreateSoundBuffer(&soundBufferDesc, &sound.buffer, nullptr);
+	directSound->CreateSoundBuffer(&soundBufferDesc, &sound.buffer, 0);
 }
 
 static void FillSoundBuffer(Game::SoundBuffer* source, DWORD lockCursor, DWORD bytesToWrite, u32* runningSampleIndex) {
 	void* region1; DWORD region1Size; void* region2; DWORD region2Size;
-	if (!SUCCEEDED(sound.buffer->Lock(lockCursor, bytesToWrite, &region1, &region1Size, &region2, &region2Size, NULL)))
+	if (!SUCCEEDED(sound.buffer->Lock(lockCursor, bytesToWrite, &region1, &region1Size, &region2, &region2Size, 0)))
 		return;
 
 	// TODO REF: remove block when runningSampleIndex will go away
@@ -124,7 +124,7 @@ static void FillSoundBuffer(Game::SoundBuffer* source, DWORD lockCursor, DWORD b
 
 static void ClearSoundBuffer() {
 	void* region1; DWORD region1Size; void* region2; DWORD region2Size;
-	if (!SUCCEEDED(sound.buffer->Lock(0, sound.waveFormat.nAvgBytesPerSec, &region1, &region1Size, &region2, &region2Size, NULL)))
+	if (!SUCCEEDED(sound.buffer->Lock(0, sound.waveFormat.nAvgBytesPerSec, &region1, &region1Size, &region2, &region2Size, 0)))
 		return;
 
 	std::memset(region1, 0, region1Size);
@@ -134,11 +134,11 @@ static void ClearSoundBuffer() {
 
 static void ResizeScreenBuffer(u16 width, u16 height) {
 	if (screen.memory)
-		VirtualFree(screen.memory, NULL, MEM_RELEASE);
+		VirtualFree(screen.memory, 0, MEM_RELEASE);
 		
 	screen.setWidth(width);
 	screen.setHeight(height);
-	screen.memory = VirtualAlloc(nullptr, screen.getMemorySize(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	screen.memory = VirtualAlloc(0, screen.getMemorySize(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 }
 
 static void DisplayScreenBuffer(HWND window, HDC deviceContext) {
@@ -188,7 +188,7 @@ static void ProcessPendingMessages(Game::Input* gameInput) {
 	gameInput->ResetTransitionsCount();
 
 	MSG message;
-	while (PeekMessageA(&message, NULL, NULL, NULL, PM_REMOVE)) {
+	while (PeekMessageA(&message, 0, 0, 0, PM_REMOVE)) {
 		switch (message.message) {
 			case WM_QUIT: {
 				isAppRunning = false;
@@ -275,9 +275,9 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 	RegisterClassA(&windowClass);
 
 	HWND window = CreateWindowExA(
-		NULL, windowClass.lpszClassName, "Handmade Hero", WS_TILEDWINDOW | WS_VISIBLE,
+		0, windowClass.lpszClassName, "Handmade Hero", WS_TILEDWINDOW | WS_VISIBLE,
 		CW_USEDEFAULT, CW_USEDEFAULT, windowWidth, windowHeight,
-		nullptr, nullptr, hInstance, nullptr
+		0, 0, hInstance, 0
 	);
 
 	HDC deviceContext = GetDC(window);
@@ -291,14 +291,14 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 		// TODO FEAT: address sanitizer crashes program after Play() call, it seems to be known DirectSound problem
 		// https://stackoverflow.com/questions/72511236/directsound-crashes-due-to-a-read-access-violation-when-calling-idirectsoundbuff
 		// try to switch sound to XAudio2 after day 025, and check if address sanitizer problem goes away
-		sound.buffer->Play(NULL, NULL, DSBPLAY_LOOPING);
+		sound.buffer->Play(0, 0, DSBPLAY_LOOPING);
 	}
 
 	s16* soundSamples =  static_cast<s16*>(
-		VirtualAlloc(nullptr, sound.waveFormat.nAvgBytesPerSec, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)
+		VirtualAlloc(0, sound.waveFormat.nAvgBytesPerSec, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)
 	);
 
-	void* gameMemoryBaseAddress = nullptr;
+	void* gameMemoryBaseAddress = 0;
 	if constexpr (HANDMADE_DEV) {
 		gameMemoryBaseAddress = reinterpret_cast<void*>(1024_GB);
 	}
@@ -386,21 +386,21 @@ namespace Platform {
 		if (!heapHandle)
 			return;
 
-		HeapFree(heapHandle, NULL, memory);
-		memory = nullptr;
+		HeapFree(heapHandle, 0, memory);
+		memory = 0;
 	}
 
 	static ReadEntireFileResult ReadEntireFile(const char* fileName) {
 		ReadEntireFileResult result = {};
 		u32 memorySize = 0;
-		void* memory = nullptr;
+		void* memory = 0;
 
 		// seems like this handle don't need to be closed
 		HANDLE heapHandle = GetProcessHeap();
 		if (!heapHandle)
 			return result;
 
-		HANDLE fileHandle = CreateFileA(fileName, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, NULL, nullptr);
+		HANDLE fileHandle = CreateFileA(fileName, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
 		if (fileHandle == INVALID_HANDLE_VALUE)
 			return result;
 
@@ -409,13 +409,13 @@ namespace Platform {
 			goto close_file_handle;
 
 		memorySize = SafeTruncateToU32(fileSize.QuadPart);
-		memory = HeapAlloc(heapHandle, NULL, memorySize);
+		memory = HeapAlloc(heapHandle, 0, memorySize);
 		if (!memory)
 			goto close_file_handle;
 
 		DWORD bytesRead;
-		if (!ReadFile(fileHandle, memory, memorySize, &bytesRead, nullptr) || (bytesRead != memorySize)) {
-			HeapFree(heapHandle, NULL, memory);
+		if (!ReadFile(fileHandle, memory, memorySize, &bytesRead, 0) || (bytesRead != memorySize)) {
+			HeapFree(heapHandle, 0, memory);
 			goto close_file_handle;
 		}
 
@@ -430,12 +430,12 @@ namespace Platform {
 	static bool WriteEntireFile(const char* fileName, const void* memory, u32 memorySize) {
 		bool result = false;
 
-		HANDLE fileHandle = CreateFileA(fileName, GENERIC_WRITE, NULL, nullptr, CREATE_ALWAYS, NULL, nullptr);
+		HANDLE fileHandle = CreateFileA(fileName, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
 		if (fileHandle == INVALID_HANDLE_VALUE)
 			return result;
 
 		DWORD bytesWritten;
-		if (WriteFile(fileHandle, memory, memorySize, &bytesWritten, nullptr) && (bytesWritten == memorySize)) {
+		if (WriteFile(fileHandle, memory, memorySize, &bytesWritten, 0) && (bytesWritten == memorySize)) {
 			result = true;
 		}
 
