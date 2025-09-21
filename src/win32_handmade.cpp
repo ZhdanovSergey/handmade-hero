@@ -14,8 +14,6 @@ struct Screen {
 		},
 	};
 
-	PADDING_4
-
 	void* memory;
 
 	void setWidth(u32 width) {
@@ -32,7 +30,7 @@ struct Screen {
 	}
 
 	u32 getHeight() {
-		long positiveHeight = std::abs(bitmapInfo.bmiHeader.biHeight);
+		LONG positiveHeight = std::abs(bitmapInfo.bmiHeader.biHeight);
 		return static_cast<u32>(positiveHeight);
 	}
 
@@ -51,11 +49,7 @@ struct Sound {
 		.wBitsPerSample = sizeof(s16) * 8,
 	};
 
-	PADDING_2
-	
-	PADDING_4
 	// DWORD latencySamples = waveFormat.nSamplesPerSec / 15u;
-
 	IDirectSoundBuffer* buffer;
 };
 
@@ -301,11 +295,10 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 		VirtualAlloc(0, sound.waveFormat.nAvgBytesPerSec, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)
 	);
 
-	#if HANDMADE_DEV
-		void* gameMemoryBaseAddress = reinterpret_cast<void*>(1024_GB);
-	#else
-		void* gameMemoryBaseAddress = 0;
-	#endif
+	void* gameMemoryBaseAddress = 0;
+	if constexpr (HANDMADE_DEV) {
+		gameMemoryBaseAddress = reinterpret_cast<void*>(1024_GB);
+	}
 
 	const size_t gameMemorySize = 1_GB;
 	void* gameMemoryStorage = VirtualAlloc(gameMemoryBaseAddress, gameMemorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);

@@ -12,7 +12,6 @@ namespace Game {
 	struct ButtonState {
 		u32 transitionsCount;
 		bool isEndedPressed;
-		PADDING_3
 	};
 
 	struct Input {
@@ -57,7 +56,6 @@ namespace Game {
 		void* permanentStorage;
 		void* transientStorage;
 		bool isInitialized;
-		PADDING_7
 	};
 
 	struct ScreenBuffer {

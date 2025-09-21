@@ -11,36 +11,18 @@
 #include <cmath>
 #include <cstdint>
 
-typedef int8_t s8;
-typedef int16_t s16;
-typedef int32_t s32;
-typedef int64_t s64;
+typedef float f32;
+typedef double f64;
 
 typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
 
-typedef float f32;
-typedef double f64;
-
-#define CONCAT_IMPL(x, y) x##y
-#define CONCAT(x, y) CONCAT_IMPL(x, y)
-
-#if INTPTR_MAX == INT64_MAX
-    #define _PADDING(value) char CONCAT(_padding, __LINE__)[value];
-    #define PADDING_4 _PADDING(4)
-#else
-    #define _PADDING(value) char CONCAT(_padding, __LINE__)[value % 4];
-    #define PADDING_4
-#endif
-
-#define PADDING_1 _PADDING(1)
-#define PADDING_2 _PADDING(2)
-#define PADDING_3 _PADDING(3)
-#define PADDING_5 _PADDING(5)
-#define PADDING_6 _PADDING(6)
-#define PADDING_7 _PADDING(7)
+typedef int8_t s8;
+typedef int16_t s16;
+typedef int32_t s32;
+typedef int64_t s64;
 
 static constexpr f64 pi64 = 3.14159265358979323846;
 static constexpr f32 pi32 = static_cast<f32>(pi64);
@@ -57,7 +39,6 @@ static inline u32 SafeTruncateToU32(s64 value) {
 namespace Platform {
     struct ReadEntireFileResult {
         u32 memorySize;
-        PADDING_4
         void* memory;
     };
 
