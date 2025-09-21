@@ -43,8 +43,8 @@ namespace Game {
 	};
 
 	static void OutputSound(GameState* gameState, SoundBuffer* soundBuffer) {
-		constexpr u32 frequency = 261;
-		constexpr f32 volume = 5000.0f;
+		const u32 frequency = 261;
+		const f32 volume = 5000.0f;
 
 		f32 samplesPerWavePeriod = static_cast<f32>(soundBuffer->samplesPerSecond / frequency);
 		s16* sampleOut = soundBuffer->samples;

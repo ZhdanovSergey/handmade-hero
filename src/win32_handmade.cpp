@@ -18,22 +18,22 @@ struct Screen {
 
 	void* memory;
 
-	void setWidth(u16 width) {
-		bitmapInfo.bmiHeader.biWidth = width;
+	void setWidth(u32 width) {
+		bitmapInfo.bmiHeader.biWidth = static_cast<LONG>(width);
 	}
 
-	u16 getWidth() {
-		return static_cast<u16>(bitmapInfo.bmiHeader.biWidth);
+	u32 getWidth() {
+		return static_cast<u32>(bitmapInfo.bmiHeader.biWidth);
 	}
 
-	void setHeight(u16 height) {
+	void setHeight(u32 height) {
 		// biHeight is negative in order to top-left pixel been first in bitmap
-		bitmapInfo.bmiHeader.biHeight = - height;
+		bitmapInfo.bmiHeader.biHeight = - static_cast<LONG>(height);
 	}
 
-	u16 getHeight() {
+	u32 getHeight() {
 		long positiveHeight = std::abs(bitmapInfo.bmiHeader.biHeight);
-		return static_cast<u16>(positiveHeight);
+		return static_cast<u32>(positiveHeight);
 	}
 
 	size_t getMemorySize() {
@@ -110,7 +110,7 @@ static void FillSoundBuffer(Game::SoundBuffer* source, DWORD lockCursor, DWORD b
 
 	// TODO REF: remove block when runningSampleIndex will go away
 	// -------------------------------------------------------
-	constexpr u32 sampleSize = sizeof(*(source->samples));
+	u32 sampleSize = sizeof(*(source->samples));
 	u32 region1SizeInSamples = region1Size / sampleSize;
 	u32 region2SizeInSamples = region2Size / sampleSize;
 	*runningSampleIndex += (region1SizeInSamples + region2SizeInSamples) / 2;
@@ -132,7 +132,7 @@ static void ClearSoundBuffer() {
 	sound.buffer->Unlock(region1, region1Size, region2, region2Size);
 }
 
-static void ResizeScreenBuffer(u16 width, u16 height) {
+static void ResizeScreenBuffer(u32 width, u32 height) {
 	if (screen.memory)
 		VirtualFree(screen.memory, 0, MEM_RELEASE);
 		
@@ -144,12 +144,15 @@ static void ResizeScreenBuffer(u16 width, u16 height) {
 static void DisplayScreenBuffer(HWND window, HDC deviceContext) {
 	RECT clientRect;
 	GetClientRect(window, &clientRect);
+
 	int clientWidth = clientRect.right - clientRect.left;
 	int clientHeight = clientRect.bottom - clientRect.top;
+	int screenWidth = static_cast<int>(screen.getWidth());
+	int screenHeight = static_cast<int>(screen.getHeight());
 
 	StretchDIBits(deviceContext,
 		0, 0, clientWidth, clientHeight,
-		0, 0, screen.getWidth(), screen.getHeight(),
+		0, 0, screenWidth, screenHeight,
 		screen.memory, &screen.bitmapInfo,
 		DIB_RGB_COLORS, SRCCOPY
 	);
@@ -262,8 +265,8 @@ static void ProcessPendingMessages(Game::Input* gameInput) {
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int) {
 	static_assert(HANDMADE_DEV || !HANDMADE_SLOW);
 
-	constexpr u16 windowWidth = 1280;
-	constexpr u16 windowHeight = 720;
+	const u32 windowWidth = 1280;
+	const u32 windowHeight = 720;
 
 	WNDCLASSA windowClass = {
 		.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW,
@@ -298,12 +301,13 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 		VirtualAlloc(0, sound.waveFormat.nAvgBytesPerSec, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)
 	);
 
-	void* gameMemoryBaseAddress = 0;
-	if constexpr (HANDMADE_DEV) {
-		gameMemoryBaseAddress = reinterpret_cast<void*>(1024_GB);
-	}
+	#if HANDMADE_DEV
+		void* gameMemoryBaseAddress = reinterpret_cast<void*>(1024_GB);
+	#else
+		void* gameMemoryBaseAddress = 0;
+	#endif
 
-	constexpr size_t gameMemorySize = 1_GB;
+	const size_t gameMemorySize = 1_GB;
 	void* gameMemoryStorage = VirtualAlloc(gameMemoryBaseAddress, gameMemorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 	if (!gameMemoryStorage)
 		return 0;

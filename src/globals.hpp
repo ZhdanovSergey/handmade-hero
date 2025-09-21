@@ -7,8 +7,6 @@
     #define NDEBUG
 #endif
 
-#define _USE_MATH_DEFINES
-
 #include <cassert>
 #include <cmath>
 #include <cstdint>
@@ -44,7 +42,7 @@ typedef double f64;
 #define PADDING_6 _PADDING(6)
 #define PADDING_7 _PADDING(7)
 
-static constexpr f64 pi64 = M_PI;
+static constexpr f64 pi64 = 3.14159265358979323846;
 static constexpr f32 pi32 = static_cast<f32>(pi64);
 
 static constexpr size_t operator ""_KB(u64 value) { return static_cast<size_t>((value << 10) & SIZE_MAX); }
