@@ -4,7 +4,7 @@ namespace Game {
 	static void UpdateAndRender(Input* input, Memory* memory, ScreenBuffer* screenBuffer, SoundBuffer* soundBuffer) {
 		assert(sizeof(GameState) <= memory->permanentStorageSize);
 
-		GameState* gameState = static_cast<GameState*>(memory->permanentStorage);
+		GameState* gameState = (GameState*)memory->permanentStorage;
 
 		if (!memory->isInitialized)
 			memory->isInitialized = true;
@@ -46,11 +46,11 @@ namespace Game {
 		u32 frequency = 261;
 		f32 volume = 5000.0f;
 
-		f32 samplesPerWavePeriod = static_cast<f32>(soundBuffer->samplesPerSecond / frequency);
+		f32 samplesPerWavePeriod = (f32)(soundBuffer->samplesPerSecond / frequency);
 		s16* sampleOut = soundBuffer->samples;
 
 		for (u32 i = 0; i < soundBuffer->samplesToWrite; i++) {
-			s16 sampleValue = static_cast<s16>(std::sin(gameState->tSine) * volume);
+			s16 sampleValue = (s16)(std::sin(gameState->tSine) * volume);
 			*sampleOut++ = sampleValue;
 			*sampleOut++ = sampleValue;
 			gameState->tSine += 2.0f * pi32 / samplesPerWavePeriod;

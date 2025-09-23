@@ -25,15 +25,15 @@ typedef int32_t s32;
 typedef int64_t s64;
 
 static constexpr f64 pi64 = 3.14159265358979323846;
-static constexpr f32 pi32 = static_cast<f32>(pi64);
+static constexpr f32 pi32 = (f32)pi64;
 
-static constexpr size_t operator ""_KB(u64 value) { return static_cast<size_t>((value << 10) & SIZE_MAX); }
-static constexpr size_t operator ""_MB(u64 value) { return static_cast<size_t>((value << 20) & SIZE_MAX); }
-static constexpr size_t operator ""_GB(u64 value) { return static_cast<size_t>((value << 30) & SIZE_MAX); }
+static constexpr size_t operator ""_KB(u64 value) { return (size_t)(value << 10); }
+static constexpr size_t operator ""_MB(u64 value) { return (size_t)(value << 20); }
+static constexpr size_t operator ""_GB(u64 value) { return (size_t)(value << 30); }
 
 static inline u32 SafeTruncateToU32(s64 value) {
     assert(value >= 0 && value <= UINT32_MAX);
-    return static_cast<u32>(value);
+    return (u32)value;
 }
 
 namespace Platform {
