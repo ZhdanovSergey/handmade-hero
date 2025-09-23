@@ -55,7 +55,8 @@ struct Sound {
 
 // TODO REF: try to get rid of globals
 // TODO REF: attach methods to structs after day 020
-static bool isAppRunning = true;
+static bool globalIsAppRunning = true;
+static u64 globalPerfFrequency;
 static Screen screen = {};
 static Sound sound = {};
 
@@ -163,7 +164,7 @@ static LRESULT CALLBACK MainWindowCallback(HWND window, UINT message, WPARAM wPa
 
 		case WM_CLOSE:
 		case WM_DESTROY: {
-			isAppRunning = false;
+			globalIsAppRunning = false;
 		} break;
 
 		case WM_KEYUP:
@@ -188,7 +189,7 @@ static void ProcessPendingMessages(Game::Input* gameInput) {
 	while (PeekMessageA(&message, 0, 0, 0, PM_REMOVE)) {
 		switch (message.message) {
 			case WM_QUIT: {
-				isAppRunning = false;
+				globalIsAppRunning = false;
 			} break;
 			case WM_KEYUP:
 			case WM_KEYDOWN:
@@ -255,12 +256,32 @@ static void ProcessPendingMessages(Game::Input* gameInput) {
 	}
 }
 
+static inline u64 GetWallClock() {
+	LARGE_INTEGER perfCounterResult;
+	QueryPerformanceCounter(&perfCounterResult);
+	return (u64)perfCounterResult.QuadPart;
+}
+
+static inline f32 GetSecondsElapsed(u64 start) {
+	return (f32)(GetWallClock() - start) / (f32)globalPerfFrequency;
+}
+
 // TODO REF: add header file and reorder functions top-down
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int) {
 	static_assert(HANDMADE_DEV || !HANDMADE_SLOW);
 
 	const u32 windowWidth = 1280;
 	const u32 windowHeight = 720;
+
+	u32 targetUpdateFrequency = 30;
+	f32 targetSecondsPerFrame = 1.0f / (f32)targetUpdateFrequency;
+
+	LARGE_INTEGER perfFrequencyResult;
+	QueryPerformanceFrequency(&perfFrequencyResult);
+	globalPerfFrequency = (u64)perfFrequencyResult.QuadPart;
+
+	// set Windows scheduler granularity in ms
+	bool sleepIsGranular = timeBeginPeriod(1) == TIMERR_NOERROR;
 
 	WNDCLASSA windowClass = {
 		.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW,
@@ -300,7 +321,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 		gameMemoryBaseAddress = reinterpret_cast<void*>(1024_GB);
 	}
 
-	const size_t gameMemorySize = 1_GB;
+	size_t gameMemorySize = 1_GB;
 	void* gameMemoryStorage = VirtualAlloc(gameMemoryBaseAddress, gameMemorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 	if (!gameMemoryStorage)
 		return 0;
@@ -314,15 +335,12 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 
 	Game::Input gameInput = {};
 
-	// LARGE_INTEGER perfFrequency;
-	// QueryPerformanceFrequency(&perfFrequency);
-	// LARGE_INTEGER startPerfCounter;
-	// QueryPerformanceCounter(&startPerfCounter);
-	// u64 startCycleCounter = __rdtsc();
+	u64 startPerfCounter = GetWallClock();
+	u64 startCycleCounter = __rdtsc();
 
 	u32 runningSampleIndex = 0;
 
-	while (isAppRunning) {
+	while (globalIsAppRunning) {
 		ProcessPendingMessages(&gameInput);
 
 		Game::ScreenBuffer gameScreenBuffer = {
@@ -353,22 +371,35 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 		};
 
 		Game::UpdateAndRender(&gameInput, &gameMemory, &gameScreenBuffer, &gameSoundBuffer);
-		DisplayScreenBuffer(window, deviceContext);
 		FillSoundBuffer(&gameSoundBuffer, lockCursor, bytesToWrite, &runningSampleIndex);
 
-		// u64 endCycleCounter = __rdtsc();
-		// u64 cycleCounterElapsed = endCycleCounter - startCycleCounter;
-		// LARGE_INTEGER endPerfCounter;
-		// QueryPerformanceCounter(&endPerfCounter);
-		// s64 perfCounterElapsed = endPerfCounter.QuadPart - startPerfCounter.QuadPart;
-		// s32 framesPerSecond = static_cast<s32>(perfFrequency.QuadPart / perfCounterElapsed);
-		// s32 millisecondsPerFrame = static_cast<s32>(1000 * perfCounterElapsed / perfFrequency.QuadPart);
-		// s32 megaCyclesPerFrame = static_cast<s32>(cycleCounterElapsed / (1000 * 1000));
-		// char outputBuffer[256];
-		// wsprintfA(outputBuffer, "%d f/s, %d ms/f, %d Mc/f\n", framesPerSecond, millisecondsPerFrame, megaCyclesPerFrame);
-		// OutputDebugStringA(outputBuffer);
-		// startPerfCounter = endPerfCounter;
-		// startCycleCounter = endCycleCounter;
+		f32 frameSecondsElapsed = GetSecondsElapsed(startPerfCounter);
+		if (sleepIsGranular && frameSecondsElapsed < targetSecondsPerFrame) {
+			DWORD sleepErrorMs = 2;
+			DWORD sleepMs = (DWORD)(1000.0f * (targetSecondsPerFrame - frameSecondsElapsed));
+			if (sleepMs > sleepErrorMs) Sleep(sleepMs - sleepErrorMs);
+		}
+
+		frameSecondsElapsed = GetSecondsElapsed(startPerfCounter);
+		// TODO: change assert to log, because sometimes sleep is late anyway
+		if (globalIsAppRunning) assert(frameSecondsElapsed < targetSecondsPerFrame);
+
+		while (frameSecondsElapsed < targetSecondsPerFrame)
+			frameSecondsElapsed = GetSecondsElapsed(startPerfCounter);
+		
+		DisplayScreenBuffer(window, deviceContext);
+
+		u64 endCycleCounter = __rdtsc();
+		u64 cycleCounterElapsed = endCycleCounter - startCycleCounter;
+		u32 framesPerSecond = (u32)(1 / frameSecondsElapsed);
+		u32 millisecondsPerFrame = (u32)(1000 * frameSecondsElapsed);
+		u32 megaCyclesPerFrame = (u32)(cycleCounterElapsed / (1000 * 1000));
+		char outputBuffer[256];
+		wsprintfA(outputBuffer, "%d f/s, %d ms/f, %d Mc/f\n", framesPerSecond, millisecondsPerFrame, megaCyclesPerFrame);
+		OutputDebugStringA(outputBuffer);
+		
+		startPerfCounter = GetWallClock();
+		startCycleCounter = __rdtsc();
 	}
 
 	return 0;
