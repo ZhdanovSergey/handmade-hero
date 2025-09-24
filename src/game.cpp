@@ -44,16 +44,16 @@ namespace Game {
 
 	static void OutputSound(GameState* gameState, SoundBuffer* soundBuffer) {
 		u32 frequency = 261;
-		f32 volume = 5000.0f;
+		f64 volume = 5000.0;
 
-		f32 samplesPerWavePeriod = (f32)(soundBuffer->samplesPerSecond / frequency);
+		f64 samplesPerWavePeriod = (f64)(soundBuffer->samplesPerSecond / frequency);
 		s16* sampleOut = soundBuffer->samples;
 
 		for (u32 i = 0; i < soundBuffer->samplesToWrite; i++) {
 			s16 sampleValue = (s16)(std::sin(gameState->tSine) * volume);
 			*sampleOut++ = sampleValue;
 			*sampleOut++ = sampleValue;
-			gameState->tSine += 2.0f * pi32 / samplesPerWavePeriod;
+			gameState->tSine += 2.0 * pi64 / samplesPerWavePeriod;
 		}
 	}
 }

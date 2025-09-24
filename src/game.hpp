@@ -4,7 +4,7 @@
 
 namespace Game {
 	struct GameState {
-		f32 tSine;
+		f64 tSine;
 		u32 greenOffset;
 		u32 blueOffset;
 	};

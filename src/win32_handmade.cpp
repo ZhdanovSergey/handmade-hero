@@ -370,7 +370,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 
 		f32 frameSecondsElapsed = GetSecondsElapsed(startWallClock);
 		if (sleepIsGranular && frameSecondsElapsed < targetSecondsPerFrame) {
-			DWORD sleepErrorMs = 2;
+			DWORD sleepErrorMs = 3;
 			DWORD sleepMs = (DWORD)(1000.0f * (targetSecondsPerFrame - frameSecondsElapsed));
 			if (sleepMs > sleepErrorMs) Sleep(sleepMs - sleepErrorMs);
 		}
