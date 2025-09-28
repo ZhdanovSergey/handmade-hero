@@ -1,6 +1,6 @@
 #pragma once
 
-// TODO FEAT: move to clang
+// TODO: use std::byte* instead of void* for raw data?
 // TODO FEAT: revive windows xp build
 
 #if !HANDMADE_SLOW
@@ -35,6 +35,8 @@ static inline u32 SafeTruncateToU32(s64 value) {
     assert(value >= 0 && value <= UINT32_MAX);
     return (u32)value;
 }
+
+#define ArrayCount(array) (sizeof(array) / sizeof(*(array)))
 
 namespace Platform {
     struct ReadEntireFileResult {
