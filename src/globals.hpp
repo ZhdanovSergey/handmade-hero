@@ -1,6 +1,5 @@
 #pragma once
 
-// TODO: use std::byte* instead of void* for raw data?
 // TODO FEAT: revive windows xp build
 
 #if !HANDMADE_SLOW
@@ -10,6 +9,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 
 typedef float f32;
 typedef double f64;

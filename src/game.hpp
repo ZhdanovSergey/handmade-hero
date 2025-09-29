@@ -53,8 +53,8 @@ namespace Game {
 	struct Memory {
 		size_t permanentStorageSize;
 		size_t transientStorageSize;
-		void* permanentStorage;
-		void* transientStorage;
+		std::byte* permanentStorage;
+		std::byte* transientStorage;
 		bool isInitialized;
 	};
 
@@ -70,7 +70,7 @@ namespace Game {
 		s16* samples;
 	};
 
-	static void UpdateAndRender(Input* input, Memory* memory, ScreenBuffer* screenBuffer, SoundBuffer* soundBuffer);
-	static void RenderGradient(GameState* gameState, ScreenBuffer* screenBuffer);
+	static void UpdateAndRender(const Input* input, Memory* memory, ScreenBuffer* screenBuffer, SoundBuffer* soundBuffer);
+	static void RenderGradient(const GameState* gameState, ScreenBuffer* screenBuffer);
 	static void OutputSound(GameState* gameState, SoundBuffer* soundBuffer);
 }

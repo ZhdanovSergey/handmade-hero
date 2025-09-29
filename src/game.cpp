@@ -1,7 +1,7 @@
 #include "game.hpp"
 
 namespace Game {
-	static void UpdateAndRender(Input* input, Memory* memory, ScreenBuffer* screenBuffer, SoundBuffer* soundBuffer) {
+	static void UpdateAndRender(const Input* input, Memory* memory, ScreenBuffer* screenBuffer, SoundBuffer* soundBuffer) {
 		assert(sizeof(GameState) <= memory->permanentStorageSize);
 
 		GameState* gameState = (GameState*)memory->permanentStorage;
@@ -32,12 +32,12 @@ namespace Game {
 		OutputSound(gameState, soundBuffer);
 	};
 
-	static void RenderGradient(GameState* gameState, ScreenBuffer* screenBuffer) {
+	static void RenderGradient(const GameState* gameState, ScreenBuffer* screenBuffer) {
 		for (u32 y = 0; y < screenBuffer->height; y++) {
 			for (u32 x = 0; x < screenBuffer->width; x++) {
 				u32 green = (y + gameState->greenOffset) & UINT8_MAX;
 				u32 blue = (x + gameState->blueOffset) & UINT8_MAX;
-				*(screenBuffer->memory)++ = (green << 8) | blue; // padding red green blue
+				*screenBuffer->memory++ = (green << 8) | blue; // padding red green blue
 			}
 		}
 	};

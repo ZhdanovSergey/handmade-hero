@@ -5,8 +5,9 @@
 #include <dsound.h>
 
 // TODO: divide this big ass file
-// TODO: store width/height and make getter for bitmapInfo
 struct Screen {
+	u32* memory;
+
 	BITMAPINFO bitmapInfo = {
 		.bmiHeader = {
 			.biSize = sizeof(bitmapInfo.bmiHeader),
@@ -16,13 +17,11 @@ struct Screen {
 		},
 	};
 
-	void* memory;
-
 	void setWidth(u32 width) {
 		bitmapInfo.bmiHeader.biWidth = (LONG)width;
 	}
 
-	u32 getWidth() {
+	u32 getWidth() const {
 		return (u32)bitmapInfo.bmiHeader.biWidth;
 	}
 
@@ -31,20 +30,8 @@ struct Screen {
 		bitmapInfo.bmiHeader.biHeight = - (LONG)height;
 	}
 
-	u32 getHeight() {
+	u32 getHeight() const {
 		return (u32)std::abs(bitmapInfo.bmiHeader.biHeight);
-	}
-
-	u32 getBytesPerPixel() {
-		return bitmapInfo.bmiHeader.biBitCount / 8u;
-	}
-
-	u32 getPitch() {
-		return getWidth() * getBytesPerPixel();
-	}
-
-	size_t getMemorySize() {
-		return getWidth() * getHeight() * getBytesPerPixel();
 	}
 };
 
@@ -63,7 +50,7 @@ struct Sound {
 };
 
 // TODO REF: try to get rid of globals
-// TODO REF: attach methods to structs after day 020?
+// TODO REF: attach methods to structs after day 025?
 static bool globalIsAppRunning = true;
 static u64 globalPerfFrequency;
 static Screen globalScreen = {};
@@ -107,7 +94,7 @@ static void InitDirectSound(HWND window) {
 	directSound->CreateSoundBuffer(&soundBufferDesc, &globalSound.buffer, 0);
 }
 
-static void FillSoundBuffer(Game::SoundBuffer* source, DWORD lockCursor, DWORD bytesToWrite, u32* runningSampleIndex) {
+static void FillSoundBuffer(const Game::SoundBuffer* source, DWORD lockCursor, DWORD bytesToWrite, u32* runningSampleIndex) {
 	void* region1; DWORD region1Size; void* region2; DWORD region2Size;
 	if (!SUCCEEDED(globalSound.buffer->Lock(lockCursor, bytesToWrite, &region1, &region1Size, &region2, &region2Size, 0)))
 		return;
@@ -117,11 +104,12 @@ static void FillSoundBuffer(Game::SoundBuffer* source, DWORD lockCursor, DWORD b
 	u32 sampleSize = sizeof(*(source->samples));
 	u32 region1SizeInSamples = region1Size / sampleSize;
 	u32 region2SizeInSamples = region2Size / sampleSize;
+	// 2 samples - left and right - for 1 runningSampleIndex
 	*runningSampleIndex += (region1SizeInSamples + region2SizeInSamples) / 2;
 	// -------------------------------------------------------
 
 	std::memcpy(region1, source->samples, region1Size);
-	std::memcpy(region2, (std::byte*)source->samples + region1Size, region2Size);
+	std::memcpy(region2, source->samples + region1SizeInSamples, region2Size);
 	globalSound.buffer->Unlock(region1, region1Size, region2, region2Size);
 }
 
@@ -135,13 +123,14 @@ static void ClearSoundBuffer() {
 	globalSound.buffer->Unlock(region1, region1Size, region2, region2Size);
 }
 
-static void ResizeScreenBuffer(u32 width, u32 height) {
-	if (globalScreen.memory)
-		VirtualFree(globalScreen.memory, 0, MEM_RELEASE);
+static void ResizeScreenBuffer(Screen* screen, u32 width, u32 height) {
+	if (screen->memory)
+		VirtualFree(screen->memory, 0, MEM_RELEASE);
 		
-	globalScreen.setWidth(width);
-	globalScreen.setHeight(height);
-	globalScreen.memory = VirtualAlloc(0, globalScreen.getMemorySize(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	screen->setWidth(width);
+	screen->setHeight(height);
+	size_t screenMemorySize = width * height * sizeof(*screen->memory);
+	screen->memory = (u32*)VirtualAlloc(0, screenMemorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 }
 
 static void DisplayScreenBuffer(HWND window, HDC deviceContext) {
@@ -275,16 +264,15 @@ static inline f32 GetSecondsElapsed(u64 start) {
 }
 
 static void DebugDrawVertical(Screen* screen, u32 x, u32 top, u32 bottom, u32 color) {
-	u32 pitch = screen->getPitch();
-	std::byte* pixel = (std::byte*)screen->memory + top * pitch + x * screen->getBytesPerPixel();
+	u32* pixel = screen->memory + top * screen->getWidth() + x;
 
 	for (u32 y = top; y < bottom; y++) {
-		*(u32*)pixel = color;
-		pixel += pitch;
+		*pixel = color;
+		pixel += screen->getWidth();
 	}
 }
 
-static void DebugSyncDisplay(Screen* screen, Sound* sound, DWORD* playCursors, size_t playCursorsCount) {
+static void DebugSyncDisplay(Screen* screen, const Sound* sound, const DWORD* playCursors, size_t playCursorsCount) {
 	for (size_t i = 0; i < playCursorsCount; i++) {
 		u32 x = (u32)((f32)playCursors[i] * (f32)screen->getWidth() / (f32)sound->waveFormat.nAvgBytesPerSec);
 		DebugDrawVertical(screen, x, 0, screen->getHeight(), 0xffffff);
@@ -324,7 +312,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 	);
 
 	HDC deviceContext = GetDC(window);
-	ResizeScreenBuffer(windowWidth, windowHeight);
+	ResizeScreenBuffer(&globalScreen, windowWidth, windowHeight);
 
 	InitDirectSound(window);
 
@@ -345,7 +333,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 	}
 
 	size_t gameMemorySize = 1_GB;
-	void* gameMemoryStorage = VirtualAlloc(gameMemoryBaseAddress, gameMemorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	std::byte* gameMemoryStorage = (std::byte*)VirtualAlloc(gameMemoryBaseAddress, gameMemorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 	if (!gameMemoryStorage)
 		return 0;
 
@@ -353,14 +341,14 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 		.permanentStorageSize = 64_MB,
 		.transientStorageSize = gameMemorySize - gameMemory.permanentStorageSize,
 		.permanentStorage = gameMemoryStorage,
-		.transientStorage = (std::byte*)gameMemory.permanentStorage + gameMemory.permanentStorageSize
+		.transientStorage = gameMemory.permanentStorage + gameMemory.permanentStorageSize
 	};
 
 	Game::Input gameInput = {};
 
 	u32 runningSampleIndex = 0;
 
-	DWORD debugPlayCursors[targetUpdateFrequency / 2] = {};
+	DWORD debugPlayCursors[targetUpdateFrequency] = {};
 	size_t debugPlayCursorsIndex = 0;
 
 	u64 startWallClock = GetWallClock();
@@ -372,7 +360,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 		Game::ScreenBuffer gameScreenBuffer = {
 			.width = globalScreen.getWidth(),
 			.height = globalScreen.getHeight(),
-			.memory = (u32*)globalScreen.memory,
+			.memory = globalScreen.memory,
 		};
 
 		// TODO FEAT: make sure that game not crashes if sound was not initialized
@@ -397,13 +385,14 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 
 		f32 frameSecondsElapsed = GetSecondsElapsed(startWallClock);
 		if (sleepIsGranular && frameSecondsElapsed < targetSecondsPerFrame) {
-			DWORD sleepErrorMs = 2; // TODO: find a way to lock frame rate more reliably
+			DWORD sleepErrorMs = 0;
 			DWORD sleepMs = (DWORD)(1000.0f * (targetSecondsPerFrame - frameSecondsElapsed));
 			if (sleepMs > sleepErrorMs) Sleep(sleepMs - sleepErrorMs);
 		}
 
 		frameSecondsElapsed = GetSecondsElapsed(startWallClock);
-		if (globalIsAppRunning) assert(frameSecondsElapsed < targetSecondsPerFrame);
+		// TODO: find a way to lock frame rate more reliably
+		// if (globalIsAppRunning) assert(frameSecondsElapsed < targetSecondsPerFrame);
 
 		while (frameSecondsElapsed < targetSecondsPerFrame)
 			frameSecondsElapsed = GetSecondsElapsed(startWallClock);
@@ -417,11 +406,11 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 
 		u64 endCycleCounter = __rdtsc();
 		u64 cycleCounterElapsed = endCycleCounter - startCycleCounter;
-		u32 framesPerSecond = (u32)(1 / frameSecondsElapsed);
-		u32 millisecondsPerFrame = (u32)(1000 * frameSecondsElapsed);
-		u32 megaCyclesPerFrame = (u32)(cycleCounterElapsed / (1000 * 1000));
+		f32 framesPerSecond = 1.0f / frameSecondsElapsed;
+		f32 millisecondsPerFrame = 1000 * frameSecondsElapsed;
+		u64 megaCyclesPerFrame = cycleCounterElapsed / (1000 * 1000);
 		char outputBuffer[256];
-		wsprintfA(outputBuffer, "%d ms/f, %d f/s, %d Mc/f\n", millisecondsPerFrame, framesPerSecond, megaCyclesPerFrame);
+		sprintf_s(outputBuffer, "%.2f ms/f, %.2f f/s, %lld Mc/f\n", millisecondsPerFrame, framesPerSecond, megaCyclesPerFrame);
 		OutputDebugStringA(outputBuffer);
 		
 		startWallClock = GetWallClock();
