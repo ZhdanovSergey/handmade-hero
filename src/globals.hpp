@@ -1,6 +1,7 @@
 #pragma once
 
-// TODO FEAT: revive windows xp build
+// TODO: switch to PascalCase?
+// TODO: revive windows xp build
 
 #if !HANDMADE_SLOW
     #define NDEBUG

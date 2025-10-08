@@ -35,9 +35,10 @@ namespace Game {
 	static void RenderGradient(const GameState* gameState, ScreenBuffer* screenBuffer) {
 		for (u32 y = 0; y < screenBuffer->height; y++) {
 			for (u32 x = 0; x < screenBuffer->width; x++) {
-				u32 green = (y + gameState->greenOffset) & UINT8_MAX;
-				u32 blue = (x + gameState->blueOffset) & UINT8_MAX;
-				*screenBuffer->memory++ = (green << 8) | blue; // padding red green blue
+				*screenBuffer->memory++ = {
+					.blue = (u8)((x + gameState->blueOffset) & UINT8_MAX),
+					.green = (u8)((y + gameState->greenOffset) & UINT8_MAX),
+				};
 			}
 		}
 	};
@@ -47,13 +48,16 @@ namespace Game {
 		f64 volume = 5000.0;
 
 		f64 samplesPerWavePeriod = (f64)(soundBuffer->samplesPerSecond / frequency);
-		s16* sampleOut = soundBuffer->samples;
+		SoundSample* soundSample = soundBuffer->samples;
 
 		for (u32 i = 0; i < soundBuffer->samplesToWrite; i++) {
 			s16 sampleValue = (s16)(std::sin(gameState->tSine) * volume);
-			*sampleOut++ = sampleValue;
-			*sampleOut++ = sampleValue;
 			gameState->tSine += 2.0 * pi64 / samplesPerWavePeriod;
+
+			*soundSample++ = {
+				.left = sampleValue,
+				.right = sampleValue
+			};
 		}
 	}
 }

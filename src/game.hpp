@@ -58,16 +58,28 @@ namespace Game {
 		bool isInitialized;
 	};
 
+	struct ScreenPixel {
+		u8 blue;
+		u8 green;
+		u8 red;
+		u8 padding;
+	};
+
 	struct ScreenBuffer {
 		u32 width;
 		u32 height;
-		u32* memory;
+		ScreenPixel* memory;
+	};
+
+	struct SoundSample {
+		s16 left;
+		s16 right;
 	};
 
 	struct SoundBuffer {
 		u32 samplesPerSecond;
 		u32 samplesToWrite;
-		s16* samples;
+		SoundSample* samples;
 	};
 
 	static void UpdateAndRender(const Input* input, Memory* memory, ScreenBuffer* screenBuffer, SoundBuffer* soundBuffer);
