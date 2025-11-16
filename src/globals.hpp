@@ -4,7 +4,7 @@
 // TODO: revive windows xp build
 
 #if !HANDMADE_SLOW
-    #define NDEBUG
+    #define NDEBUG // disable assert
 #endif
 
 #include <cassert>

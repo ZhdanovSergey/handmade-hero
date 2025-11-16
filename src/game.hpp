@@ -5,8 +5,7 @@
 namespace Game {
 	struct GameState {
 		f64 tSine;
-		u32 greenOffset;
-		u32 blueOffset;
+		u8 greenOffset, blueOffset;
 	};
 
 	struct ButtonState {
@@ -15,25 +14,17 @@ namespace Game {
 	};
 
 	struct Input {
-		ButtonState start;
-		ButtonState back;
-
-		ButtonState moveUp;
-		ButtonState moveDown;
-		ButtonState moveLeft;
-		ButtonState moveRight;
-
-		ButtonState actionUp;
-		ButtonState actionDown;
-		ButtonState actionLeft;
-		ButtonState actionRight;
-
-		ButtonState leftShoulder;
-		ButtonState rightShoulder;
+		ButtonState start, back;
+		ButtonState leftShoulder, rightShoulder;
+		ButtonState moveUp, moveDown, moveLeft, moveRight;
+		ButtonState actionUp, actionDown, actionLeft, actionRight;
 
 		void ResetTransitionsCount() {
 			start.transitionsCount = 0;
 			back.transitionsCount = 0;
+
+			leftShoulder.transitionsCount = 0;
+			rightShoulder.transitionsCount = 0;
 
 			moveUp.transitionsCount = 0;
 			moveDown.transitionsCount = 0;
@@ -44,9 +35,6 @@ namespace Game {
 			actionDown.transitionsCount = 0;
 			actionLeft.transitionsCount = 0;
 			actionRight.transitionsCount = 0;
-
-			leftShoulder.transitionsCount = 0;
-			rightShoulder.transitionsCount = 0;
 		}
 	};
 
@@ -59,21 +47,16 @@ namespace Game {
 	};
 
 	struct ScreenPixel {
-		u8 blue;
-		u8 green;
-		u8 red;
-		u8 padding;
+		u8 blue, green, red, padding;
 	};
 
 	struct ScreenBuffer {
-		u32 width;
-		u32 height;
+		u32 width, height;
 		ScreenPixel* memory;
 	};
 
 	struct SoundSample {
-		s16 left;
-		s16 right;
+		s16 left, right;
 	};
 
 	struct SoundBuffer {
