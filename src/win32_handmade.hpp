@@ -24,11 +24,11 @@ struct Sound {
 	DWORD lockCursor;
 	DWORD bytesToWrite;
 	DWORD latencyBytes;
+	bool isValid;
 
 	// TODO: deprecated
 	DWORD playCursor;
 	DWORD writeCursor;
-	bool isValid;
 	DWORD latencySamples;
 
 	DWORD getBufferSize() const     { return waveFormat.nAvgBytesPerSec; }
@@ -38,12 +38,12 @@ struct Sound {
 // TODO: attach methods to structs after day 025?
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int);
 static LRESULT CALLBACK MainWindowCallback(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
-static void DisplayScreenBuffer(HWND window, HDC deviceContext, const Screen* screen);
-static void ResizeScreenBuffer(Screen* screen, u32 width, u32 height);
-static void InitDirectSound(HWND window, Sound* sound);
-static void ClearSoundBuffer(Sound* sound);
-static void FillSoundBuffer(const Game::SoundBuffer* source, Sound* sound);
-static void ProcessPendingMessages(Game::Input* gameInput);
+static void DisplayScreenBuffer(HWND window, HDC deviceContext, const Screen& screen);
+static void ResizeScreenBuffer(Screen& screen, u32 width, u32 height);
+static void InitDirectSound(HWND window, Sound& sound);
+static void ClearSoundBuffer(Sound& sound);
+static void FillSoundBuffer(const Game::SoundBuffer& source, Sound& sound);
+static void ProcessPendingMessages(Game::Input& gameInput);
 static inline u64 GetWallClock();
 static inline f32 GetSecondsElapsed(u64 start);
 
@@ -52,6 +52,6 @@ namespace Debug {
         DWORD playCursor, writeCursor;
     };
 
-    static void SyncDisplay(Screen* screen, const Sound* sound, const SoundCursors* soundCursors, size_t soundCursorsCount);
-    static void DrawVertical(Screen* screen, u32 x, u32 top, u32 bottom, u32 color);
+    static void SyncDisplay(Screen& screen, const Sound& sound, const SoundCursors* soundCursors, size_t soundCursorsCount);
+    static void DrawVertical(Screen& screen, u32 x, u32 top, u32 bottom, u32 color);
 }

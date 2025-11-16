@@ -65,7 +65,7 @@ namespace Game {
 		SoundSample* samples;
 	};
 
-	static void UpdateAndRender(const Input* input, Memory* memory, ScreenBuffer* screenBuffer, SoundBuffer* soundBuffer);
-	static void RenderGradient(const GameState* gameState, ScreenBuffer* screenBuffer);
-	static void OutputSound(GameState* gameState, SoundBuffer* soundBuffer);
+	static void UpdateAndRender(const Input& input, Memory& memory, ScreenBuffer& screenBuffer, SoundBuffer& soundBuffer);
+	static void RenderGradient(const GameState* gameState, ScreenBuffer& screenBuffer);
+	static void OutputSound(GameState* gameState, SoundBuffer& soundBuffer);
 }
