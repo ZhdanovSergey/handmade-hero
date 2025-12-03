@@ -2,6 +2,7 @@
 #include "win32_handmade.hpp"
 
 static bool globalIsAppRunning = true;
+static bool globalIsPause = false;
 static u64 globalPerformanceFrequency = 0;
 
 // global because of MainWindowCallback
@@ -16,6 +17,7 @@ static Screen globalScreen = {
 	}
 };
 
+// TODO: use NULL instead of 0 if it is not a meaningful number
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int) {
 	static_assert(HANDMADE_DEV || !HANDMADE_SLOW);
 
@@ -58,12 +60,12 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 			.nBlockAlign = sizeof(Game::SoundSample),
 			.wBitsPerSample = sizeof(Game::SoundSample) / sound.waveFormat.nChannels * 8,
 		},
-		.latencySamples = sound.waveFormat.nSamplesPerSec / TARGET_UPDATE_FREQUENCY,
+		.bytesPerFrame = sound.waveFormat.nAvgBytesPerSec / TARGET_UPDATE_FREQUENCY,
+		.safetyBytes = sound.bytesPerFrame / 3,
 	};
 
-	// minus 1 for better visualization
-	Debug::SoundCursors debugSoundCursorsArray[TARGET_UPDATE_FREQUENCY - 1] = {};
-	size_t debugSoundCursorsIndex = 0;
+	Debug::Marker debugMarkersArray[TARGET_UPDATE_FREQUENCY - 1] = {};
+	size_t debugMarkersIndex = 0;
 
 	InitDirectSound(window, sound);
 	Game::SoundSample* gameSoundSamples = (Game::SoundSample*)VirtualAlloc(0, sound.getBufferSize(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
@@ -76,8 +78,9 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 	}
 
 	void* gameMemoryBaseAddress = 0;
-	if constexpr (HANDMADE_DEV && INTPTR_MAX == INT64_MAX)
+	if constexpr (HANDMADE_DEV && INTPTR_MAX == INT64_MAX) {
 		gameMemoryBaseAddress = (void*)1024_GB;
+	}
 
 	size_t gameMemorySize = 1_GB;
 	std::byte* gameMemoryStorage = (std::byte*)VirtualAlloc(gameMemoryBaseAddress, gameMemorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
@@ -91,11 +94,23 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 
 	Game::Input gameInput = {};
 
-	u64 startWallClock = GetWallClock();
+	u64 flipWallClock = GetWallClock();
 	u64 startCycleCounter = __rdtsc();
 
 	while (globalIsAppRunning) {
 		ProcessPendingMessages(gameInput);
+
+		if constexpr (HANDMADE_DEV) {
+			if (globalIsPause) continue;
+		}
+
+		Game::ScreenBuffer gameScreenBuffer = {
+			.width = globalScreen.getWidth(),
+			.height = globalScreen.getHeight(),
+			.memory = globalScreen.memory,
+		};
+
+		Game::UpdateAndRender(gameMemory, gameInput, gameScreenBuffer);
 
 		// Here is how sound output computation works:
 		// We define a safety value that is the number of samples we think our game update loop may vary by
@@ -107,76 +122,92 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 		// If the write cursor is after that safery margin, then we assume we can never sync the audio perfectly,
 		// so we will write one frame's worth of audio plus the safety margin's worth of guard samples.
 
-		if (sound.buffer && sound.isValid) {
-			DWORD targetCursor = (sound.playCursor + sound.latencySamples * sound.waveFormat.nBlockAlign) % sound.getBufferSize();
-			sound.lockCursor = (sound.runningSampleIndex * sound.waveFormat.nBlockAlign) % sound.getBufferSize();
-			sound.bytesToWrite = sound.lockCursor > targetCursor ? sound.getBufferSize() : 0;
-			sound.bytesToWrite += targetCursor - sound.lockCursor;
-		}
-
-		sound.isValid = sound.buffer && SUCCEEDED(sound.buffer->GetCurrentPosition(&sound.playCursor, &sound.writeCursor));
-		if (!sound.isValid) {
+		
+		f32 fromFlipToAudioSeconds = GetSecondsElapsed(flipWallClock);
+		if (!sound.buffer || !SUCCEEDED(sound.buffer->GetCurrentPosition(&sound.playCursor, &sound.writeCursor))) {
 			sound.runningSampleIndex = sound.writeCursor / sound.waveFormat.nBlockAlign;
-		} else {
-			DWORD unwrappedWriteCursor = sound.playCursor < sound.writeCursor
-				? sound.writeCursor
-				: sound.writeCursor + sound.getBufferSize();
-			sound.latencyBytes = unwrappedWriteCursor - sound.playCursor;
 		}
-
+		DWORD expectedBytesUntilFlip = sound.bytesPerFrame - (DWORD)((f32)sound.waveFormat.nAvgBytesPerSec * fromFlipToAudioSeconds);
+		DWORD expectedFlipPlayCursorUnwrapped = sound.playCursor + expectedBytesUntilFlip;
+		DWORD writeCursorUnwrapped = sound.playCursor < sound.writeCursor
+			? sound.writeCursor
+			: sound.writeCursor + sound.getBufferSize();
+		bool isLowLatencySound = (writeCursorUnwrapped + sound.safetyBytes) < expectedFlipPlayCursorUnwrapped;
+		DWORD targetCursorUnwrapped = isLowLatencySound
+			? expectedFlipPlayCursorUnwrapped + sound.bytesPerFrame
+			: writeCursorUnwrapped + sound.bytesPerFrame + sound.safetyBytes;
+		DWORD targetCursor = targetCursorUnwrapped % sound.getBufferSize();
+		sound.outputLocation = sound.runningSampleIndex * sound.waveFormat.nBlockAlign % sound.getBufferSize();
+		sound.outputByteCount = sound.outputLocation < targetCursor ? 0 : sound.getBufferSize();
+		sound.outputByteCount += targetCursor - sound.outputLocation;
 		Game::SoundBuffer gameSoundBuffer = {
 			.samplesPerSecond = sound.waveFormat.nSamplesPerSec,
-			.samplesToWrite = sound.bytesToWrite / sound.waveFormat.nBlockAlign,
+			.samplesToWrite = sound.outputByteCount / sound.waveFormat.nBlockAlign,
 			.samples = gameSoundSamples,
-		};
-
-		Game::ScreenBuffer gameScreenBuffer = {
-			.width = globalScreen.getWidth(),
-			.height = globalScreen.getHeight(),
-			.memory = globalScreen.memory,
-		};
-
-		Game::UpdateAndRender(gameInput, gameMemory, gameScreenBuffer, gameSoundBuffer);
-
-		f32 frameSecondsElapsed = GetSecondsElapsed(startWallClock);
-		if (sleepIsGranular && frameSecondsElapsed < TARGET_SECONDS_PER_FRAME) {
-			DWORD sleepErrorMs = 0;
-			DWORD sleepMs = (DWORD)(1000.0f * (TARGET_SECONDS_PER_FRAME - frameSecondsElapsed));
-			if (sleepMs > sleepErrorMs) Sleep(sleepMs - sleepErrorMs);
-		}
-
-		frameSecondsElapsed = GetSecondsElapsed(startWallClock);
-		// TODO: find a way to lock frame rate more reliably? It shouldn`t be assert anyway
-		// if (globalIsAppRunning) assert(frameSecondsElapsed < targetSecondsPerFrame);
-
-		while (frameSecondsElapsed < TARGET_SECONDS_PER_FRAME)
-			frameSecondsElapsed = GetSecondsElapsed(startWallClock);
+		};		
+		Game::GetSoundSamples(gameMemory, gameSoundBuffer);
+		FillSoundBuffer(gameSoundBuffer, sound);
 
 		if constexpr (HANDMADE_DEV) {
-			debugSoundCursorsArray[debugSoundCursorsIndex] = {
-				.playCursor = sound.playCursor,
-				.writeCursor = sound.writeCursor
-			};
-			debugSoundCursorsIndex = (debugSoundCursorsIndex + 1) % ArrayCount(debugSoundCursorsArray);
-			Debug::SyncDisplay(globalScreen, sound, debugSoundCursorsArray, ArrayCount(debugSoundCursorsArray));
+			debugMarkersArray[debugMarkersIndex].outputPlayCursor = sound.playCursor;
+			debugMarkersArray[debugMarkersIndex].outputWriteCursor = sound.writeCursor;
+			debugMarkersArray[debugMarkersIndex].outputLocation = sound.outputLocation;
+			debugMarkersArray[debugMarkersIndex].outputByteCount = sound.outputByteCount;
+			debugMarkersArray[debugMarkersIndex].expectedFlipPlayCursor = expectedFlipPlayCursorUnwrapped % sound.getBufferSize();
+		}
 
-			f32 millisecondsPerFrame = 1000 * frameSecondsElapsed;
+		f32 frameSecondsElapsed = GetSecondsElapsed(flipWallClock);
+		if (sleepIsGranular && frameSecondsElapsed < TARGET_SECONDS_PER_FRAME) {
+			f32 sleepMs = 1000.0f * (TARGET_SECONDS_PER_FRAME - frameSecondsElapsed);
+			if (sleepMs > 0) Sleep((DWORD)sleepMs);
+		}
+
+		frameSecondsElapsed = GetSecondsElapsed(flipWallClock);
+		// TODO: unreliable frame rate, log this
+		// if (globalIsAppRunning) assert(frameSecondsElapsed < targetSecondsPerFrame);
+
+		while (frameSecondsElapsed < TARGET_SECONDS_PER_FRAME) {
+			frameSecondsElapsed = GetSecondsElapsed(flipWallClock);
+		}
+
+		if constexpr (HANDMADE_DEV) {
+			bool isCursorsRecorded = sound.buffer && SUCCEEDED(sound.buffer->GetCurrentPosition(
+				&debugMarkersArray[debugMarkersIndex].flipPlayCursor, NULL
+			));
+			if (isCursorsRecorded) {
+				Debug::SyncDisplay(
+					globalScreen, sound,
+					debugMarkersArray, ArrayCount(debugMarkersArray), debugMarkersIndex
+				);
+			}
+
+			// DWORD latencyBytes = writeCursorUnwrapped - sound.playCursor;
+			// f32 latencyMs = (f32)latencyBytes / (f32)sound.waveFormat.nAvgBytesPerSec * 1000;
+			// f32 millisecondsPerFrame = 1000 * frameSecondsElapsed;
 			// f32 framesPerSecond = 1.0f / frameSecondsElapsed;
 			// u64 endCycleCounter = __rdtsc();
 			// u64 cycleCounterElapsed = endCycleCounter - startCycleCounter;
 			// u64 megaCyclesPerFrame = cycleCounterElapsed / (1000 * 1000);
+			size_t debugMarkersIndexUnwrapped = debugMarkersIndex == 0 ? ArrayCount(debugMarkersArray) : debugMarkersIndex;
 			char outputBuffer[256];
-			sprintf_s(outputBuffer, "%.2f ms/f, latency ms: %f\n", millisecondsPerFrame, sound.getLatencySeconds() * 1000);
+			sprintf_s(outputBuffer, "diff: %ld\n", debugMarkersArray[debugMarkersIndex].flipPlayCursor - debugMarkersArray[debugMarkersIndexUnwrapped - 1].flipPlayCursor);
 			OutputDebugStringA(outputBuffer);
 		}
 		
-		startWallClock = GetWallClock();
+		flipWallClock = GetWallClock();
 		startCycleCounter = __rdtsc();
 
-		if (sound.bytesToWrite)
-			FillSoundBuffer(gameSoundBuffer, sound);
-
 		DisplayScreenBuffer(window, deviceContext, globalScreen);
+
+		if constexpr (HANDMADE_DEV) {
+			// TODO: unreliable frame rate, log this
+			// size_t debugMarkersIndexUnwrapped = debugMarkersIndex == 0 ? ArrayCount(debugMarkersArray) : debugMarkersIndex;
+			// Debug::Marker prevMarker = debugMarkersArray[debugMarkersIndexUnwrapped - 1];
+			// DWORD prevSoundFilledCursor = (prevMarker.outputLocation + prevMarker.outputByteCount) % sound.getBufferSize();
+			// // compare with half buffer size to account for the fact that prevSoundFilledCursor may be wrapped
+			// assert(sound.playCursor <= prevSoundFilledCursor || sound.playCursor > prevSoundFilledCursor + sound.getBufferSize() / 2);
+			debugMarkersIndex = (debugMarkersIndex + 1) % ArrayCount(debugMarkersArray);
+		}
 	}
 
 	return 0;
@@ -269,8 +300,9 @@ static void InitDirectSound(HWND window, Sound& sound) {
 
 static void ClearSoundBuffer(Sound& sound) {
 	void *region1, *region2; DWORD region1Size, region2Size;
-	if (!SUCCEEDED(sound.buffer->Lock(0, sound.getBufferSize(), &region1, &region1Size, &region2, &region2Size, 0)))
+	if (!sound.buffer || !SUCCEEDED(sound.buffer->Lock(0, sound.getBufferSize(), &region1, &region1Size, &region2, &region2Size, 0))) {
 		return;
+	}
 
 	std::memset(region1, 0, region1Size);
 	std::memset(region2, 0, region2Size);
@@ -279,8 +311,9 @@ static void ClearSoundBuffer(Sound& sound) {
 
 static void FillSoundBuffer(const Game::SoundBuffer& source, Sound& sound) {
 	void *region1, *region2; DWORD region1Size, region2Size;
-	if (!SUCCEEDED(sound.buffer->Lock(sound.lockCursor, sound.bytesToWrite, &region1, &region1Size, &region2, &region2Size, 0)))
+	if (!sound.buffer || !SUCCEEDED(sound.buffer->Lock(sound.outputLocation, sound.outputByteCount, &region1, &region1Size, &region2, &region2Size, 0))) {
 		return;
+	}
 
 	u32 sampleSize = sizeof(*(source.samples));
 	u32 region1SizeInSamples = region1Size / sampleSize;
@@ -302,14 +335,18 @@ static void ProcessPendingMessages(Game::Input& gameInput) {
 				globalIsAppRunning = false;
 			} break;
 			case WM_KEYUP:
-			case WM_KEYDOWN:
-			case WM_SYSKEYUP:
-			case WM_SYSKEYDOWN: {
-				Game::ButtonState* buttonState = nullptr;
+			case WM_KEYDOWN: {
 				bool wasKeyPressed = message.lParam & (1u << 30);
 				bool isKeyPressed = !(message.lParam & (1u << 31));
 				if (wasKeyPressed == isKeyPressed) continue;
 
+				if constexpr (HANDMADE_DEV) {
+					if (message.wParam == 'P' && message.message == WM_KEYDOWN) {
+						globalIsPause = !globalIsPause;
+					}
+				}
+
+				Game::ButtonState* buttonState = nullptr;
 				switch (message.wParam) {
 					case VK_RETURN: buttonState = &gameInput.start; break;
 					case VK_ESCAPE: buttonState = &gameInput.back; break;
@@ -325,7 +362,6 @@ static void ProcessPendingMessages(Game::Input& gameInput) {
 					case 'E': 		buttonState = &gameInput.rightShoulder; break;
 					default: continue;
 				}
-
 				buttonState->isEndedPressed = isKeyPressed;
 				buttonState->transitionsCount++;
 			} break;
@@ -412,12 +448,47 @@ namespace Platform {
 }
 
 namespace Debug {
-	static void SyncDisplay(Screen& screen, const Sound& sound, const SoundCursors* soundCursors, size_t soundCursorsCount) {
-		for (size_t i = 0; i < soundCursorsCount; i++) {
-			u32 playCursorPosition = (u32)((f32)soundCursors[i].playCursor * (f32)screen.getWidth() / (f32)sound.getBufferSize());
-			u32 writeCursorPosition = (u32)((f32)soundCursors[i].writeCursor * (f32)screen.getWidth() / (f32)sound.getBufferSize());
-			DrawVertical(screen, playCursorPosition, 0, screen.getHeight(), 0x00ffffff);
-			DrawVertical(screen, writeCursorPosition, 0, screen.getHeight(), 0x00ff0000);
+	static void SyncDisplay(
+		Screen& screen, const Sound& sound,
+		const Marker* markers, size_t markersCount, size_t currentMarkerIndex) {
+
+		f32 horizontalScaling = (f32)screen.getWidth() / (f32)sound.getBufferSize();
+		Marker currentMarker = markers[currentMarkerIndex];
+
+		u32 expectedFlipPlayCursorX = (u32)((f32)currentMarker.expectedFlipPlayCursor * horizontalScaling);
+		DrawVertical(screen, expectedFlipPlayCursorX, 0, screen.getHeight(), 0xffffff00);
+
+		for (size_t i = 0; i < markersCount; i++) {
+			u32 top = 0;
+			u32 bottom = screen.getHeight() * 1/4;
+			u32 historicOutputPlayCursorX = (u32)((f32)markers[i].outputPlayCursor * horizontalScaling);
+			u32 historicOutputWriteCursorX = (u32)((f32)markers[i].outputWriteCursor * horizontalScaling);
+			DrawVertical(screen, historicOutputPlayCursorX, top, bottom, 0x00ffffff);
+			DrawVertical(screen, historicOutputWriteCursorX, top, bottom, 0x00ff0000);
+		}
+		{
+			u32 top = screen.getHeight() * 1/4;
+			u32 bottom = screen.getHeight() * 2/4;
+			u32 outputPlayCursorX = (u32)((f32)currentMarker.outputPlayCursor * horizontalScaling);
+			u32 outputWriteCursorX = (u32)((f32)currentMarker.outputWriteCursor * horizontalScaling);
+			DrawVertical(screen, outputPlayCursorX, top, bottom, 0x00ffffff);
+			DrawVertical(screen, outputWriteCursorX, top, bottom, 0x00ff0000);
+		}
+		{
+			u32 top = screen.getHeight() * 2/4;
+			u32 bottom = screen.getHeight() * 3/4;
+			u32 outputLocationX = (u32)((f32)currentMarker.outputLocation * horizontalScaling);
+			u32 outputByteCountX = (u32)((f32)currentMarker.outputByteCount * horizontalScaling);
+			DrawVertical(screen, outputLocationX, top, bottom, 0x00ffffff);
+			DrawVertical(screen, (outputLocationX + outputByteCountX) % screen.getWidth(), top, bottom, 0x00ff0000);
+		}
+		{
+			u32 top = screen.getHeight() * 3/4;
+			u32 bottom = screen.getHeight();
+			u32 flipPlayCursorX = (u32)((f32)currentMarker.flipPlayCursor * horizontalScaling);
+			u32 cursorGranularityBytesX = (u32)(1920.0f * horizontalScaling);
+			DrawVertical(screen, (flipPlayCursorX - cursorGranularityBytesX / 2) % screen.getWidth(), top, bottom, 0x00ffffff);
+			DrawVertical(screen, (flipPlayCursorX + cursorGranularityBytesX / 2) % screen.getWidth(), top, bottom, 0x00ffffff);
 		}
 	}
 	

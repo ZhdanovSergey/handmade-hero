@@ -1,5 +1,6 @@
 #pragma once
 
+// TODO: add array with counter template
 // TODO: switch to PascalCase?
 // TODO: revive windows xp build
 

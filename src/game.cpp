@@ -1,7 +1,7 @@
 #include "game.hpp"
 
 namespace Game {
-	static void UpdateAndRender(const Input& input, Memory& memory, ScreenBuffer& screenBuffer, SoundBuffer& soundBuffer) {
+	static void UpdateAndRender(Memory& memory, const Input& input, ScreenBuffer& screenBuffer) {
 		assert(sizeof(GameState) <= memory.permanentStorageSize);
 		GameState* gameState = (GameState*)memory.permanentStorage;
 
@@ -25,7 +25,6 @@ namespace Game {
 			gameState->blueOffset--;
 
 		RenderGradient(gameState, screenBuffer);
-		OutputSound(gameState, soundBuffer);
 	};
 
 	static void RenderGradient(const GameState* gameState, ScreenBuffer& screenBuffer) {
@@ -39,17 +38,19 @@ namespace Game {
 		}
 	};
 
-	static void OutputSound(GameState* gameState, SoundBuffer& soundBuffer) {
-		u32 frequency = 261;
-		f64 volume = 5000.0;
+	static void GetSoundSamples(Memory& memory, SoundBuffer& soundBuffer) {
+		GameState* gameState = (GameState*)memory.permanentStorage;
 
-		f64 samplesPerWavePeriod = (f64)(soundBuffer.samplesPerSecond / frequency);
+		u32 frequency = 261;
+		f32 volume = 5000.0f;
+
+		f32 samplesPerWavePeriod = (f32)(soundBuffer.samplesPerSecond / frequency);
 		SoundSample* soundSample = soundBuffer.samples;
+		gameState->tSine = std::fmod(gameState->tSine, 2.0f * pi32);
 
 		for (u32 i = 0; i < soundBuffer.samplesToWrite; i++) {
-			s16 sampleValue = (s16)(std::sin(gameState->tSine) * volume);
-			gameState->tSine += 2.0 * pi64 / samplesPerWavePeriod;
-
+			s16 sampleValue = (s16)(std::sinf(gameState->tSine) * volume);
+			gameState->tSine += 2.0f * pi32 / samplesPerWavePeriod;
 			*soundSample++ = {
 				.left = sampleValue,
 				.right = sampleValue

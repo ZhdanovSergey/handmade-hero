@@ -21,18 +21,16 @@ struct Sound {
 	WAVEFORMATEX waveFormat;
 	IDirectSoundBuffer* buffer;
 	u32 runningSampleIndex;
-	DWORD lockCursor;
-	DWORD bytesToWrite;
-	DWORD latencyBytes;
-	bool isValid;
+	DWORD outputLocation;
+	DWORD outputByteCount;
+	DWORD bytesPerFrame;
+	DWORD safetyBytes;
 
-	// TODO: deprecated
+	// TODO: deprecated?
 	DWORD playCursor;
 	DWORD writeCursor;
-	DWORD latencySamples;
 
 	DWORD getBufferSize() const     { return waveFormat.nAvgBytesPerSec; }
-	f32 getLatencySeconds() const   { return (f32)latencyBytes / (f32)waveFormat.nAvgBytesPerSec; }
 };
 
 // TODO: attach methods to structs after day 025?
@@ -48,10 +46,18 @@ static inline u64 GetWallClock();
 static inline f32 GetSecondsElapsed(u64 start);
 
 namespace Debug {
-    struct SoundCursors {
-        DWORD playCursor, writeCursor;
+    struct Marker {
+        DWORD outputPlayCursor;
+		DWORD outputWriteCursor;
+		DWORD outputLocation;
+		DWORD outputByteCount;
+        DWORD flipPlayCursor;
+        DWORD expectedFlipPlayCursor;
     };
 
-    static void SyncDisplay(Screen& screen, const Sound& sound, const SoundCursors* soundCursors, size_t soundCursorsCount);
+    static void SyncDisplay(
+		Screen& screen, const Sound& sound,
+		const Marker* markers, size_t markersCount, size_t currentMarkerIndex
+	);
     static void DrawVertical(Screen& screen, u32 x, u32 top, u32 bottom, u32 color);
 }

@@ -4,7 +4,7 @@
 
 namespace Game {
 	struct GameState {
-		f64 tSine;
+		f32 tSine;
 		u8 greenOffset, blueOffset;
 	};
 
@@ -65,7 +65,8 @@ namespace Game {
 		SoundSample* samples;
 	};
 
-	static void UpdateAndRender(const Input& input, Memory& memory, ScreenBuffer& screenBuffer, SoundBuffer& soundBuffer);
+	static void UpdateAndRender(Memory& memory, const Input& input, ScreenBuffer& screenBuffer);
+	// GetSoundSamples should be fast, something like <= 1ms
+	static void GetSoundSamples(Memory& memory, SoundBuffer& soundBuffer);
 	static void RenderGradient(const GameState* gameState, ScreenBuffer& screenBuffer);
-	static void OutputSound(GameState* gameState, SoundBuffer& soundBuffer);
 }
