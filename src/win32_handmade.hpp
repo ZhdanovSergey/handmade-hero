@@ -55,7 +55,7 @@ namespace Debug {
         DWORD expectedFlipPlayCursor;
     };
 
-    static void SyncDisplay(
+    static void SoundSyncDisplay(
 		Screen& screen, const Sound& sound,
 		const Marker* markers, size_t markersCount, size_t currentMarkerIndex
 	);

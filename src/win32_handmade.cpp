@@ -1,10 +1,15 @@
 #include "game.cpp"
 #include "win32_handmade.hpp"
 
+static const u32 INITIAL_WINDOW_WIDTH = 1280;
+static const u32 INITIAL_WINDOW_HEIGHT = 720;
+static const u32 TARGET_UPDATE_FREQUENCY = 30;
+static const f32 TARGET_SECONDS_PER_FRAME = 1.0f / (f32)TARGET_UPDATE_FREQUENCY;
+
 static bool globalIsAppRunning = true;
 static bool globalIsPause = false;
+static bool globalWasPause = false;
 static u64 globalPerformanceFrequency = 0;
-
 // global because of MainWindowCallback
 static Screen globalScreen = {
 	.bitmapInfo = {
@@ -20,18 +25,9 @@ static Screen globalScreen = {
 // TODO: use NULL instead of 0 if it is not a meaningful number
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int) {
 	static_assert(HANDMADE_DEV || !HANDMADE_SLOW);
-
-	const u32 INITIAL_WINDOW_WIDTH = 1280;
-	const u32 INITIAL_WINDOW_HEIGHT = 720;
-	const u32 TARGET_UPDATE_FREQUENCY = 30;
-	const f32 TARGET_SECONDS_PER_FRAME = 1.0f / (f32)TARGET_UPDATE_FREQUENCY;
-
-	LARGE_INTEGER performanceFrequencyResult;
-	QueryPerformanceFrequency(&performanceFrequencyResult);
-	globalPerformanceFrequency = (u64)performanceFrequencyResult.QuadPart;
-
-	// set Windows scheduler granularity in ms
-	bool sleepIsGranular = timeBeginPeriod(1) == TIMERR_NOERROR;
+	
+    SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
+	bool sleepIsGranular = timeBeginPeriod(1) == TIMERR_NOERROR; // set Windows scheduler granularity in ms
 
 	WNDCLASSA windowClass = {
 		.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW,
@@ -39,15 +35,12 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 		.hInstance = hInstance,
 		.lpszClassName = "HandmadeHeroWindowClass",
 	};
-
 	RegisterClassA(&windowClass);
-
 	HWND window = CreateWindowExA(
 		0, windowClass.lpszClassName, "Handmade Hero", WS_TILEDWINDOW | WS_VISIBLE,
 		CW_USEDEFAULT, CW_USEDEFAULT, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT,
 		0, 0, hInstance, 0
 	);
-
 	HDC deviceContext = GetDC(window);
 	ResizeScreenBuffer(globalScreen, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT);
 
@@ -63,28 +56,23 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 		.bytesPerFrame = sound.waveFormat.nAvgBytesPerSec / TARGET_UPDATE_FREQUENCY,
 		.safetyBytes = sound.bytesPerFrame / 3,
 	};
-
-	Debug::Marker debugMarkersArray[TARGET_UPDATE_FREQUENCY - 1] = {};
-	size_t debugMarkersIndex = 0;
-
 	InitDirectSound(window, sound);
-	Game::SoundSample* gameSoundSamples = (Game::SoundSample*)VirtualAlloc(0, sound.getBufferSize(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-	
+	Game::SoundSample* gameSoundSamples = (Game::SoundSample*)VirtualAlloc(0, sound.getBufferSize(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);	
 	if (sound.buffer) {
 		ClearSoundBuffer(sound);
 		// TODO: address sanitizer crashes program after Play() call, it seems to be known DirectSound problem
 		// https://stackoverflow.com/questions/72511236/directsound-crashes-due-to-a-read-access-violation-when-calling-idirectsoundbuff
 		sound.buffer->Play(0, 0, DSBPLAY_LOOPING);
 	}
+	Debug::Marker debugMarkersArray[TARGET_UPDATE_FREQUENCY - 1] = {};
+	size_t debugMarkersIndex = 0;
 
 	void* gameMemoryBaseAddress = 0;
 	if constexpr (HANDMADE_DEV && INTPTR_MAX == INT64_MAX) {
 		gameMemoryBaseAddress = (void*)1024_GB;
 	}
-
 	size_t gameMemorySize = 1_GB;
 	std::byte* gameMemoryStorage = (std::byte*)VirtualAlloc(gameMemoryBaseAddress, gameMemorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-
 	Game::Memory gameMemory = {
 		.permanentStorageSize = 64_MB,
 		.transientStorageSize = gameMemorySize - gameMemory.permanentStorageSize,
@@ -94,14 +82,23 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 
 	Game::Input gameInput = {};
 
+	LARGE_INTEGER performanceFrequencyResult;
+	QueryPerformanceFrequency(&performanceFrequencyResult);
+	globalPerformanceFrequency = (u64)performanceFrequencyResult.QuadPart;
 	u64 flipWallClock = GetWallClock();
-	u64 startCycleCounter = __rdtsc();
+	u64 flipCycleCounter = __rdtsc();
 
 	while (globalIsAppRunning) {
 		ProcessPendingMessages(gameInput);
 
 		if constexpr (HANDMADE_DEV) {
-			if (globalIsPause) continue;
+			if (globalIsPause) {
+				globalWasPause = true;
+				YieldProcessor();
+				flipWallClock = GetWallClock();
+				flipCycleCounter = __rdtsc();
+				continue;
+			};
 		}
 
 		Game::ScreenBuffer gameScreenBuffer = {
@@ -122,11 +119,11 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 		// If the write cursor is after that safery margin, then we assume we can never sync the audio perfectly,
 		// so we will write one frame's worth of audio plus the safety margin's worth of guard samples.
 
-		
 		f32 fromFlipToAudioSeconds = GetSecondsElapsed(flipWallClock);
 		if (!sound.buffer || !SUCCEEDED(sound.buffer->GetCurrentPosition(&sound.playCursor, &sound.writeCursor))) {
 			sound.runningSampleIndex = sound.writeCursor / sound.waveFormat.nBlockAlign;
 		}
+
 		DWORD expectedBytesUntilFlip = sound.bytesPerFrame - (DWORD)((f32)sound.waveFormat.nAvgBytesPerSec * fromFlipToAudioSeconds);
 		DWORD expectedFlipPlayCursorUnwrapped = sound.playCursor + expectedBytesUntilFlip;
 		DWORD writeCursorUnwrapped = sound.playCursor < sound.writeCursor
@@ -140,6 +137,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 		sound.outputLocation = sound.runningSampleIndex * sound.waveFormat.nBlockAlign % sound.getBufferSize();
 		sound.outputByteCount = sound.outputLocation < targetCursor ? 0 : sound.getBufferSize();
 		sound.outputByteCount += targetCursor - sound.outputLocation;
+
 		Game::SoundBuffer gameSoundBuffer = {
 			.samplesPerSecond = sound.waveFormat.nSamplesPerSec,
 			.samplesToWrite = sound.outputByteCount / sound.waveFormat.nBlockAlign,
@@ -161,53 +159,43 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 			f32 sleepMs = 1000.0f * (TARGET_SECONDS_PER_FRAME - frameSecondsElapsed);
 			if (sleepMs > 0) Sleep((DWORD)sleepMs);
 		}
-
 		frameSecondsElapsed = GetSecondsElapsed(flipWallClock);
-		// TODO: unreliable frame rate, log this
-		// if (globalIsAppRunning) assert(frameSecondsElapsed < targetSecondsPerFrame);
-
 		while (frameSecondsElapsed < TARGET_SECONDS_PER_FRAME) {
+			YieldProcessor();
 			frameSecondsElapsed = GetSecondsElapsed(flipWallClock);
 		}
+		flipWallClock = GetWallClock();
+		flipCycleCounter = __rdtsc();
 
 		if constexpr (HANDMADE_DEV) {
 			bool isCursorsRecorded = sound.buffer && SUCCEEDED(sound.buffer->GetCurrentPosition(
 				&debugMarkersArray[debugMarkersIndex].flipPlayCursor, NULL
 			));
 			if (isCursorsRecorded) {
-				Debug::SyncDisplay(
+				Debug::SoundSyncDisplay(
 					globalScreen, sound,
 					debugMarkersArray, ArrayCount(debugMarkersArray), debugMarkersIndex
 				);
 			}
 
-			// DWORD latencyBytes = writeCursorUnwrapped - sound.playCursor;
-			// f32 latencyMs = (f32)latencyBytes / (f32)sound.waveFormat.nAvgBytesPerSec * 1000;
-			// f32 millisecondsPerFrame = 1000 * frameSecondsElapsed;
-			// f32 framesPerSecond = 1.0f / frameSecondsElapsed;
-			// u64 endCycleCounter = __rdtsc();
-			// u64 cycleCounterElapsed = endCycleCounter - startCycleCounter;
-			// u64 megaCyclesPerFrame = cycleCounterElapsed / (1000 * 1000);
-			size_t debugMarkersIndexUnwrapped = debugMarkersIndex == 0 ? ArrayCount(debugMarkersArray) : debugMarkersIndex;
-			char outputBuffer[256];
-			sprintf_s(outputBuffer, "diff: %ld\n", debugMarkersArray[debugMarkersIndex].flipPlayCursor - debugMarkersArray[debugMarkersIndexUnwrapped - 1].flipPlayCursor);
-			OutputDebugStringA(outputBuffer);
-		}
-		
-		flipWallClock = GetWallClock();
-		startCycleCounter = __rdtsc();
-
-		DisplayScreenBuffer(window, deviceContext, globalScreen);
-
-		if constexpr (HANDMADE_DEV) {
-			// TODO: unreliable frame rate, log this
+			// // TODO: log this instead of assert
 			// size_t debugMarkersIndexUnwrapped = debugMarkersIndex == 0 ? ArrayCount(debugMarkersArray) : debugMarkersIndex;
 			// Debug::Marker prevMarker = debugMarkersArray[debugMarkersIndexUnwrapped - 1];
 			// DWORD prevSoundFilledCursor = (prevMarker.outputLocation + prevMarker.outputByteCount) % sound.getBufferSize();
 			// // compare with half buffer size to account for the fact that prevSoundFilledCursor may be wrapped
-			// assert(sound.playCursor <= prevSoundFilledCursor || sound.playCursor > prevSoundFilledCursor + sound.getBufferSize() / 2);
+			// assert(globalWasPause || sound.playCursor <= prevSoundFilledCursor || sound.playCursor > prevSoundFilledCursor + sound.getBufferSize() / 2);
+			// globalWasPause = false;
+			
+			// f32 millisecondsPerFrame = 1000 * frameSecondsElapsed;
+			// u64 cycleCounterElapsed = __rdtsc() - flipCycleCounter;
+			char outputBuffer[256];
+			sprintf_s(outputBuffer, "frame ms: %.2f\n", frameSecondsElapsed * 1000);
+			OutputDebugStringA(outputBuffer);
+
 			debugMarkersIndex = (debugMarkersIndex + 1) % ArrayCount(debugMarkersArray);
 		}
+
+		DisplayScreenBuffer(window, deviceContext, globalScreen);
 	}
 
 	return 0;
@@ -228,9 +216,7 @@ static LRESULT CALLBACK MainWindowCallback(HWND window, UINT message, WPARAM wPa
 		} break;
 
 		case WM_KEYUP:
-		case WM_KEYDOWN:
-		case WM_SYSKEYUP:
-		case WM_SYSKEYDOWN: {
+		case WM_KEYDOWN: {
 			assert(!"Keyboard input came in through non-dispatched message!");
 		} break;
 
@@ -259,9 +245,10 @@ static void DisplayScreenBuffer(HWND window, HDC deviceContext, const Screen& sc
 }
 
 static void ResizeScreenBuffer(Screen& screen, u32 width, u32 height) {
-	if (screen.memory)
+	if (screen.memory) {
 		VirtualFree(screen.memory, 0, MEM_RELEASE);
-
+	}
+	
 	screen.setWidth(width);
 	screen.setHeight(height);
 	size_t screenMemorySize = width * height * sizeof(*screen.memory);
@@ -401,21 +388,17 @@ namespace Platform {
 
 		// seems like this handle don't need to be closed
 		HANDLE heapHandle = GetProcessHeap();
-		if (!heapHandle)
-			return result;
+		if (!heapHandle) return result;
 
 		HANDLE fileHandle = CreateFileA(fileName, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
-		if (fileHandle == INVALID_HANDLE_VALUE)
-			return result;
+		if (fileHandle == INVALID_HANDLE_VALUE) return result;
 
 		LARGE_INTEGER fileSize;
-		if (!GetFileSizeEx(fileHandle, &fileSize))
-			goto close_file_handle;
+		if (!GetFileSizeEx(fileHandle, &fileSize)) goto close_file_handle;
 
 		memorySize = SafeTruncateToU32(fileSize.QuadPart);
 		memory = HeapAlloc(heapHandle, 0, memorySize);
-		if (!memory)
-			goto close_file_handle;
+		if (!memory) goto close_file_handle;
 
 		DWORD bytesRead;
 		if (!ReadFile(fileHandle, memory, memorySize, &bytesRead, 0) || (bytesRead != memorySize)) {
@@ -435,12 +418,12 @@ namespace Platform {
 		bool result = false;
 
 		HANDLE fileHandle = CreateFileA(fileName, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
-		if (fileHandle == INVALID_HANDLE_VALUE)
-			return result;
+		if (fileHandle == INVALID_HANDLE_VALUE) return result;
 
 		DWORD bytesWritten;
-		if (WriteFile(fileHandle, memory, memorySize, &bytesWritten, 0) && (bytesWritten == memorySize))
+		if (WriteFile(fileHandle, memory, memorySize, &bytesWritten, 0) && (bytesWritten == memorySize)) {
 			result = true;
+		}
 
 		CloseHandle(fileHandle);
 		return result;
@@ -448,7 +431,7 @@ namespace Platform {
 }
 
 namespace Debug {
-	static void SyncDisplay(
+	static void SoundSyncDisplay(
 		Screen& screen, const Sound& sound,
 		const Marker* markers, size_t markersCount, size_t currentMarkerIndex) {
 

@@ -5,24 +5,14 @@ namespace Game {
 		assert(sizeof(GameState) <= memory.permanentStorageSize);
 		GameState* gameState = (GameState*)memory.permanentStorage;
 
-		if (!memory.isInitialized)
+		if (!memory.isInitialized) {
 			memory.isInitialized = true;
-
-		auto readFileResult = Platform::ReadEntireFile(__FILE__);
-
-		if (readFileResult.memory) {
-			Platform::WriteEntireFile("test.out", readFileResult.memory, readFileResult.memorySize);
-			Platform::FreeFileMemory(readFileResult.memory);
 		}
 
-		if (input.moveUp.isEndedPressed)
-			gameState->greenOffset--;
-		if (input.moveDown.isEndedPressed)
-			gameState->greenOffset++;
-		if (input.moveRight.isEndedPressed)
-			gameState->blueOffset++;
-		if (input.moveLeft.isEndedPressed)
-			gameState->blueOffset--;
+		if (input.moveUp.isEndedPressed) 	gameState->greenOffset = (gameState->greenOffset - 10u) & UINT8_MAX;
+		if (input.moveDown.isEndedPressed) 	gameState->greenOffset = (gameState->greenOffset + 10u) & UINT8_MAX;
+		if (input.moveRight.isEndedPressed) gameState->blueOffset = (gameState->blueOffset + 10u) & UINT8_MAX;
+		if (input.moveLeft.isEndedPressed) 	gameState->blueOffset = (gameState->blueOffset - 10u) & UINT8_MAX;
 
 		RenderGradient(gameState, screenBuffer);
 	};
