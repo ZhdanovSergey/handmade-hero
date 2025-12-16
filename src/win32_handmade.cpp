@@ -8,7 +8,7 @@ static const f32 TARGET_SECONDS_PER_FRAME = 1.0f / (f32)TARGET_UPDATE_FREQUENCY;
 
 static bool globalIsAppRunning = true;
 static bool globalIsPause = false;
-static u64 globalPerformanceFrequency = 0;
+static u64 globalPerformanceFrequency = NULL;
 
 // глобальный из-за MainWindowCallback
 static Screen globalScreen = {
@@ -22,12 +22,14 @@ static Screen globalScreen = {
 	}
 };
 
-// TODO: использовать NULL вместо 0 когда по смыслу это не число
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int) {
 	static_assert(DEV_MODE || !SLOW_MODE);
 	
     SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
-	bool sleepIsGranular = timeBeginPeriod(1) == TIMERR_NOERROR;
+	UINT sleepGranularityMs = 1;
+	if (timeBeginPeriod(sleepGranularityMs) != TIMERR_NOERROR) {
+		sleepGranularityMs = NULL;
+	}
 
 	WNDCLASSA windowClass = {
 		.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW,
@@ -37,14 +39,13 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 	};
 	RegisterClassA(&windowClass);
 	HWND window = CreateWindowExA(
-		0, windowClass.lpszClassName, "Handmade Hero", WS_TILEDWINDOW | WS_VISIBLE,
+		NULL, windowClass.lpszClassName, "Handmade Hero", WS_TILEDWINDOW | WS_VISIBLE,
 		CW_USEDEFAULT, CW_USEDEFAULT, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT,
-		0, 0, hInstance, 0
+		nullptr, nullptr, hInstance, nullptr
 	);
 	HDC deviceContext = GetDC(window);
 	ResizeScreenBuffer(globalScreen, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT);
 
-	// TODO: platformSound
 	Sound sound = {
 		.waveFormat = {
 			.wFormatTag = WAVE_FORMAT_PCM,
@@ -58,17 +59,17 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 		.safetyBytes = sound.bytesPerFrame / 3,
 	};
 	InitDirectSound(window, sound);
-	Game::SoundSample* gameSoundMemory = (Game::SoundSample*)VirtualAlloc(0, sound.getBufferSize(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	Game::SoundSample* gameSoundMemory = (Game::SoundSample*)VirtualAlloc(nullptr, sound.getBufferSize(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 	if (sound.buffer) {
 		ClearSoundBuffer(sound);
 		// TODO: address sanitizer падает после вызова Play(), по-видимому это известная проблема DirectSound
 		// https://stackoverflow.com/questions/72511236/directsound-crashes-due-to-a-read-access-violation-when-calling-idirectsoundbuff
-		sound.buffer->Play(0, 0, DSBPLAY_LOOPING);
+		sound.buffer->Play(NULL, NULL, DSBPLAY_LOOPING);
 	}
 	Debug::Marker debugMarkersArray[TARGET_UPDATE_FREQUENCY - 1] = {};
 	size_t debugMarkersIndex = 0;
 
-	void* gameMemoryBaseAddress = 0;
+	void* gameMemoryBaseAddress = nullptr;
 	if constexpr (DEV_MODE && INTPTR_MAX == INT64_MAX) {
 		gameMemoryBaseAddress = (void*)1024_GB;
 	}
@@ -123,9 +124,9 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 		FillSoundBuffer(gameSoundBuffer, sound);
 
 		f32 frameSecondsElapsed = GetSecondsElapsed(flipWallClock);
-		if (sleepIsGranular && frameSecondsElapsed < TARGET_SECONDS_PER_FRAME) {
-			f32 sleepMs = 1000.0f * (TARGET_SECONDS_PER_FRAME - frameSecondsElapsed);
-			if (sleepMs > 0) Sleep((DWORD)sleepMs);
+		if (sleepGranularityMs) {
+			f32 sleepMs = 1000.0f * (TARGET_SECONDS_PER_FRAME - frameSecondsElapsed) - (f32)sleepGranularityMs;
+			if (sleepMs >= 1) Sleep((DWORD)sleepMs);
 		}
 		frameSecondsElapsed = GetSecondsElapsed(flipWallClock);
 		while (frameSecondsElapsed < TARGET_SECONDS_PER_FRAME) {
@@ -146,7 +147,6 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 				);
 			}
 
-			// TODO: залогировать вместо assert
 			// size_t debugMarkersIndexUnwrapped = debugMarkersIndex == 0 ? ArrayCount(debugMarkersArray) : debugMarkersIndex;
 			// Debug::Marker prevMarker = debugMarkersArray[debugMarkersIndexUnwrapped - 1];
 			// DWORD prevSoundFilledCursor = (prevMarker.outputLocation + prevMarker.outputByteCount) % sound.getBufferSize();
@@ -165,7 +165,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 		DisplayScreenBuffer(window, deviceContext, globalScreen);
 	}
 
-	return 0;
+	return EXIT_SUCCESS;
 }
 
 static LRESULT CALLBACK MainWindowCallback(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -188,7 +188,7 @@ static LRESULT CALLBACK MainWindowCallback(HWND window, UINT message, WPARAM wPa
 			return DefWindowProcA(window, message, wParam, lParam);
 	}
 
-	return 0;
+	return NULL;
 }
 
 static void DisplayScreenBuffer(HWND window, HDC deviceContext, const Screen& screen) {
@@ -210,13 +210,13 @@ static void DisplayScreenBuffer(HWND window, HDC deviceContext, const Screen& sc
 
 static void ResizeScreenBuffer(Screen& screen, u32 width, u32 height) {
 	if (screen.memory) {
-		VirtualFree(screen.memory, 0, MEM_RELEASE);
+		VirtualFree(screen.memory, NULL, MEM_RELEASE);
 	}
 	
 	screen.setWidth(width);
 	screen.setHeight(height);
 	size_t screenMemorySize = width * height * sizeof(*screen.memory);
-	screen.memory = (Game::ScreenPixel*)VirtualAlloc(0, screenMemorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	screen.memory = (Game::ScreenPixel*)VirtualAlloc(nullptr, screenMemorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 }
 
 static void InitDirectSound(HWND window, Sound& sound) {
@@ -228,7 +228,7 @@ static void InitDirectSound(HWND window, Sound& sound) {
 	if (!directSoundCreate) return;
 
 	IDirectSound* directSound;
-	if (!SUCCEEDED(directSoundCreate(0, &directSound, 0))) return;
+	if (!SUCCEEDED(directSoundCreate(nullptr, &directSound, nullptr))) return;
 	if (!SUCCEEDED(directSound->SetCooperativeLevel(window, DSSCL_PRIORITY))) return;
 
 	DSBUFFERDESC primaryBufferDesc = {
@@ -237,7 +237,7 @@ static void InitDirectSound(HWND window, Sound& sound) {
 	};
 
 	IDirectSoundBuffer* primaryBuffer;
-	if (!SUCCEEDED(directSound->CreateSoundBuffer(&primaryBufferDesc, &primaryBuffer, 0))) return;
+	if (!SUCCEEDED(directSound->CreateSoundBuffer(&primaryBufferDesc, &primaryBuffer, nullptr))) return;
 	if (!SUCCEEDED(primaryBuffer->SetFormat(&sound.waveFormat))) return;
 
 	DSBUFFERDESC soundBufferDesc = {
@@ -246,7 +246,7 @@ static void InitDirectSound(HWND window, Sound& sound) {
 		.lpwfxFormat = &sound.waveFormat
 	};
 
-	directSound->CreateSoundBuffer(&soundBufferDesc, &sound.buffer, 0);
+	directSound->CreateSoundBuffer(&soundBufferDesc, &sound.buffer, nullptr);
 }
 
 static void CalcRequiredSoundOutput(Sound& sound, u64 flipWallClock, Debug::Marker* debugMarkersArray, size_t debugMarkersIndex) {
@@ -289,7 +289,7 @@ static void CalcRequiredSoundOutput(Sound& sound, u64 flipWallClock, Debug::Mark
 
 static void ClearSoundBuffer(Sound& sound) {
 	void *region1, *region2; DWORD region1Size, region2Size;
-	if (!sound.buffer || !SUCCEEDED(sound.buffer->Lock(0, sound.getBufferSize(), &region1, &region1Size, &region2, &region2Size, 0))) {
+	if (!sound.buffer || !SUCCEEDED(sound.buffer->Lock(0, sound.getBufferSize(), &region1, &region1Size, &region2, &region2Size, NULL))) {
 		return;
 	}
 
@@ -300,7 +300,7 @@ static void ClearSoundBuffer(Sound& sound) {
 
 static void FillSoundBuffer(const Game::SoundBuffer& source, Sound& sound) {
 	void *region1, *region2; DWORD region1Size, region2Size;
-	if (!sound.buffer || !SUCCEEDED(sound.buffer->Lock(sound.outputLocation, sound.outputByteCount, &region1, &region1Size, &region2, &region2Size, 0))) {
+	if (!sound.buffer || !SUCCEEDED(sound.buffer->Lock(sound.outputLocation, sound.outputByteCount, &region1, &region1Size, &region2, &region2Size, NULL))) {
 		return;
 	}
 
@@ -316,7 +316,7 @@ static void FillSoundBuffer(const Game::SoundBuffer& source, Sound& sound) {
 
 static void ProcessPendingMessages(Game::Controller& controller) {
 	MSG message;
-	while (PeekMessageA(&message, 0, 0, 0, PM_REMOVE)) {
+	while (PeekMessageA(&message, nullptr, NULL, NULL, PM_REMOVE)) {
 		switch (message.message) {
 			case WM_QUIT: {
 				globalIsAppRunning = false;
@@ -417,26 +417,26 @@ static inline f32 GetSecondsElapsed(u64 start) {
 namespace Platform {
 	static ReadEntireFileResult ReadEntireFileSync(const char* fileName) {
 		ReadEntireFileResult result = {};
-		u32 memorySize = 0;
+		u32 memorySize = NULL;
 		void* memory = nullptr;
 
 		// похоже этот handle не надо закрывать
 		HANDLE heapHandle = GetProcessHeap();
 		if (!heapHandle) return result;
 
-		HANDLE fileHandle = CreateFileA(fileName, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+		HANDLE fileHandle = CreateFileA(fileName, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, NULL, nullptr);
 		if (fileHandle == INVALID_HANDLE_VALUE) return result;
 
 		LARGE_INTEGER fileSize;
 		if (!GetFileSizeEx(fileHandle, &fileSize)) goto close_file_handle;
 
 		memorySize = SafeTruncateToU32(fileSize.QuadPart);
-		memory = HeapAlloc(heapHandle, 0, memorySize);
+		memory = HeapAlloc(heapHandle, NULL, memorySize);
 		if (!memory) goto close_file_handle;
 
 		DWORD bytesRead;
-		if (!ReadFile(fileHandle, memory, memorySize, &bytesRead, 0) || (bytesRead != memorySize)) {
-			HeapFree(heapHandle, 0, memory);
+		if (!ReadFile(fileHandle, memory, memorySize, &bytesRead, nullptr) || (bytesRead != memorySize)) {
+			HeapFree(heapHandle, NULL, memory);
 			goto close_file_handle;
 		}
 
@@ -450,11 +450,11 @@ namespace Platform {
 	static bool WriteEntireFileSync(const char* fileName, const void* memory, u32 memorySize) {
 		bool result = false;
 
-		HANDLE fileHandle = CreateFileA(fileName, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
+		HANDLE fileHandle = CreateFileA(fileName, GENERIC_WRITE, NULL, nullptr, CREATE_ALWAYS, NULL, nullptr);
 		if (fileHandle == INVALID_HANDLE_VALUE) return result;
 
 		DWORD bytesWritten;
-		if (WriteFile(fileHandle, memory, memorySize, &bytesWritten, 0) && (bytesWritten == memorySize)) {
+		if (WriteFile(fileHandle, memory, memorySize, &bytesWritten, nullptr) && (bytesWritten == memorySize)) {
 			result = true;
 		}
 
@@ -467,7 +467,7 @@ namespace Platform {
 		HANDLE heapHandle = GetProcessHeap();
 		if (!heapHandle) return;
 
-		HeapFree(heapHandle, 0, memory);
+		HeapFree(heapHandle, NULL, memory);
 		memory = nullptr;
 	}
 }
