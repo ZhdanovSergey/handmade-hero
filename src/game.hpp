@@ -5,45 +5,59 @@
 namespace Game {
 	struct GameState {
 		f32 tSine;
-		u8 greenOffset, blueOffset;
+		u32 toneHz;
+		u32 greenOffset, blueOffset;
 	};
 
 	struct ButtonState {
+		bool isPressed;
 		u32 transitionsCount;
-		bool isEndedPressed;
 	};
 
-	struct Input {
+	struct Controller {
+		bool isAnalog;
+
+		f32 startX, startY;
+		f32 endX, endY;
+		f32 minX, minY;
+		f32 maxX, maxY;
+
 		ButtonState start, back;
 		ButtonState leftShoulder, rightShoulder;
 		ButtonState moveUp, moveDown, moveLeft, moveRight;
 		ButtonState actionUp, actionDown, actionLeft, actionRight;
+	};
+
+	struct Input {
+		Controller controllers[2];
 
 		void ResetTransitionsCount() {
-			start.transitionsCount = 0;
-			back.transitionsCount = 0;
+			for (auto& controller : controllers) {
+				controller.start.transitionsCount = 0;
+				controller.back.transitionsCount = 0;
 
-			leftShoulder.transitionsCount = 0;
-			rightShoulder.transitionsCount = 0;
+				controller.leftShoulder.transitionsCount = 0;
+				controller.rightShoulder.transitionsCount = 0;
 
-			moveUp.transitionsCount = 0;
-			moveDown.transitionsCount = 0;
-			moveLeft.transitionsCount = 0;
-			moveRight.transitionsCount = 0;
+				controller.moveUp.transitionsCount = 0;
+				controller.moveDown.transitionsCount = 0;
+				controller.moveLeft.transitionsCount = 0;
+				controller.moveRight.transitionsCount = 0;
 
-			actionUp.transitionsCount = 0;
-			actionDown.transitionsCount = 0;
-			actionLeft.transitionsCount = 0;
-			actionRight.transitionsCount = 0;
+				controller.actionUp.transitionsCount = 0;
+				controller.actionDown.transitionsCount = 0;
+				controller.actionLeft.transitionsCount = 0;
+				controller.actionRight.transitionsCount = 0;
+			}
 		}
 	};
 
 	struct Memory {
+		bool isInitialized;
 		size_t permanentStorageSize;
 		size_t transientStorageSize;
 		std::byte* permanentStorage;
 		std::byte* transientStorage;
-		bool isInitialized;
 	};
 
 	struct ScreenPixel {

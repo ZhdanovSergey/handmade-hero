@@ -1,11 +1,13 @@
 #pragma once
 
-// TODO: add array with counter template
-// TODO: switch to PascalCase?
-// TODO: revive windows xp build
+// TODO: подключить что-нибудь для вывода дебаг инфы за пределами платформенного слоя
+// TODO: переписать комменты на русском
+// TODO: сделать шаблон массива со счетчиком?
+// TODO: перейти на стиль_форматирования Джонатана_Блоу?
+// TODO: оживить windows xp билд
 
-#if !HANDMADE_SLOW
-    #define NDEBUG // disable assert
+#if !SLOW_MODE
+    #define NDEBUG // выключаем assert
 #endif
 
 #include <cassert>
@@ -46,7 +48,7 @@ namespace Platform {
         void* memory;
     };
 
-    static ReadEntireFileResult ReadEntireFile(const char* fileName);
+    static ReadEntireFileResult ReadEntireFileSync(const char* fileName);
+    static bool WriteEntireFileSync(const char* fileName, const void* memory, u32 memorySize);
     static void FreeFileMemory(void* memory);
-    static bool WriteEntireFile(const char* fileName, const void* memory, u32 memorySize);
 }
