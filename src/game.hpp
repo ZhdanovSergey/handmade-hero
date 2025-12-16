@@ -80,7 +80,7 @@ namespace Game {
 	};
 
 	static void UpdateAndRender(Memory& memory, const Input& input, ScreenBuffer& screenBuffer);
-	// GetSoundSamples should be fast, something like <= 1ms
+	// GetSoundSamples должен быть быстрым, не больше 1ms
 	static void GetSoundSamples(Memory& memory, SoundBuffer& soundBuffer);
 	static void RenderGradient(const GameState* gameState, ScreenBuffer& screenBuffer);
 }

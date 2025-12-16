@@ -9,7 +9,8 @@ static const f32 TARGET_SECONDS_PER_FRAME = 1.0f / (f32)TARGET_UPDATE_FREQUENCY;
 static bool globalIsAppRunning = true;
 static bool globalIsPause = false;
 static u64 globalPerformanceFrequency = 0;
-// global because of MainWindowCallback
+
+// глобальный из-за MainWindowCallback
 static Screen globalScreen = {
 	.bitmapInfo = {
 		.bmiHeader = {
@@ -21,12 +22,12 @@ static Screen globalScreen = {
 	}
 };
 
-// TODO: use NULL instead of 0 if it is not a meaningful number
+// TODO: использовать NULL вместо 0 когда по смыслу это не число
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int) {
 	static_assert(DEV_MODE || !SLOW_MODE);
 	
     SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
-	bool sleepIsGranular = timeBeginPeriod(1) == TIMERR_NOERROR; // set Windows scheduler granularity in ms
+	bool sleepIsGranular = timeBeginPeriod(1) == TIMERR_NOERROR;
 
 	WNDCLASSA windowClass = {
 		.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW,
@@ -60,7 +61,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 	Game::SoundSample* gameSoundMemory = (Game::SoundSample*)VirtualAlloc(0, sound.getBufferSize(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 	if (sound.buffer) {
 		ClearSoundBuffer(sound);
-		// TODO: address sanitizer crashes program after Play() call, it seems to be known DirectSound problem
+		// TODO: address sanitizer падает после вызова Play(), по-видимому это известная проблема DirectSound
 		// https://stackoverflow.com/questions/72511236/directsound-crashes-due-to-a-read-access-violation-when-calling-idirectsoundbuff
 		sound.buffer->Play(0, 0, DSBPLAY_LOOPING);
 	}
@@ -145,11 +146,11 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 				);
 			}
 
-			// // TODO: log this instead of assert
+			// TODO: залогировать вместо assert
 			// size_t debugMarkersIndexUnwrapped = debugMarkersIndex == 0 ? ArrayCount(debugMarkersArray) : debugMarkersIndex;
 			// Debug::Marker prevMarker = debugMarkersArray[debugMarkersIndexUnwrapped - 1];
 			// DWORD prevSoundFilledCursor = (prevMarker.outputLocation + prevMarker.outputByteCount) % sound.getBufferSize();
-			// // compare with half buffer size to account for the fact that prevSoundFilledCursor may be wrapped
+			// // сравниваем с половиной размера буфера чтобы учесть что prevSoundFilledCursor мог сделать оборот
 			// assert(sound.playCursor <= prevSoundFilledCursor || sound.playCursor > prevSoundFilledCursor + sound.getBufferSize() / 2);
 			
 			// f32 millisecondsPerFrame = 1000 * frameSecondsElapsed;
@@ -249,15 +250,12 @@ static void InitDirectSound(HWND window, Sound& sound) {
 }
 
 static void CalcRequiredSoundOutput(Sound& sound, u64 flipWallClock, Debug::Marker* debugMarkersArray, size_t debugMarkersIndex) {
-	// Here is how sound output computation works:
-	// We define a safety value that is the number of samples we think our game update loop may vary by
-	// (let's say up to 2ms). When we wake up to write audio, we will look and see what the play cursor
-	// position is and we will forecast ahead where we think the play cursor will be on the next frame boundary.
-	// We will then look to see if the write cursor is before that by at least our safety value.
-	// If it is, the target fill position is that frame boundary plus one frame.
-	// This gives us perfect audio sync in the case of a card that has low enough latency.
-	// If the write cursor is after that safery margin, then we assume we can never sync the audio perfectly,
-	// so we will write one frame's worth of audio plus the safety margin's worth of guard samples.
+	// Определяем величину, на размер которой может отличаться время цикла (safetyBytes). Когда мы просыпаемся чтобы писать звук,
+	// смотрим где находится playCursor и делаем прогноз где от будет находиться при смене кадра (expectedFlipPlayCursorUnwrapped).
+	// Если writeCursor + safetyBytes < expectedFlipPlayCursorUnwrapped, то это значит что у нас звуковая карта с маленькой задержкой
+	// и мы успеваем писать звук синхронно с изображением, поэтому пишем звук до конца следующего фрейма.
+	// Если writeCursor + safetyBytes >= expectedFlipPlayCursorUnwrapped, то полностью синхронизировать звук и изображение не получится,
+	// просто пишем количество сэмплов, равное bytesPerFrame + safetyBytes
 
 	f32 fromFlipToAudioSeconds = GetSecondsElapsed(flipWallClock);
 	if (!sound.buffer || !SUCCEEDED(sound.buffer->GetCurrentPosition(&sound.playCursor, &sound.writeCursor))) {
@@ -270,7 +268,7 @@ static void CalcRequiredSoundOutput(Sound& sound, u64 flipWallClock, Debug::Mark
 		? sound.writeCursor
 		: sound.writeCursor + sound.getBufferSize();
 
-	bool isLowLatencySound = (writeCursorUnwrapped + sound.safetyBytes) < expectedFlipPlayCursorUnwrapped;	
+	bool isLowLatencySound = (writeCursorUnwrapped + sound.safetyBytes) < expectedFlipPlayCursorUnwrapped;
 	DWORD targetCursorUnwrapped = isLowLatencySound
 		? expectedFlipPlayCursorUnwrapped + sound.bytesPerFrame
 		: writeCursorUnwrapped + sound.bytesPerFrame + sound.safetyBytes;
@@ -422,7 +420,7 @@ namespace Platform {
 		u32 memorySize = 0;
 		void* memory = nullptr;
 
-		// seems like this handle don't need to be closed
+		// похоже этот handle не надо закрывать
 		HANDLE heapHandle = GetProcessHeap();
 		if (!heapHandle) return result;
 
@@ -513,9 +511,9 @@ namespace Debug {
 			u32 top = screen.getHeight() * 3/4;
 			u32 bottom = screen.getHeight();
 			u32 flipPlayCursorX = (u32)((f32)currentMarker.flipPlayCursor * horizontalScaling);
-			u32 cursorGranularityBytesX = (u32)(1920.0f * horizontalScaling);
-			DrawVertical(screen, (flipPlayCursorX - cursorGranularityBytesX / 2) % screen.getWidth(), top, bottom, 0x00ffffff);
-			DrawVertical(screen, (flipPlayCursorX + cursorGranularityBytesX / 2) % screen.getWidth(), top, bottom, 0x00ffffff);
+			u32 safetyBytesX = (u32)((f32)sound.safetyBytes * horizontalScaling);
+			DrawVertical(screen, (flipPlayCursorX - safetyBytesX / 2) % screen.getWidth(), top, bottom, 0x00ffffff);
+			DrawVertical(screen, (flipPlayCursorX + safetyBytesX / 2) % screen.getWidth(), top, bottom, 0x00ffffff);
 		}
 	}
 	
@@ -523,7 +521,7 @@ namespace Debug {
 		Game::ScreenPixel* pixel = screen.memory + top * screen.getWidth() + x;
 
 		for (u32 y = top; y < bottom; y++) {
-			// TODO: maybe add u32 constructor
+			// TODO: добавить u32 конструктор либо избавиться от ScreenPixel
 			*pixel = *(Game::ScreenPixel*)&color;
 			pixel += screen.getWidth();
 		}

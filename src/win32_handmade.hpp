@@ -17,6 +17,7 @@ struct Screen {
 };
 
 struct Sound {
+	// TODO: создать отдельную структуру для полей, которые не должны переходить границу фрейма
 	WAVEFORMATEX waveFormat;
 	IDirectSoundBuffer* buffer;
 	u32 runningSampleIndex;
@@ -24,8 +25,6 @@ struct Sound {
 	DWORD outputByteCount;
 	DWORD bytesPerFrame;
 	DWORD safetyBytes;
-
-	// TODO: deprecated?
 	DWORD playCursor;
 	DWORD writeCursor;
 
@@ -49,7 +48,6 @@ namespace Debug {
     static void DrawVertical(Screen& screen, u32 x, u32 top, u32 bottom, u32 color);
 }
 
-// TODO: attach methods to structs after day 025?
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int);
 static LRESULT CALLBACK MainWindowCallback(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 static void DisplayScreenBuffer(HWND window, HDC deviceContext, const Screen& screen);
