@@ -1,4 +1,3 @@
-#include "game.cpp"
 #include "win32_handmade.hpp"
 
 static const u32 INITIAL_WINDOW_WIDTH = 1280;
@@ -79,11 +78,17 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 		.permanentStorageSize = 64_MB,
 		.transientStorageSize = gameMemorySize - gameMemory.permanentStorageSize,
 		.permanentStorage = gameMemoryStorage,
-		.transientStorage = gameMemory.permanentStorage + gameMemory.permanentStorageSize
+		.transientStorage = gameMemory.permanentStorage + gameMemory.permanentStorageSize,
+    	.ReadEntireFileSync = Platform::ReadEntireFileSync,
+    	.WriteEntireFileSync = Platform::WriteEntireFileSync,
+    	.FreeFileMemory = Platform::FreeFileMemory,
 	};
 
 	LoadXInputLibrary();
 	Game::Input gameInput = {};
+
+	GameCode gameCode = LoadGameCode();
+	u32 gameCodeLoadCounter = 0;
 
 	LARGE_INTEGER performanceFrequencyResult;
 	QueryPerformanceFrequency(&performanceFrequencyResult);
@@ -97,6 +102,12 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 		ProcessGamepadInput(gameInput.controllers[1]);
 
 		if constexpr (DEV_MODE) {
+			if (gameCodeLoadCounter++ > TARGET_UPDATE_FREQUENCY * 5) {
+				gameCodeLoadCounter = 0;
+				UnloadGameCode(gameCode);
+				gameCode = LoadGameCode();
+			}
+
 			if (globalIsPause) {
 				YieldProcessor();
 				flipWallClock = GetWallClock();
@@ -111,7 +122,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 			.memory = globalScreen.memory,
 		};
 
-		Game::UpdateAndRender(gameMemory, gameInput, gameScreenBuffer);
+		gameCode.UpdateAndRender(gameInput, gameMemory, gameScreenBuffer);
 		CalcRequiredSoundOutput(sound, flipWallClock, debugMarkersArray, debugMarkersIndex);
 
 		Game::SoundBuffer gameSoundBuffer = {
@@ -120,7 +131,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _
 			.samples = gameSoundMemory,
 		};
 
-		Game::GetSoundSamples(gameMemory, gameSoundBuffer);
+		gameCode.GetSoundSamples(gameMemory, gameSoundBuffer);
 		FillSoundBuffer(gameSoundBuffer, sound);
 
 		f32 frameSecondsElapsed = GetSecondsElapsed(flipWallClock);
@@ -191,6 +202,32 @@ static LRESULT CALLBACK MainWindowCallback(HWND window, UINT message, WPARAM wPa
 	return NULL;
 }
 
+static GameCode LoadGameCode() {
+	// TODO: регулярные потери кадров из-за синхронного копирования файла
+	CopyFileA("handmade.dll", "handmade_temp.dll", FALSE);
+	HMODULE gameDll = LoadLibraryA("handmade_temp.dll"); // загружаем handmade_temp.dll чтобы компилятор мог писать в handmade.dll
+	if (!gameDll) return {
+		.UpdateAndRender = Game::UpdateAndRenderStub,
+		.GetSoundSamples = Game::GetSoundSamplesStub,
+	};
+
+	return {
+		.UpdateAndRender = (Game::UpdateAndRenderType*) GetProcAddress(gameDll, "UpdateAndRender"),
+		.GetSoundSamples = (Game::GetSoundSamplesType*) GetProcAddress(gameDll, "GetSoundSamples"),
+		.gameDll = gameDll,
+	};
+}
+
+static void UnloadGameCode(GameCode& gameCode) {
+	if (!gameCode.gameDll) return;
+
+	FreeLibrary(gameCode.gameDll);
+	gameCode = {
+		.UpdateAndRender = Game::UpdateAndRenderStub,
+		.GetSoundSamples = Game::GetSoundSamplesStub,
+	};
+}
+
 static void DisplayScreenBuffer(HWND window, HDC deviceContext, const Screen& screen) {
 	RECT clientRect;
 	GetClientRect(window, &clientRect);
@@ -225,7 +262,6 @@ static void InitDirectSound(HWND window, Sound& sound) {
 
 	typedef HRESULT WINAPI DirectSoundCreateType(LPCGUID, LPDIRECTSOUND*, LPUNKNOWN);
 	auto directSoundCreate = (DirectSoundCreateType*)GetProcAddress(directSoundLibrary, "DirectSoundCreate");
-	if (!directSoundCreate) return;
 
 	IDirectSound* directSound;
 	if (!SUCCEEDED(directSoundCreate(nullptr, &directSound, nullptr))) return;
@@ -245,7 +281,6 @@ static void InitDirectSound(HWND window, Sound& sound) {
 		.dwBufferBytes = sound.getBufferSize(),
 		.lpwfxFormat = &sound.waveFormat
 	};
-
 	directSound->CreateSoundBuffer(&soundBufferDesc, &sound.buffer, nullptr);
 }
 
@@ -415,7 +450,7 @@ static inline f32 GetSecondsElapsed(u64 start) {
 }
 
 namespace Platform {
-	static ReadEntireFileResult ReadEntireFileSync(const char* fileName) {
+	ReadEntireFileResult ReadEntireFileSync(const char* fileName) {
 		ReadEntireFileResult result = {};
 		u32 memorySize = NULL;
 		void* memory = nullptr;
@@ -447,7 +482,7 @@ namespace Platform {
 			CloseHandle(fileHandle);
 			return result;
 	}
-	static bool WriteEntireFileSync(const char* fileName, const void* memory, u32 memorySize) {
+	bool WriteEntireFileSync(const char* fileName, const void* memory, u32 memorySize) {
 		bool result = false;
 
 		HANDLE fileHandle = CreateFileA(fileName, GENERIC_WRITE, NULL, nullptr, CREATE_ALWAYS, NULL, nullptr);
@@ -461,7 +496,7 @@ namespace Platform {
 		CloseHandle(fileHandle);
 		return result;
 	}
-	static void FreeFileMemory(void* memory) {
+	void FreeFileMemory(void* memory) {
 		if (!memory) return;
 
 		HANDLE heapHandle = GetProcessHeap();

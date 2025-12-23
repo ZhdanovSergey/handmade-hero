@@ -41,11 +41,16 @@ static inline u32 SafeTruncateToU32(s64 value) {
 
 namespace Platform {
     struct ReadEntireFileResult {
-        u32 memorySize;
+        size_t memorySize;
         void* memory;
     };
 
-    static ReadEntireFileResult ReadEntireFileSync(const char* fileName);
-    static bool WriteEntireFileSync(const char* fileName, const void* memory, u32 memorySize);
-    static void FreeFileMemory(void* memory);
+    typedef ReadEntireFileResult ReadEntireFileSyncType (const char* fileName);
+            ReadEntireFileResult ReadEntireFileSync     (const char* fileName);
+
+    typedef bool WriteEntireFileSyncType(const char* fileName, const void* memory, u32 memorySize);
+            bool WriteEntireFileSync    (const char* fileName, const void* memory, u32 memorySize);
+
+    typedef void FreeFileMemoryType (void* memory);
+            void FreeFileMemory     (void* memory);
 }

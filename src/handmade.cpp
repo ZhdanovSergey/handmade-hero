@@ -1,7 +1,7 @@
-#include "game.hpp"
+#include "handmade.hpp"
 
 namespace Game {
-	static void UpdateAndRender(Memory& memory, const Input& input, ScreenBuffer& screenBuffer) {
+	extern "C" void UpdateAndRender(const Input& input, Memory& memory, ScreenBuffer& screenBuffer) {
 		assert(sizeof(GameState) <= memory.permanentStorageSize);
 		if (!memory.isInitialized) memory.isInitialized = true;
 		GameState* gameState = (GameState*)memory.permanentStorage;
@@ -23,18 +23,7 @@ namespace Game {
 		RenderGradient(gameState, screenBuffer);
 	};
 
-	static void RenderGradient(const GameState* gameState, ScreenBuffer& screenBuffer) {
-		for (u32 y = 0; y < screenBuffer.height; y++) {
-			for (u32 x = 0; x < screenBuffer.width; x++) {
-				*screenBuffer.memory++ = {
-					.blue = (u8)(x + gameState->blueOffset),
-					.green = (u8)(y + gameState->greenOffset),
-				};
-			}
-		}
-	};
-
-	static void GetSoundSamples(Memory& memory, SoundBuffer& soundBuffer) {
+	extern "C" void GetSoundSamples(Memory& memory, SoundBuffer& soundBuffer) {
 		GameState* gameState = (GameState*)memory.permanentStorage;
 		f32 volume = 5000.0f;
 
@@ -51,4 +40,20 @@ namespace Game {
 		}
 		gameState->tSine = std::fmod(gameState->tSine, 2.0f * pi32);
 	}
+
+	static void RenderGradient(const GameState* gameState, ScreenBuffer& screenBuffer) {
+		for (u32 y = 0; y < screenBuffer.height; y++) {
+			for (u32 x = 0; x < screenBuffer.width; x++) {
+				*screenBuffer.memory++ = {
+					.blue = (u8)(x + gameState->blueOffset),
+					.green = (u8)(y + gameState->greenOffset),
+				};
+			}
+		}
+	};
 }
+
+// TODO: вынести в отдельный файл и избавиться от флага WIN32?
+#if WIN32
+	int __stdcall DllMain(_In_ void*, _In_ unsigned long, _In_ void*) { return 1; }
+#endif

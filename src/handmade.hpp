@@ -58,6 +58,10 @@ namespace Game {
 		size_t transientStorageSize;
 		std::byte* permanentStorage;
 		std::byte* transientStorage;
+
+    	Platform::ReadEntireFileSyncType* ReadEntireFileSync;
+    	Platform::WriteEntireFileSyncType* WriteEntireFileSync;
+    	Platform::FreeFileMemoryType* FreeFileMemory;
 	};
 
 	struct ScreenPixel {
@@ -79,8 +83,14 @@ namespace Game {
 		SoundSample* samples;
 	};
 
-	static void UpdateAndRender(Memory& memory, const Input& input, ScreenBuffer& screenBuffer);
+	typedef 	void UpdateAndRenderType(const Game::Input&, Game::Memory&, Game::ScreenBuffer&);
+	extern "C"	void UpdateAndRender	(const Game::Input&, Game::Memory&, Game::ScreenBuffer&);
+				void UpdateAndRenderStub(const Game::Input&, Game::Memory&, Game::ScreenBuffer&){};
+
 	// GetSoundSamples должен быть быстрым, не больше 1ms
-	static void GetSoundSamples(Memory& memory, SoundBuffer& soundBuffer);
+	typedef		void GetSoundSamplesType(Game::Memory&, Game::SoundBuffer&);
+	extern "C"	void GetSoundSamples	(Game::Memory&, Game::SoundBuffer&);
+				void GetSoundSamplesStub(Game::Memory&, Game::SoundBuffer&){};
+
 	static void RenderGradient(const GameState* gameState, ScreenBuffer& screenBuffer);
 }
