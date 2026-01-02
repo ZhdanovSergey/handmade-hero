@@ -3,94 +3,93 @@
 #include "globals.hpp"
 
 namespace Game {
-	struct GameState {
-		f32 tSine;
-		u32 toneHz;
-		u32 greenOffset, blueOffset;
+	struct Game_State {
+		f32 t_sine;
+		u32 tone_hz;
+		u32 green_offset, blue_offset;
 	};
 
-	struct ButtonState {
-		bool isPressed;
-		u32 transitionsCount;
+	struct Button_State {
+		bool is_pressed;
+		u32 transitions_count;
 	};
 
 	struct Controller {
-		bool isAnalog;
+		bool is_analog;
 
-		f32 startX, startY;
-		f32 endX, endY;
-		f32 minX, minY;
-		f32 maxX, maxY;
+		f32 start_x, start_y;
+		f32 end_x, end_y;
+		f32 min_x, min_y;
+		f32 max_x, max_y;
 
-		ButtonState start, back;
-		ButtonState leftShoulder, rightShoulder;
-		ButtonState moveUp, moveDown, moveLeft, moveRight;
-		ButtonState actionUp, actionDown, actionLeft, actionRight;
+		Button_State start, back;
+		Button_State left_shoulder, right_shoulder;
+		Button_State move_up, move_down, move_left, move_right;
+		Button_State action_up, action_down, action_left, action_right;
 	};
 
 	struct Input {
 		Controller controllers[2];
 
-		void ResetTransitionsCount() {
+		void reset_transitions_count() {
 			for (auto& controller : controllers) {
-				controller.start.transitionsCount = 0;
-				controller.back.transitionsCount = 0;
+				controller.start.transitions_count 			= 0;
+				controller.back.transitions_count  			= 0;
+				controller.left_shoulder.transitions_count  = 0;
+				controller.right_shoulder.transitions_count = 0;
 
-				controller.leftShoulder.transitionsCount = 0;
-				controller.rightShoulder.transitionsCount = 0;
+				controller.move_up.transitions_count    	= 0;
+				controller.move_down.transitions_count  	= 0;
+				controller.move_left.transitions_count  	= 0;
+				controller.move_right.transitions_count 	= 0;
 
-				controller.moveUp.transitionsCount = 0;
-				controller.moveDown.transitionsCount = 0;
-				controller.moveLeft.transitionsCount = 0;
-				controller.moveRight.transitionsCount = 0;
-
-				controller.actionUp.transitionsCount = 0;
-				controller.actionDown.transitionsCount = 0;
-				controller.actionLeft.transitionsCount = 0;
-				controller.actionRight.transitionsCount = 0;
+				controller.action_up.transitions_count		= 0;
+				controller.action_down.transitions_count	= 0;
+				controller.action_left.transitions_count	= 0;
+				controller.action_right.transitions_count	= 0;
 			}
 		}
 	};
 
 	struct Memory {
-		bool isInitialized;
-		size_t permanentStorageSize;
-		size_t transientStorageSize;
-		std::byte* permanentStorage;
-		std::byte* transientStorage;
+		bool is_initialized;
+		uptr permanent_storage_size;
+		uptr transient_storage_size;
+		std::byte* permanent_storage;
+		std::byte* transient_storage;
 
-    	Platform::ReadEntireFileSyncType* ReadEntireFileSync;
-    	Platform::WriteEntireFileSyncType* WriteEntireFileSync;
-    	Platform::FreeFileMemoryType* FreeFileMemory;
+    	Platform::Read_File_Sync* read_file_sync;
+    	Platform::Write_File_Sync* write_file_sync;
+    	Platform::Free_File_Memory* free_file_memory;
 	};
 
-	struct ScreenPixel {
+	struct Screen_Pixel {
 		u8 blue, green, red, padding;
 	};
 
-	struct ScreenBuffer {
+	struct Screen_Buffer {
 		u32 width, height;
-		ScreenPixel* memory;
+		Screen_Pixel* memory;
 	};
 
-	struct SoundSample {
+	struct Sound_Sample {
 		s16 left, right;
 	};
 
-	struct SoundBuffer {
-		u32 samplesPerSecond;
-		u32 samplesToWrite;
-		SoundSample* samples;
+	struct Sound_Buffer {
+		u32 samples_per_second;
+		u32 samples_to_write;
+		Sound_Sample* samples;
 	};
 
-	typedef 	void UpdateAndRenderType(const Game::Input&, Game::Memory&, Game::ScreenBuffer&);
-	extern "C"	void UpdateAndRender	(const Game::Input&, Game::Memory&, Game::ScreenBuffer&);
-				void UpdateAndRenderStub(const Game::Input&, Game::Memory&, Game::ScreenBuffer&){};
+	typedef 	void Update_And_Render		(const Input& input, Memory& memory, Screen_Buffer& screen_buffer);
+	extern "C"	void update_and_render		(const Input& input, Memory& memory, Screen_Buffer& screen_buffer);
+				void update_and_render_stub	(const Input& input, Memory& memory, Screen_Buffer& screen_buffer){};
 
-	// GetSoundSamples должен быть быстрым, не больше 1ms
-	typedef		void GetSoundSamplesType(Game::Memory&, Game::SoundBuffer&);
-	extern "C"	void GetSoundSamples	(Game::Memory&, Game::SoundBuffer&);
-				void GetSoundSamplesStub(Game::Memory&, Game::SoundBuffer&){};
+	// get_sound_samples должен быть быстрым, не больше 1ms
+	typedef		void Get_Sound_Samples		(Memory& memory, Sound_Buffer& sound_buffer);
+	extern "C"	void get_sound_samples		(Memory& memory, Sound_Buffer& sound_buffer);
+				void get_sound_samples_stub	(Memory& memory, Sound_Buffer& sound_buffer){};
 
-	static void RenderGradient(const GameState* gameState, ScreenBuffer& screenBuffer);
+	static void render_gradient(const Game_State* game_state, Screen_Buffer& screen_buffer);
 }

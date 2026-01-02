@@ -4,16 +4,16 @@ static const u32 INITIAL_WINDOW_WIDTH = 1280;
 static const u32 INITIAL_WINDOW_HEIGHT = 720;
 static const u32 TARGET_UPDATE_FREQUENCY = 30;
 static const f32 TARGET_SECONDS_PER_FRAME = 1.0f / (f32)TARGET_UPDATE_FREQUENCY;
+static const u64 PERFORMANCE_FREQUENCY = get_performance_frequency();
 
-static bool globalIsAppRunning = true;
-static bool globalIsPause = false;
-static u64 globalPerformanceFrequency = NULL;
+static bool global_is_app_running = true;
+static bool global_is_pause = false;
 
-// глобальный из-за MainWindowCallback
-static Screen globalScreen = {
-	.bitmapInfo = {
+// глобальный из-за main_window_callback
+static Screen global_screen = {
+	.bitmap_info = {
 		.bmiHeader = {
-			.biSize = sizeof(globalScreen.bitmapInfo.bmiHeader),
+			.biSize = sizeof(BITMAPINFOHEADER),
 			.biPlanes = 1,
 			.biBitCount = 32,
 			.biCompression = BI_RGB,
@@ -21,175 +21,172 @@ static Screen globalScreen = {
 	}
 };
 
-int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int) {
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
 	static_assert(DEV_MODE || !SLOW_MODE);
 	
     SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
-	UINT sleepGranularityMs = 1;
-	if (timeBeginPeriod(sleepGranularityMs) != TIMERR_NOERROR) {
-		sleepGranularityMs = NULL;
+	UINT sleep_granularity_ms = 1;
+	if (timeBeginPeriod(sleep_granularity_ms) != TIMERR_NOERROR) {
+		sleep_granularity_ms = NULL;
 	}
 
-	WNDCLASSA windowClass = {
+	WNDCLASSA window_class = {
 		.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW,
-		.lpfnWndProc = MainWindowCallback,
+		.lpfnWndProc = main_window_callback,
 		.hInstance = hInstance,
-		.lpszClassName = "HandmadeHeroWindowClass",
+		.lpszClassName = "Handmade_Hero_Window_Class",
 	};
-	RegisterClassA(&windowClass);
+	RegisterClassA(&window_class);
 	HWND window = CreateWindowExA(
-		NULL, windowClass.lpszClassName, "Handmade Hero", WS_TILEDWINDOW | WS_VISIBLE,
+		NULL, window_class.lpszClassName, "Handmade Hero", WS_TILEDWINDOW | WS_VISIBLE,
 		CW_USEDEFAULT, CW_USEDEFAULT, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT,
 		nullptr, nullptr, hInstance, nullptr
 	);
-	HDC deviceContext = GetDC(window);
-	ResizeScreenBuffer(globalScreen, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT);
+	HDC device_context = GetDC(window);
+	resize_screen_buffer(global_screen, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT);
 
 	Sound sound = {
-		.waveFormat = {
+		.wave_format = {
 			.wFormatTag = WAVE_FORMAT_PCM,
 			.nChannels = 2,
 			.nSamplesPerSec = 48000,
-			.nAvgBytesPerSec = sizeof(Game::SoundSample) * sound.waveFormat.nSamplesPerSec,
-			.nBlockAlign = sizeof(Game::SoundSample),
-			.wBitsPerSample = sizeof(Game::SoundSample) / sound.waveFormat.nChannels * 8,
+			.nAvgBytesPerSec = sizeof(Game::Sound_Sample) * sound.wave_format.nSamplesPerSec,
+			.nBlockAlign = sizeof(Game::Sound_Sample),
+			.wBitsPerSample = sizeof(Game::Sound_Sample) / sound.wave_format.nChannels * 8,
 		},
-		.bytesPerFrame = sound.waveFormat.nAvgBytesPerSec / TARGET_UPDATE_FREQUENCY,
-		.safetyBytes = sound.bytesPerFrame / 3,
+		.bytes_per_frame = sound.wave_format.nAvgBytesPerSec / TARGET_UPDATE_FREQUENCY,
+		.safety_bytes = sound.bytes_per_frame / 3,
 	};
-	InitDirectSound(window, sound);
-	Game::SoundSample* gameSoundMemory = (Game::SoundSample*)VirtualAlloc(nullptr, sound.getBufferSize(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	init_direct_sound(window, sound);
+	Game::Sound_Sample* game_sound_memory = (Game::Sound_Sample*)VirtualAlloc(nullptr, sound.get_buffer_size(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 	if (sound.buffer) {
-		ClearSoundBuffer(sound);
+		clear_sound_buffer(sound);
 		// TODO: address sanitizer падает после вызова Play(), по-видимому это известная проблема DirectSound
 		// https://stackoverflow.com/questions/72511236/directsound-crashes-due-to-a-read-access-violation-when-calling-idirectsoundbuff
 		sound.buffer->Play(NULL, NULL, DSBPLAY_LOOPING);
 	}
-	Debug::Marker debugMarkersArray[TARGET_UPDATE_FREQUENCY - 1] = {};
-	size_t debugMarkersIndex = 0;
+	Debug::Marker debug_markers_array[TARGET_UPDATE_FREQUENCY - 1] = {};
+	uptr debug_markers_index = 0;
 
-	void* gameMemoryBaseAddress = nullptr;
-	if constexpr (DEV_MODE && INTPTR_MAX == INT64_MAX) {
-		gameMemoryBaseAddress = (void*)1024_GB;
+	void* game_memory_base_address = nullptr;
+	if constexpr (DEV_MODE && UINTPTR_MAX == UINT64_MAX) {
+		game_memory_base_address = (void*)1024_GB;
 	}
-	size_t gameMemorySize = 1_GB;
-	std::byte* gameMemoryStorage = (std::byte*)VirtualAlloc(gameMemoryBaseAddress, gameMemorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-	Game::Memory gameMemory = {
-		.permanentStorageSize = 64_MB,
-		.transientStorageSize = gameMemorySize - gameMemory.permanentStorageSize,
-		.permanentStorage = gameMemoryStorage,
-		.transientStorage = gameMemory.permanentStorage + gameMemory.permanentStorageSize,
-    	.ReadEntireFileSync = Platform::ReadEntireFileSync,
-    	.WriteEntireFileSync = Platform::WriteEntireFileSync,
-    	.FreeFileMemory = Platform::FreeFileMemory,
+	uptr game_memory_size = 1_GB;
+	std::byte* game_memory_storage = (std::byte*)VirtualAlloc(game_memory_base_address, game_memory_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	Game::Memory game_memory = {
+		.permanent_storage_size = 64_MB,
+		.transient_storage_size = game_memory_size - game_memory.permanent_storage_size,
+		.permanent_storage = game_memory_storage,
+		.transient_storage = game_memory.permanent_storage + game_memory.permanent_storage_size,
+    	.read_file_sync = Platform::read_file_sync,
+    	.write_file_sync = Platform::write_file_sync,
+    	.free_file_memory = Platform::free_file_memory,
 	};
 
-	LoadXInputLibrary();
-	Game::Input gameInput = {};
+	init_xinput();
+	Game::Input game_input = {};
 
-	GameCode gameCode = LoadGameCode();
-	u32 gameCodeLoadCounter = 0;
+	Game_Code game_code = load_game_code();
+	u32 game_code_load_counter = 0;
 
-	LARGE_INTEGER performanceFrequencyResult;
-	QueryPerformanceFrequency(&performanceFrequencyResult);
-	globalPerformanceFrequency = (u64)performanceFrequencyResult.QuadPart;
-	u64 flipWallClock = GetWallClock();
-	u64 flipCycleCounter = __rdtsc();
+	u64 flip_wall_clock = get_wall_clock();
+	u64 flip_cycle_counter = __rdtsc();
 
-	while (globalIsAppRunning) {
-		gameInput.ResetTransitionsCount();
-		ProcessPendingMessages(gameInput.controllers[0]);
-		ProcessGamepadInput(gameInput.controllers[1]);
+	while (global_is_app_running) {
+		game_input.reset_transitions_count();
+		process_pending_messages(game_input.controllers[0]);
+		process_gamepad_input(game_input.controllers[1]);
 
 		if constexpr (DEV_MODE) {
-			if (gameCodeLoadCounter++ > TARGET_UPDATE_FREQUENCY * 5) {
-				gameCodeLoadCounter = 0;
-				UnloadGameCode(gameCode);
-				gameCode = LoadGameCode();
+			if (game_code_load_counter++ > TARGET_UPDATE_FREQUENCY * 5) {
+				game_code_load_counter = 0;
+				unload_game_code(game_code);
+				game_code = load_game_code();
 			}
 
-			if (globalIsPause) {
+			if (global_is_pause) {
 				YieldProcessor();
-				flipWallClock = GetWallClock();
-				flipCycleCounter = __rdtsc();
+				flip_wall_clock = get_wall_clock();
+				flip_cycle_counter = __rdtsc();
 				continue;
 			};
 		}
 
-		Game::ScreenBuffer gameScreenBuffer = {
-			.width = globalScreen.getWidth(),
-			.height = globalScreen.getHeight(),
-			.memory = globalScreen.memory,
+		Game::Screen_Buffer game_screen_buffer = {
+			.width  = global_screen.get_width(),
+			.height = global_screen.get_height(),
+			.memory = global_screen.memory,
 		};
 
-		gameCode.UpdateAndRender(gameInput, gameMemory, gameScreenBuffer);
-		CalcRequiredSoundOutput(sound, flipWallClock, debugMarkersArray, debugMarkersIndex);
+		game_code.update_and_render(game_input, game_memory, game_screen_buffer);
+		calc_required_sound_output(sound, flip_wall_clock, debug_markers_array, debug_markers_index);
 
-		Game::SoundBuffer gameSoundBuffer = {
-			.samplesPerSecond = sound.waveFormat.nSamplesPerSec,
-			.samplesToWrite = sound.outputByteCount / sound.waveFormat.nBlockAlign,
-			.samples = gameSoundMemory,
+		Game::Sound_Buffer game_sound_buffer = {
+			.samples_per_second = sound.wave_format.nSamplesPerSec,
+			.samples_to_write = sound.output_byte_count / sound.wave_format.nBlockAlign,
+			.samples = game_sound_memory,
 		};
 
-		gameCode.GetSoundSamples(gameMemory, gameSoundBuffer);
-		FillSoundBuffer(gameSoundBuffer, sound);
+		game_code.get_sound_samples(game_memory, game_sound_buffer);
+		fill_sound_buffer(game_sound_buffer, sound);
 
-		f32 frameSecondsElapsed = GetSecondsElapsed(flipWallClock);
-		if (sleepGranularityMs) {
-			f32 sleepMs = 1000.0f * (TARGET_SECONDS_PER_FRAME - frameSecondsElapsed) - (f32)sleepGranularityMs;
-			if (sleepMs >= 1) Sleep((DWORD)sleepMs);
+		f32 frame_seconds_elapsed = get_seconds_elapsed(flip_wall_clock);
+		if (sleep_granularity_ms) {
+			f32 sleep_ms = 1000.0f * (TARGET_SECONDS_PER_FRAME - frame_seconds_elapsed) - (f32)sleep_granularity_ms;
+			if (sleep_ms >= 1) Sleep((DWORD)sleep_ms);
 		}
-		frameSecondsElapsed = GetSecondsElapsed(flipWallClock);
-		while (frameSecondsElapsed < TARGET_SECONDS_PER_FRAME) {
+		frame_seconds_elapsed = get_seconds_elapsed(flip_wall_clock);
+		while (frame_seconds_elapsed < TARGET_SECONDS_PER_FRAME) {
 			YieldProcessor();
-			frameSecondsElapsed = GetSecondsElapsed(flipWallClock);
+			frame_seconds_elapsed = get_seconds_elapsed(flip_wall_clock);
 		}
-		flipWallClock = GetWallClock();
-		flipCycleCounter = __rdtsc();
+		flip_wall_clock = get_wall_clock();
+		flip_cycle_counter = __rdtsc();
 
 		if constexpr (DEV_MODE) {
-			bool isCursorsRecorded = sound.buffer && SUCCEEDED(sound.buffer->GetCurrentPosition(
-				&debugMarkersArray[debugMarkersIndex].flipPlayCursor, NULL
+			bool is_cursors_recorded = sound.buffer && SUCCEEDED(sound.buffer->GetCurrentPosition(
+				&debug_markers_array[debug_markers_index].flip_play_cursor, NULL
 			));
-			if (isCursorsRecorded) {
-				Debug::SoundSyncDisplay(
-					globalScreen, sound,
-					debugMarkersArray, ArrayCount(debugMarkersArray), debugMarkersIndex
+			if (is_cursors_recorded) {
+				Debug::sound_sync_display(
+					global_screen, sound,
+					debug_markers_array, array_count(debug_markers_array), debug_markers_index
 				);
 			}
 
-			// size_t debugMarkersIndexUnwrapped = debugMarkersIndex == 0 ? ArrayCount(debugMarkersArray) : debugMarkersIndex;
-			// Debug::Marker prevMarker = debugMarkersArray[debugMarkersIndexUnwrapped - 1];
-			// DWORD prevSoundFilledCursor = (prevMarker.outputLocation + prevMarker.outputByteCount) % sound.getBufferSize();
-			// // сравниваем с половиной размера буфера чтобы учесть что prevSoundFilledCursor мог сделать оборот
-			// assert(sound.playCursor <= prevSoundFilledCursor || sound.playCursor > prevSoundFilledCursor + sound.getBufferSize() / 2);
+			// uptr debug_markers_index_unwrapped = debug_markers_index == 0 ? array_count(debug_markers_array) : debug_markers_index;
+			// Debug::Marker prev_marker = debug_markers_array[debug_markers_index_unwrapped - 1];
+			// DWORD prev_sound_filled_cursor = (prev_marker.output_location + prev_marker.output_byte_count) % sound.get_buffer_size();
+			// // сравниваем с половиной размера буфера чтобы учесть что prev_sound_filled_cursor мог сделать оборот
+			// assert(sound.play_cursor <= prev_sound_filled_cursor || sound.play_cursor > prev_sound_filled_cursor + sound.get_buffer_size() / 2);
 			
-			// f32 millisecondsPerFrame = 1000 * frameSecondsElapsed;
-			// u64 cycleCounterElapsed = __rdtsc() - flipCycleCounter;
-			char outputBuffer[256];
-			sprintf_s(outputBuffer, "frame ms: %.2f\n", frameSecondsElapsed * 1000);
-			OutputDebugStringA(outputBuffer);
+			// f32 ms_per_frame = 1000 * frame_seconds_elapsed;
+			// u64 cycle_counter_elapsed = __rdtsc() - flip_cycle_counter;
+			char output_buffer[256];
+			sprintf_s(output_buffer, "frame ms: %.2f\n", frame_seconds_elapsed * 1000);
+			OutputDebugStringA(output_buffer);
 
-			debugMarkersIndex = (debugMarkersIndex + 1) % ArrayCount(debugMarkersArray);
+			debug_markers_index = (debug_markers_index + 1) % array_count(debug_markers_array);
 		}
 
-		DisplayScreenBuffer(window, deviceContext, globalScreen);
+		display_screen_buffer(window, device_context, global_screen);
 	}
 
 	return EXIT_SUCCESS;
 }
 
-static LRESULT CALLBACK MainWindowCallback(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
+static LRESULT CALLBACK main_window_callback(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_PAINT: {
 			PAINTSTRUCT paint;
-			HDC deviceContext = BeginPaint(window, &paint);
-			DisplayScreenBuffer(window, deviceContext, globalScreen);
+			HDC device_context = BeginPaint(window, &paint);
+			display_screen_buffer(window, device_context, global_screen);
 			EndPaint(window, &paint);
 		} break;
 		case WM_CLOSE:
 		case WM_DESTROY: {
-			globalIsAppRunning = false;
+			global_is_app_running = false;
 		} break;
 		case WM_KEYUP:
 		case WM_KEYDOWN: {
@@ -202,190 +199,190 @@ static LRESULT CALLBACK MainWindowCallback(HWND window, UINT message, WPARAM wPa
 	return NULL;
 }
 
-static GameCode LoadGameCode() {
+static Game_Code load_game_code() {
 	// TODO: регулярные потери кадров из-за синхронного копирования файла
-	CopyFileA("handmade.dll", "handmade_temp.dll", FALSE);
-	HMODULE gameDll = LoadLibraryA("handmade_temp.dll"); // загружаем handmade_temp.dll чтобы компилятор мог писать в handmade.dll
-	if (!gameDll) return {
-		.UpdateAndRender = Game::UpdateAndRenderStub,
-		.GetSoundSamples = Game::GetSoundSamplesStub,
+	CopyFileA("win32_dll_main.dll", "win32_dll_main_temp.dll", FALSE);
+	HMODULE game_dll = LoadLibraryA("win32_dll_main_temp.dll"); // загружаем win32_dll_main_temp.dll чтобы компилятор мог писать в win32_dll_main.dll
+	if (!game_dll) return {
+		.update_and_render = Game::update_and_render_stub,
+		.get_sound_samples = Game::get_sound_samples_stub,
 	};
 
 	return {
-		.UpdateAndRender = (Game::UpdateAndRenderType*) GetProcAddress(gameDll, "UpdateAndRender"),
-		.GetSoundSamples = (Game::GetSoundSamplesType*) GetProcAddress(gameDll, "GetSoundSamples"),
-		.gameDll = gameDll,
+		.update_and_render = (Game::Update_And_Render*)GetProcAddress(game_dll, "update_and_render"),
+		.get_sound_samples = (Game::Get_Sound_Samples*)GetProcAddress(game_dll, "get_sound_samples"),
+		.game_dll = game_dll,
 	};
 }
 
-static void UnloadGameCode(GameCode& gameCode) {
-	if (!gameCode.gameDll) return;
+static void unload_game_code(Game_Code& game_code) {
+	if (!game_code.game_dll) return;
 
-	FreeLibrary(gameCode.gameDll);
-	gameCode = {
-		.UpdateAndRender = Game::UpdateAndRenderStub,
-		.GetSoundSamples = Game::GetSoundSamplesStub,
+	FreeLibrary(game_code.game_dll);
+	game_code = {
+		.update_and_render = Game::update_and_render_stub,
+		.get_sound_samples = Game::get_sound_samples_stub,
 	};
 }
 
-static void DisplayScreenBuffer(HWND window, HDC deviceContext, const Screen& screen) {
-	RECT clientRect;
-	GetClientRect(window, &clientRect);
+static void display_screen_buffer(HWND window, HDC device_context, const Screen& screen) {
+	RECT client_rect;
+	GetClientRect(window, &client_rect);
 
-	int destWidth = clientRect.right - clientRect.left;
-	int destHeight = clientRect.bottom - clientRect.top;
-	int srcWidth = (int)screen.getWidth();
-	int srcHeight = (int)screen.getHeight();
+	int dest_width = client_rect.right - client_rect.left;
+	int dest_height = client_rect.bottom - client_rect.top;
+	int src_width = (int)screen.get_width();
+	int src_height = (int)screen.get_height();
 
-	StretchDIBits(deviceContext,
-		0, 0, destWidth, destHeight,
-		0, 0, srcWidth, srcHeight,
-		screen.memory, &screen.bitmapInfo,
+	StretchDIBits(device_context,
+		0, 0, dest_width, dest_height,
+		0, 0, src_width, src_height,
+		screen.memory, &screen.bitmap_info,
 		DIB_RGB_COLORS, SRCCOPY
 	);
 }
 
-static void ResizeScreenBuffer(Screen& screen, u32 width, u32 height) {
+static void resize_screen_buffer(Screen& screen, u32 width, u32 height) {
 	if (screen.memory) {
 		VirtualFree(screen.memory, NULL, MEM_RELEASE);
 	}
 	
-	screen.setWidth(width);
-	screen.setHeight(height);
-	size_t screenMemorySize = width * height * sizeof(*screen.memory);
-	screen.memory = (Game::ScreenPixel*)VirtualAlloc(nullptr, screenMemorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	screen.set_width(width);
+	screen.set_height(height);
+	uptr screen_memory_size = width * height * sizeof(*screen.memory);
+	screen.memory = (Game::Screen_Pixel*)VirtualAlloc(nullptr, screen_memory_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 }
 
-static void InitDirectSound(HWND window, Sound& sound) {
-	HMODULE directSoundLibrary = LoadLibraryA("dsound.dll");
-	if (!directSoundLibrary) return;
+static void init_direct_sound(HWND window, Sound& sound) {
+	HMODULE direct_sound_dll = LoadLibraryA("dsound.dll");
+	if (!direct_sound_dll) return;
 
-	typedef HRESULT WINAPI DirectSoundCreateType(LPCGUID, LPDIRECTSOUND*, LPUNKNOWN);
-	auto directSoundCreate = (DirectSoundCreateType*)GetProcAddress(directSoundLibrary, "DirectSoundCreate");
+	typedef HRESULT WINAPI Direct_Sound_Create(LPGUID lpGuid, LPDIRECTSOUND* ppDS, LPUNKNOWN pUnkOuter);
+	Direct_Sound_Create* DirectSoundCreate = (Direct_Sound_Create*)GetProcAddress(direct_sound_dll, "DirectSoundCreate");
 
-	IDirectSound* directSound;
-	if (!SUCCEEDED(directSoundCreate(nullptr, &directSound, nullptr))) return;
-	if (!SUCCEEDED(directSound->SetCooperativeLevel(window, DSSCL_PRIORITY))) return;
+	IDirectSound* direct_sound;
+	if (!SUCCEEDED(DirectSoundCreate(nullptr, &direct_sound, nullptr))) return;
+	if (!SUCCEEDED(direct_sound->SetCooperativeLevel(window, DSSCL_PRIORITY))) return;
 
-	DSBUFFERDESC primaryBufferDesc = {
-		.dwSize = sizeof(primaryBufferDesc),
+	DSBUFFERDESC primary_buffer_desc = {
+		.dwSize = sizeof(primary_buffer_desc),
 		.dwFlags = DSBCAPS_PRIMARYBUFFER
 	};
 
-	IDirectSoundBuffer* primaryBuffer;
-	if (!SUCCEEDED(directSound->CreateSoundBuffer(&primaryBufferDesc, &primaryBuffer, nullptr))) return;
-	if (!SUCCEEDED(primaryBuffer->SetFormat(&sound.waveFormat))) return;
+	IDirectSoundBuffer* primary_buffer;
+	if (!SUCCEEDED(direct_sound->CreateSoundBuffer(&primary_buffer_desc, &primary_buffer, nullptr))) return;
+	if (!SUCCEEDED(primary_buffer->SetFormat(&sound.wave_format))) return;
 
-	DSBUFFERDESC soundBufferDesc = {
-		.dwSize = sizeof(soundBufferDesc),
-		.dwBufferBytes = sound.getBufferSize(),
-		.lpwfxFormat = &sound.waveFormat
+	DSBUFFERDESC sound_buffer_desc = {
+		.dwSize = sizeof(sound_buffer_desc),
+		.dwBufferBytes = sound.get_buffer_size(),
+		.lpwfxFormat = &sound.wave_format
 	};
-	directSound->CreateSoundBuffer(&soundBufferDesc, &sound.buffer, nullptr);
+	direct_sound->CreateSoundBuffer(&sound_buffer_desc, &sound.buffer, nullptr);
 }
 
-static void CalcRequiredSoundOutput(Sound& sound, u64 flipWallClock, Debug::Marker* debugMarkersArray, size_t debugMarkersIndex) {
-	// Определяем величину, на размер которой может отличаться время цикла (safetyBytes). Когда мы просыпаемся чтобы писать звук,
-	// смотрим где находится playCursor и делаем прогноз где от будет находиться при смене кадра (expectedFlipPlayCursorUnwrapped).
-	// Если writeCursor + safetyBytes < expectedFlipPlayCursorUnwrapped, то это значит что у нас звуковая карта с маленькой задержкой
+static void calc_required_sound_output(Sound& sound, u64 flip_wall_clock, Debug::Marker* debug_markers_array, uptr debug_markers_index) {
+	// Определяем величину, на размер которой может отличаться время цикла (safety_bytes). Когда мы просыпаемся чтобы писать звук,
+	// смотрим где находится play_cursor и делаем прогноз где от будет находиться при смене кадра (expected_flip_play_cursor_unwrapped).
+	// Если write_cursor + safety_bytes < expected_flip_play_cursor_unwrapped, то это значит что у нас звуковая карта с маленькой задержкой
 	// и мы успеваем писать звук синхронно с изображением, поэтому пишем звук до конца следующего фрейма.
-	// Если writeCursor + safetyBytes >= expectedFlipPlayCursorUnwrapped, то полностью синхронизировать звук и изображение не получится,
-	// просто пишем количество сэмплов, равное bytesPerFrame + safetyBytes
+	// Если write_cursor + safety_bytes >= expected_flip_play_cursor_unwrapped, то полностью синхронизировать звук и изображение не получится,
+	// просто пишем количество сэмплов, равное bytes_per_frame + safety_bytes
 
-	f32 fromFlipToAudioSeconds = GetSecondsElapsed(flipWallClock);
-	if (!sound.buffer || !SUCCEEDED(sound.buffer->GetCurrentPosition(&sound.playCursor, &sound.writeCursor))) {
-		sound.runningSampleIndex = sound.writeCursor / sound.waveFormat.nBlockAlign;
+	f32 from_flip_to_audio_seconds = get_seconds_elapsed(flip_wall_clock);
+	if (!sound.buffer || !SUCCEEDED(sound.buffer->GetCurrentPosition(&sound.play_cursor, &sound.write_cursor))) {
+		sound.running_sample_index = sound.write_cursor / sound.wave_format.nBlockAlign;
 	}
 
-	DWORD expectedBytesUntilFlip = sound.bytesPerFrame - (DWORD)((f32)sound.waveFormat.nAvgBytesPerSec * fromFlipToAudioSeconds);
-	DWORD expectedFlipPlayCursorUnwrapped = sound.playCursor + expectedBytesUntilFlip;
-	DWORD writeCursorUnwrapped = sound.playCursor < sound.writeCursor
-		? sound.writeCursor
-		: sound.writeCursor + sound.getBufferSize();
+	DWORD expected_bytes_until_flip = sound.bytes_per_frame - (DWORD)((f32)sound.wave_format.nAvgBytesPerSec * from_flip_to_audio_seconds);
+	DWORD expected_flip_play_cursor_unwrapped = sound.play_cursor + expected_bytes_until_flip;
+	DWORD write_cursor_unwrapped = sound.play_cursor < sound.write_cursor
+		? sound.write_cursor
+		: sound.write_cursor + sound.get_buffer_size();
 
-	bool isLowLatencySound = (writeCursorUnwrapped + sound.safetyBytes) < expectedFlipPlayCursorUnwrapped;
-	DWORD targetCursorUnwrapped = isLowLatencySound
-		? expectedFlipPlayCursorUnwrapped + sound.bytesPerFrame
-		: writeCursorUnwrapped + sound.bytesPerFrame + sound.safetyBytes;
+	bool is_low_latency_sound = (write_cursor_unwrapped + sound.safety_bytes) < expected_flip_play_cursor_unwrapped;
+	DWORD target_cursor_unwrapped = is_low_latency_sound
+		? expected_flip_play_cursor_unwrapped + sound.bytes_per_frame
+		: write_cursor_unwrapped + sound.bytes_per_frame + sound.safety_bytes;
 
-	DWORD targetCursor = targetCursorUnwrapped % sound.getBufferSize();
-	sound.outputLocation = sound.runningSampleIndex * sound.waveFormat.nBlockAlign % sound.getBufferSize();
-	sound.outputByteCount = sound.outputLocation < targetCursor ? 0 : sound.getBufferSize();
-	sound.outputByteCount += targetCursor - sound.outputLocation;
+	DWORD target_cursor = target_cursor_unwrapped % sound.get_buffer_size();
+	sound.output_location = sound.running_sample_index * sound.wave_format.nBlockAlign % sound.get_buffer_size();
+	sound.output_byte_count = sound.output_location < target_cursor ? 0 : sound.get_buffer_size();
+	sound.output_byte_count += target_cursor - sound.output_location;
 
 	if constexpr (DEV_MODE) {
-		debugMarkersArray[debugMarkersIndex].outputPlayCursor = sound.playCursor;
-		debugMarkersArray[debugMarkersIndex].outputWriteCursor = sound.writeCursor;
-		debugMarkersArray[debugMarkersIndex].outputLocation = sound.outputLocation;
-		debugMarkersArray[debugMarkersIndex].outputByteCount = sound.outputByteCount;
-		debugMarkersArray[debugMarkersIndex].expectedFlipPlayCursor = expectedFlipPlayCursorUnwrapped % sound.getBufferSize();
+		debug_markers_array[debug_markers_index].output_play_cursor = sound.play_cursor;
+		debug_markers_array[debug_markers_index].output_write_cursor = sound.write_cursor;
+		debug_markers_array[debug_markers_index].output_location = sound.output_location;
+		debug_markers_array[debug_markers_index].output_byte_count = sound.output_byte_count;
+		debug_markers_array[debug_markers_index].expected_flip_play_cursor = expected_flip_play_cursor_unwrapped % sound.get_buffer_size();
 	}
 }
 
-static void ClearSoundBuffer(Sound& sound) {
-	void *region1, *region2; DWORD region1Size, region2Size;
-	if (!sound.buffer || !SUCCEEDED(sound.buffer->Lock(0, sound.getBufferSize(), &region1, &region1Size, &region2, &region2Size, NULL))) {
+static void clear_sound_buffer(Sound& sound) {
+	void *region_1, *region_2; DWORD region_1_size, region_2_size;
+	if (!sound.buffer || !SUCCEEDED(sound.buffer->Lock(0, sound.get_buffer_size(), &region_1, &region_1_size, &region_2, &region_2_size, NULL))) {
 		return;
 	}
 
-	std::memset(region1, 0, region1Size);
-	std::memset(region2, 0, region2Size);
-	sound.buffer->Unlock(region1, region1Size, region2, region2Size);
+	std::memset(region_1, 0, region_1_size);
+	std::memset(region_2, 0, region_2_size);
+	sound.buffer->Unlock(region_1, region_1_size, region_2, region_2_size);
 }
 
-static void FillSoundBuffer(const Game::SoundBuffer& source, Sound& sound) {
-	void *region1, *region2; DWORD region1Size, region2Size;
-	if (!sound.buffer || !SUCCEEDED(sound.buffer->Lock(sound.outputLocation, sound.outputByteCount, &region1, &region1Size, &region2, &region2Size, NULL))) {
+static void fill_sound_buffer(const Game::Sound_Buffer& source, Sound& sound) {
+	void *region_1, *region_2; DWORD region_1_size, region_2_size;
+	if (!sound.buffer || !SUCCEEDED(sound.buffer->Lock(sound.output_location, sound.output_byte_count, &region_1, &region_1_size, &region_2, &region_2_size, NULL))) {
 		return;
 	}
 
-	u32 sampleSize = sizeof(*(source.samples));
-	u32 region1SizeInSamples = region1Size / sampleSize;
-	u32 region2SizeInSamples = region2Size / sampleSize;
-	sound.runningSampleIndex += region1SizeInSamples + region2SizeInSamples;
+	u32 sample_size = sizeof(*(source.samples));
+	u32 region_1_size_samples = region_1_size / sample_size;
+	u32 region_2_size_samples = region_2_size / sample_size;
+	sound.running_sample_index += region_1_size_samples + region_2_size_samples;
 
-	std::memcpy(region1, source.samples, region1Size);
-	std::memcpy(region2, source.samples + region1SizeInSamples, region2Size);
-	sound.buffer->Unlock(region1, region1Size, region2, region2Size);
+	std::memcpy(region_1, source.samples, region_1_size);
+	std::memcpy(region_2, source.samples + region_1_size_samples, region_2_size);
+	sound.buffer->Unlock(region_1, region_1_size, region_2, region_2_size);
 }
 
-static void ProcessPendingMessages(Game::Controller& controller) {
+static void process_pending_messages(Game::Controller& controller) {
 	MSG message;
 	while (PeekMessageA(&message, nullptr, NULL, NULL, PM_REMOVE)) {
 		switch (message.message) {
 			case WM_QUIT: {
-				globalIsAppRunning = false;
+				global_is_app_running = false;
 			} break;
 			case WM_KEYUP:
 			case WM_KEYDOWN: {
-				bool isKeyPressed = !(message.lParam & (1u << 31));
-				bool wasKeyPressed = message.lParam & (1u << 30);
-				if (isKeyPressed == wasKeyPressed) continue;
+				bool is_key_pressed  = !(message.lParam & (1u << 31));
+				bool was_key_pressed =   message.lParam & (1u << 30);
+				if (is_key_pressed == was_key_pressed) continue;
 
 				if constexpr (DEV_MODE) {
 					if (message.wParam == 'P' && message.message == WM_KEYDOWN) {
-						globalIsPause = !globalIsPause;
+						global_is_pause = !global_is_pause;
 					}
 				}
 
-				Game::ButtonState* buttonState;
+				Game::Button_State* button_state;
 				switch (message.wParam) {
-					case VK_RETURN: buttonState = &controller.start; break;
-					case VK_ESCAPE: buttonState = &controller.back; break;
-					case VK_UP: 	buttonState = &controller.moveUp; break;
-					case VK_DOWN: 	buttonState = &controller.moveDown; break;
-					case VK_LEFT: 	buttonState = &controller.moveLeft; break;
-					case VK_RIGHT: 	buttonState = &controller.moveRight; break;
-					case 'W': 		buttonState = &controller.actionUp; break;
-					case 'S': 		buttonState = &controller.actionDown; break;
-					case 'A': 		buttonState = &controller.actionLeft; break;
-					case 'D': 		buttonState = &controller.actionRight; break;
-					case 'Q': 		buttonState = &controller.leftShoulder; break;
-					case 'E': 		buttonState = &controller.rightShoulder; break;
+					case VK_RETURN: button_state = &controller.start;			break;
+					case VK_ESCAPE: button_state = &controller.back;			break;
+					case VK_UP: 	button_state = &controller.move_up;			break;
+					case VK_DOWN: 	button_state = &controller.move_down;		break;
+					case VK_LEFT: 	button_state = &controller.move_left;		break;
+					case VK_RIGHT: 	button_state = &controller.move_right;		break;
+					case 'W': 		button_state = &controller.action_up;		break;
+					case 'S': 		button_state = &controller.action_down;		break;
+					case 'A': 		button_state = &controller.action_left;		break;
+					case 'D': 		button_state = &controller.action_right;	break;
+					case 'Q': 		button_state = &controller.left_shoulder;	break;
+					case 'E': 		button_state = &controller.right_shoulder;	break;
 					default: continue;
 				}
-				buttonState->isPressed = isKeyPressed;
-				buttonState->transitionsCount++;
+				button_state->is_pressed = is_key_pressed;
+				button_state->transitions_count++;
 			} break;
 			default: {
 				TranslateMessage(&message);
@@ -395,170 +392,178 @@ static void ProcessPendingMessages(Game::Controller& controller) {
 	}
 }
 
-static void LoadXInputLibrary() {
-	HMODULE xInputLibrary = LoadLibraryA("xinput1_3.dll");
-	if (!xInputLibrary) return;
+static void init_xinput() {
+	HMODULE xinput_dll = LoadLibraryA("xinput1_3.dll");
+	if (!xinput_dll) return;
 	
-	XInputGetState = (XInputGetStateType*) GetProcAddress(xInputLibrary, "XInputGetState");
-	XInputSetState = (XInputSetStateType*) GetProcAddress(xInputLibrary, "XInputSetState");
+	XInputGetState = (Xinput_Get_State*)GetProcAddress(xinput_dll, "XInputGetState");
+	XInputSetState = (Xinput_Set_State*)GetProcAddress(xinput_dll, "XInputSetState");
 }
 
-static void ProcessGamepadInput(Game::Controller& controller) {
+static void process_gamepad_input(Game::Controller& controller) {
 	XINPUT_STATE state;
 	XINPUT_GAMEPAD& gamepad = state.Gamepad;
 	if (XInputGetState(0, &state)) return;
 	
-	controller.isAnalog = true;
-	controller.startX = controller.endX;
-	controller.startY = controller.endY;
-	controller.endX = controller.minX = controller.maxX = GetNormalizedStickValue(gamepad.sThumbLX, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
-	controller.endY = controller.minY = controller.maxY = GetNormalizedStickValue(gamepad.sThumbLY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+	controller.is_analog = true;
+	controller.start_x = controller.end_x;
+	controller.start_y = controller.end_y;
+	controller.end_x = controller.min_x = controller.max_x = get_normalized_stick_value(gamepad.sThumbLX, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+	controller.end_y = controller.min_y = controller.max_y = get_normalized_stick_value(gamepad.sThumbLY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
 
-	ProcessGamepadButton(controller.start, gamepad.wButtons & XINPUT_GAMEPAD_START);
-	ProcessGamepadButton(controller.back, gamepad.wButtons & XINPUT_GAMEPAD_BACK);
-	ProcessGamepadButton(controller.leftShoulder, gamepad.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER);
-	ProcessGamepadButton(controller.rightShoulder, gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER);
+	process_gamepad_button(controller.start,			gamepad.wButtons & XINPUT_GAMEPAD_START);
+	process_gamepad_button(controller.back,				gamepad.wButtons & XINPUT_GAMEPAD_BACK);
+	process_gamepad_button(controller.left_shoulder, 	gamepad.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER);
+	process_gamepad_button(controller.right_shoulder,	gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER);
 
-	ProcessGamepadButton(controller.moveUp, gamepad.wButtons & XINPUT_GAMEPAD_DPAD_UP);
-	ProcessGamepadButton(controller.moveDown, gamepad.wButtons & XINPUT_GAMEPAD_DPAD_DOWN);
-	ProcessGamepadButton(controller.moveLeft, gamepad.wButtons & XINPUT_GAMEPAD_DPAD_LEFT);
-	ProcessGamepadButton(controller.moveRight, gamepad.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT);
+	process_gamepad_button(controller.move_up, 			gamepad.wButtons & XINPUT_GAMEPAD_DPAD_UP);
+	process_gamepad_button(controller.move_down, 		gamepad.wButtons & XINPUT_GAMEPAD_DPAD_DOWN);
+	process_gamepad_button(controller.move_left, 		gamepad.wButtons & XINPUT_GAMEPAD_DPAD_LEFT);
+	process_gamepad_button(controller.move_right, 		gamepad.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT);
 
-	ProcessGamepadButton(controller.actionUp, gamepad.wButtons & XINPUT_GAMEPAD_A);
-	ProcessGamepadButton(controller.actionDown, gamepad.wButtons & XINPUT_GAMEPAD_B);
-	ProcessGamepadButton(controller.actionLeft, gamepad.wButtons & XINPUT_GAMEPAD_X);
-	ProcessGamepadButton(controller.actionRight, gamepad.wButtons & XINPUT_GAMEPAD_Y);
+	process_gamepad_button(controller.action_up, 		gamepad.wButtons & XINPUT_GAMEPAD_A);
+	process_gamepad_button(controller.action_down, 		gamepad.wButtons & XINPUT_GAMEPAD_B);
+	process_gamepad_button(controller.action_left, 		gamepad.wButtons & XINPUT_GAMEPAD_X);
+	process_gamepad_button(controller.action_right, 	gamepad.wButtons & XINPUT_GAMEPAD_Y);
 }
 
-static inline f32 GetNormalizedStickValue(SHORT value, SHORT deadzone) {
+static inline f32 get_normalized_stick_value(SHORT value, SHORT deadzone) {
 	return (-deadzone <= value && value < 0) || (0 < value && value <= deadzone) ? 0 : value / 32768.0f;
 }
 
-static inline void ProcessGamepadButton(Game::ButtonState& state, bool isPressed) {
-	state.transitionsCount += isPressed != state.isPressed;
-	state.isPressed = isPressed;
+static inline void process_gamepad_button(Game::Button_State& state, bool is_pressed) {
+	state.transitions_count += is_pressed != state.is_pressed;
+	state.is_pressed = is_pressed;
 }
 
-static inline u64 GetWallClock() {
-	LARGE_INTEGER performanceCounterResult;
-	QueryPerformanceCounter(&performanceCounterResult);
-	return (u64)performanceCounterResult.QuadPart;
+static inline u64 get_wall_clock() {
+	LARGE_INTEGER performance_counter_result;
+	QueryPerformanceCounter(&performance_counter_result);
+	return (u64)performance_counter_result.QuadPart;
 }
 
-static inline f32 GetSecondsElapsed(u64 start) {
-	return (f32)(GetWallClock() - start) / (f32)globalPerformanceFrequency;
+static inline f32 get_seconds_elapsed(u64 start) {
+	return (f32)(get_wall_clock() - start) / (f32)PERFORMANCE_FREQUENCY;
+}
+
+static u64 get_performance_frequency() {
+	LARGE_INTEGER performance_frequency_result;
+	QueryPerformanceFrequency(&performance_frequency_result);
+	return (u64)performance_frequency_result.QuadPart;
 }
 
 namespace Platform {
-	ReadEntireFileResult ReadEntireFileSync(const char* fileName) {
-		ReadEntireFileResult result = {};
-		u32 memorySize = NULL;
+	Read_File_Result read_file_sync(const char* file_name) {
+		Read_File_Result result = {};
+		u32 memory_size = NULL;
 		void* memory = nullptr;
 
 		// похоже этот handle не надо закрывать
-		HANDLE heapHandle = GetProcessHeap();
-		if (!heapHandle) return result;
+		HANDLE heap_handle = GetProcessHeap();
+		if (!heap_handle) return result;
 
-		HANDLE fileHandle = CreateFileA(fileName, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, NULL, nullptr);
-		if (fileHandle == INVALID_HANDLE_VALUE) return result;
+		HANDLE file_handle = CreateFileA(file_name, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, NULL, nullptr);
+		if (file_handle == INVALID_HANDLE_VALUE) return result;
 
-		LARGE_INTEGER fileSize;
-		if (!GetFileSizeEx(fileHandle, &fileSize)) goto close_file_handle;
+		LARGE_INTEGER file_size;
+		if (!GetFileSizeEx(file_handle, &file_size)) goto close_file_handle;
 
-		memorySize = SafeTruncateToU32(fileSize.QuadPart);
-		memory = HeapAlloc(heapHandle, NULL, memorySize);
+		memory_size = safe_truncate_to_u32(file_size.QuadPart);
+		memory = HeapAlloc(heap_handle, NULL, memory_size);
 		if (!memory) goto close_file_handle;
 
-		DWORD bytesRead;
-		if (!ReadFile(fileHandle, memory, memorySize, &bytesRead, nullptr) || (bytesRead != memorySize)) {
-			HeapFree(heapHandle, NULL, memory);
+		DWORD bytes_read;
+		if (!ReadFile(file_handle, memory, memory_size, &bytes_read, nullptr) || (bytes_read != memory_size)) {
+			HeapFree(heap_handle, NULL, memory);
 			goto close_file_handle;
 		}
 
-		result.memorySize = memorySize;
+		result.memory_size = memory_size;
 		result.memory = memory;
 
 		close_file_handle:
-			CloseHandle(fileHandle);
+			CloseHandle(file_handle);
 			return result;
 	}
-	bool WriteEntireFileSync(const char* fileName, const void* memory, u32 memorySize) {
+
+	bool write_file_sync(const char* file_name, const void* memory, u32 memory_size) {
 		bool result = false;
 
-		HANDLE fileHandle = CreateFileA(fileName, GENERIC_WRITE, NULL, nullptr, CREATE_ALWAYS, NULL, nullptr);
-		if (fileHandle == INVALID_HANDLE_VALUE) return result;
+		HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, NULL, nullptr, CREATE_ALWAYS, NULL, nullptr);
+		if (file_handle == INVALID_HANDLE_VALUE) return result;
 
-		DWORD bytesWritten;
-		if (WriteFile(fileHandle, memory, memorySize, &bytesWritten, nullptr) && (bytesWritten == memorySize)) {
+		DWORD bytes_written;
+		if (WriteFile(file_handle, memory, memory_size, &bytes_written, nullptr) && (bytes_written == memory_size)) {
 			result = true;
 		}
 
-		CloseHandle(fileHandle);
+		CloseHandle(file_handle);
 		return result;
 	}
-	void FreeFileMemory(void* memory) {
+	
+	void free_file_memory(void* memory) {
 		if (!memory) return;
 
-		HANDLE heapHandle = GetProcessHeap();
-		if (!heapHandle) return;
+		HANDLE heap_handle = GetProcessHeap();
+		if (!heap_handle) return;
 
-		HeapFree(heapHandle, NULL, memory);
+		HeapFree(heap_handle, NULL, memory);
 		memory = nullptr;
 	}
 }
 
 namespace Debug {
-	static void SoundSyncDisplay(
+	static void sound_sync_display(
 		Screen& screen, const Sound& sound,
-		const Marker* markers, size_t markersCount, size_t currentMarkerIndex) {
+		const Marker* markers, uptr markers_count, uptr current_marker_index) {
 
-		f32 horizontalScaling = (f32)screen.getWidth() / (f32)sound.getBufferSize();
-		Marker currentMarker = markers[currentMarkerIndex];
+		f32 horizontal_scaling = (f32)screen.get_width() / (f32)sound.get_buffer_size();
+		Marker current_marker = markers[current_marker_index];
 
-		u32 expectedFlipPlayCursorX = (u32)((f32)currentMarker.expectedFlipPlayCursor * horizontalScaling);
-		DrawVertical(screen, expectedFlipPlayCursorX, 0, screen.getHeight(), 0xffffff00);
+		u32 expected_flip_play_cursor_x = (u32)((f32)current_marker.expected_flip_play_cursor * horizontal_scaling);
+		draw_vertical(screen, expected_flip_play_cursor_x, 0, screen.get_height(), 0xffffff00);
 
-		for (size_t i = 0; i < markersCount; i++) {
+		for (uptr i = 0; i < markers_count; i++) {
 			u32 top = 0;
-			u32 bottom = screen.getHeight() * 1/4;
-			u32 historicOutputPlayCursorX = (u32)((f32)markers[i].outputPlayCursor * horizontalScaling);
-			u32 historicOutputWriteCursorX = (u32)((f32)markers[i].outputWriteCursor * horizontalScaling);
-			DrawVertical(screen, historicOutputPlayCursorX, top, bottom, 0x00ffffff);
-			DrawVertical(screen, historicOutputWriteCursorX, top, bottom, 0x00ff0000);
+			u32 bottom = screen.get_height() * 1/4;
+			u32 historic_output_play_cursor_x = (u32)((f32)markers[i].output_play_cursor * horizontal_scaling);
+			u32 historic_output_write_cursor_x = (u32)((f32)markers[i].output_write_cursor * horizontal_scaling);
+			draw_vertical(screen, historic_output_play_cursor_x, top, bottom, 0x00ffffff);
+			draw_vertical(screen, historic_output_write_cursor_x, top, bottom, 0x00ff0000);
 		}
 		{
-			u32 top = screen.getHeight() * 1/4;
-			u32 bottom = screen.getHeight() * 2/4;
-			u32 outputPlayCursorX = (u32)((f32)currentMarker.outputPlayCursor * horizontalScaling);
-			u32 outputWriteCursorX = (u32)((f32)currentMarker.outputWriteCursor * horizontalScaling);
-			DrawVertical(screen, outputPlayCursorX, top, bottom, 0x00ffffff);
-			DrawVertical(screen, outputWriteCursorX, top, bottom, 0x00ff0000);
+			u32 top = screen.get_height() * 1/4;
+			u32 bottom = screen.get_height() * 2/4;
+			u32 output_play_cursor_x = (u32)((f32)current_marker.output_play_cursor * horizontal_scaling);
+			u32 output_write_cursor_x = (u32)((f32)current_marker.output_write_cursor * horizontal_scaling);
+			draw_vertical(screen, output_play_cursor_x, top, bottom, 0x00ffffff);
+			draw_vertical(screen, output_write_cursor_x, top, bottom, 0x00ff0000);
 		}
 		{
-			u32 top = screen.getHeight() * 2/4;
-			u32 bottom = screen.getHeight() * 3/4;
-			u32 outputLocationX = (u32)((f32)currentMarker.outputLocation * horizontalScaling);
-			u32 outputByteCountX = (u32)((f32)currentMarker.outputByteCount * horizontalScaling);
-			DrawVertical(screen, outputLocationX, top, bottom, 0x00ffffff);
-			DrawVertical(screen, (outputLocationX + outputByteCountX) % screen.getWidth(), top, bottom, 0x00ff0000);
+			u32 top = screen.get_height() * 2/4;
+			u32 bottom = screen.get_height() * 3/4;
+			u32 output_location_x = (u32)((f32)current_marker.output_location * horizontal_scaling);
+			u32 output_byte_count_x = (u32)((f32)current_marker.output_byte_count * horizontal_scaling);
+			draw_vertical(screen, output_location_x, top, bottom, 0x00ffffff);
+			draw_vertical(screen, (output_location_x + output_byte_count_x) % screen.get_width(), top, bottom, 0x00ff0000);
 		}
 		{
-			u32 top = screen.getHeight() * 3/4;
-			u32 bottom = screen.getHeight();
-			u32 flipPlayCursorX = (u32)((f32)currentMarker.flipPlayCursor * horizontalScaling);
-			u32 safetyBytesX = (u32)((f32)sound.safetyBytes * horizontalScaling);
-			DrawVertical(screen, (flipPlayCursorX - safetyBytesX / 2) % screen.getWidth(), top, bottom, 0x00ffffff);
-			DrawVertical(screen, (flipPlayCursorX + safetyBytesX / 2) % screen.getWidth(), top, bottom, 0x00ffffff);
+			u32 top = screen.get_height() * 3/4;
+			u32 bottom = screen.get_height();
+			u32 flip_play_cursor_x = (u32)((f32)current_marker.flip_play_cursor * horizontal_scaling);
+			u32 safety_bytes_x = (u32)((f32)sound.safety_bytes * horizontal_scaling);
+			draw_vertical(screen, (flip_play_cursor_x - safety_bytes_x / 2) % screen.get_width(), top, bottom, 0x00ffffff);
+			draw_vertical(screen, (flip_play_cursor_x + safety_bytes_x / 2) % screen.get_width(), top, bottom, 0x00ffffff);
 		}
 	}
 	
-	static void DrawVertical(Screen& screen, u32 x, u32 top, u32 bottom, u32 color) {
-		Game::ScreenPixel* pixel = screen.memory + top * screen.getWidth() + x;
+	static void draw_vertical(Screen& screen, u32 x, u32 top, u32 bottom, u32 color) {
+		Game::Screen_Pixel* pixel = screen.memory + top * screen.get_width() + x;
 
 		for (u32 y = top; y < bottom; y++) {
 			// TODO: добавить u32 конструктор либо избавиться от ScreenPixel
-			*pixel = *(Game::ScreenPixel*)&color;
-			pixel += screen.getWidth();
+			*pixel = *(Game::Screen_Pixel*)&color;
+			pixel += screen.get_width();
 		}
 	}
 }

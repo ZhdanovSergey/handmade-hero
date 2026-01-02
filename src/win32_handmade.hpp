@@ -6,83 +6,84 @@
 #include <xinput.h>
 
 struct Screen {
-	BITMAPINFO bitmapInfo;
-	Game::ScreenPixel* memory;
+	BITMAPINFO bitmap_info;
+	Game::Screen_Pixel* memory;
 
 	// biHeight отрицательный чтобы верхний левый пиксель был первым в буфере
-	void setHeight(u32 height) 	{ bitmapInfo.bmiHeader.biHeight = - (LONG)height; }
-	u32 getHeight() const 		{ return (u32)std::abs(bitmapInfo.bmiHeader.biHeight); }
-	void setWidth(u32 width) 	{ bitmapInfo.bmiHeader.biWidth = (LONG)width; }
-	u32 getWidth() const 		{ return (u32)bitmapInfo.bmiHeader.biWidth; }
+	void set_height(u32 height) { bitmap_info.bmiHeader.biHeight = - (LONG)height; }
+	void set_width(u32 width)	{ bitmap_info.bmiHeader.biWidth  =   (LONG)width; }
+	u32 get_height() const { return (u32)std::abs(bitmap_info.bmiHeader.biHeight); }
+	u32 get_width()	 const { return (u32)		  bitmap_info.bmiHeader.biWidth; }
 };
 
 struct Sound {
 	// TODO: создать отдельную структуру для полей, которые не должны переходить границу фрейма
-	WAVEFORMATEX waveFormat;
+	WAVEFORMATEX wave_format;
 	IDirectSoundBuffer* buffer;
-	u32 runningSampleIndex;
-	DWORD outputLocation;
-	DWORD outputByteCount;
-	DWORD bytesPerFrame;
-	DWORD safetyBytes;
-	DWORD playCursor;
-	DWORD writeCursor;
+	u32 running_sample_index;
+	DWORD output_location;
+	DWORD output_byte_count;
+	DWORD bytes_per_frame;
+	DWORD safety_bytes;
+	DWORD play_cursor;
+	DWORD write_cursor;
 
-	DWORD getBufferSize() const { return waveFormat.nAvgBytesPerSec; }
+	DWORD get_buffer_size() const { return wave_format.nAvgBytesPerSec; }
 };
 
-struct GameCode {
-	Game::UpdateAndRenderType* UpdateAndRender;
-	Game::GetSoundSamplesType* GetSoundSamples;
-	HMODULE gameDll;
+struct Game_Code {
+	Game::Update_And_Render* update_and_render;
+	Game::Get_Sound_Samples* get_sound_samples;
+	HMODULE game_dll;
 };
 
 namespace Debug {
     struct Marker {
-        DWORD outputPlayCursor;
-		DWORD outputWriteCursor;
-		DWORD outputLocation;
-		DWORD outputByteCount;
-        DWORD flipPlayCursor;
-        DWORD expectedFlipPlayCursor;
+        DWORD output_play_cursor;
+		DWORD output_write_cursor;
+		DWORD output_location;
+		DWORD output_byte_count;
+        DWORD flip_play_cursor;
+        DWORD expected_flip_play_cursor;
     };
 
-    static void SoundSyncDisplay(
+    static void sound_sync_display(
 		Screen& screen, const Sound& sound,
-		const Marker* markers, size_t markersCount, size_t currentMarkerIndex
+		const Marker* markers, uptr markers_count, uptr current_marker_index
 	);
-    static void DrawVertical(Screen& screen, u32 x, u32 top, u32 bottom, u32 color);
+    static void draw_vertical(Screen& screen, u32 x, u32 top, u32 bottom, u32 color);
 }
 
-int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int);
-static LRESULT CALLBACK MainWindowCallback(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
-static GameCode LoadGameCode();
-static void UnloadGameCode(GameCode& gameCode);
-static void DisplayScreenBuffer(HWND window, HDC deviceContext, const Screen& screen);
-static void ResizeScreenBuffer(Screen& screen, u32 width, u32 height);
-static void ProcessPendingMessages(Game::Controller& controller);
-static inline u64 GetWallClock();
-static inline f32 GetSecondsElapsed(u64 start);
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow);
+static LRESULT CALLBACK main_window_callback(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
+static Game_Code load_game_code();
+static void unload_game_code(Game_Code& game_code);
+static void display_screen_buffer(HWND window, HDC device_context, const Screen& screen);
+static void resize_screen_buffer(Screen& screen, u32 width, u32 height);
+static void process_pending_messages(Game::Controller& controller);
+static inline u64 get_wall_clock();
+static inline f32 get_seconds_elapsed(u64 start);
+static u64 get_performance_frequency();
 
 // Sound
-static void InitDirectSound(HWND window, Sound& sound);
-static void CalcRequiredSoundOutput(Sound& sound, u64 flipWallClock, Debug::Marker* debugMarkersArray, size_t debugMarkersIndex);
-static void ClearSoundBuffer(Sound& sound);
-static void FillSoundBuffer(const Game::SoundBuffer& source, Sound& sound);
+static void init_direct_sound(HWND window, Sound& sound);
+static void calc_required_sound_output(Sound& sound, u64 flip_wall_clock, Debug::Marker* debug_markers_array, uptr debug_markers_index);
+static void clear_sound_buffer(Sound& sound);
+static void fill_sound_buffer(const Game::Sound_Buffer& source, Sound& sound);
 
 // ---XInput---
-static void LoadXInputLibrary();
-static void ProcessGamepadInput(Game::Controller& controller);
-static inline void ProcessGamepadButton(Game::ButtonState& state, bool isPressed);
-static inline f32 GetNormalizedStickValue(SHORT value, SHORT deadzone);
+static void init_xinput();
+static void process_gamepad_input(Game::Controller& controller);
+static inline void process_gamepad_button(Game::Button_State& state, bool is_pressed);
+static inline f32 get_normalized_stick_value(SHORT value, SHORT deadzone);
 
-typedef DWORD XInputGetStateType(DWORD, XINPUT_STATE*);
-static 	DWORD XInputGetStateStub(DWORD, XINPUT_STATE*) { return ERROR_DLL_INIT_FAILED; };
-static XInputGetStateType* XInputGetStateStubOrFn = XInputGetStateStub;
-#define XInputGetState XInputGetStateStubOrFn
+typedef DWORD Xinput_Get_State		(DWORD dwUserIndex, XINPUT_STATE *pState);
+static 	DWORD xinput_get_state_stub	(DWORD dwUserIndex, XINPUT_STATE *pState) { return ERROR_DLL_INIT_FAILED; };
+static Xinput_Get_State* xinput_get_state_stub_or_fn = xinput_get_state_stub;
+#define XInputGetState xinput_get_state_stub_or_fn
 
-typedef DWORD XInputSetStateType(DWORD, XINPUT_VIBRATION*);
-static 	DWORD XInputSetStateStub(DWORD, XINPUT_VIBRATION*) { return ERROR_DLL_INIT_FAILED; };
-static XInputSetStateType* XInputSetStateStubOrFn = XInputSetStateStub;
-#define XInputSetState XInputSetStateStubOrFn
+typedef DWORD Xinput_Set_State		(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration);
+static 	DWORD xinput_set_state_stub	(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration) { return ERROR_DLL_INIT_FAILED; };
+static Xinput_Set_State* xinput_set_state_stub_or_fn = xinput_set_state_stub;
+#define XInputSetState xinput_set_state_stub_or_fn
 // ------------

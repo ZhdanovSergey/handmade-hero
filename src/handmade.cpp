@@ -1,59 +1,54 @@
 #include "handmade.hpp"
 
 namespace Game {
-	extern "C" void UpdateAndRender(const Input& input, Memory& memory, ScreenBuffer& screenBuffer) {
-		assert(sizeof(GameState) <= memory.permanentStorageSize);
-		if (!memory.isInitialized) memory.isInitialized = true;
-		GameState* gameState = (GameState*)memory.permanentStorage;
+	extern "C" void update_and_render(const Input& input, Memory& memory, Screen_Buffer& screen_buffer) {
+		assert(sizeof(Game_State) <= memory.permanent_storage_size);
+		if (!memory.is_initialized) memory.is_initialized = true;
+		Game_State* game_state = (Game_State*)memory.permanent_storage;
 
 		for (auto& controller : input.controllers) {
-			if (controller.moveUp.isPressed) 	gameState->greenOffset -= 10;
-			if (controller.moveDown.isPressed) 	gameState->greenOffset += 10;
-			if (controller.moveRight.isPressed)	gameState->blueOffset += 10;
-			if (controller.moveLeft.isPressed)	gameState->blueOffset -= 10;
+			if (controller.move_up.is_pressed)		game_state->green_offset -= 10;
+			if (controller.move_down.is_pressed)	game_state->green_offset += 10;
+			if (controller.move_right.is_pressed)	game_state->blue_offset	 += 10;
+			if (controller.move_left.is_pressed)	game_state->blue_offset	 -= 10;
 			
-			gameState->toneHz = 256;
-			if (controller.isAnalog) {
-				gameState->toneHz += (u32)(256.0f * std::sqrtf(controller.endX * controller.endX + controller.endY * controller.endY));
-				gameState->greenOffset -= (u32)(20.0f * controller.endY);
-				gameState->blueOffset += (u32)(20.0f * controller.endX);
+			game_state->tone_hz = 256;
+			if (controller.is_analog) {
+				game_state->tone_hz		 += (u32)(256.0f * std::sqrtf(controller.end_x * controller.end_x + controller.end_y * controller.end_y));
+				game_state->green_offset -= (u32)(20.0f * controller.end_y);
+				game_state->blue_offset  += (u32)(20.0f * controller.end_x);
 			}
 		}
 
-		RenderGradient(gameState, screenBuffer);
+		render_gradient(game_state, screen_buffer);
 	};
 
-	extern "C" void GetSoundSamples(Memory& memory, SoundBuffer& soundBuffer) {
-		GameState* gameState = (GameState*)memory.permanentStorage;
+	extern "C" void get_sound_samples(Memory& memory, Sound_Buffer& sound_buffer) {
+		Game_State* game_state = (Game_State*)memory.permanent_storage;
 		f32 volume = 5000.0f;
 
-		f32 samplesPerWavePeriod = (f32)(soundBuffer.samplesPerSecond / gameState->toneHz);
-		SoundSample* soundSample = soundBuffer.samples;
+		f32 samples_per_wave_period = (f32)(sound_buffer.samples_per_second / game_state->tone_hz);
+		Sound_Sample* sound_sample = sound_buffer.samples;
 
-		for (u32 i = 0; i < soundBuffer.samplesToWrite; i++) {
-			s16 sampleValue = (s16)(std::sinf(gameState->tSine) * volume);
-			gameState->tSine += 2.0f * pi32 / samplesPerWavePeriod;
-			*soundSample++ = {
-				.left = sampleValue,
-				.right = sampleValue
+		for (u32 i = 0; i < sound_buffer.samples_to_write; i++) {
+			s16 sample_value = (s16)(std::sinf(game_state->t_sine) * volume);
+			game_state->t_sine += 2.0f * PI32 / samples_per_wave_period;
+			*sound_sample++ = {
+				.left = sample_value,
+				.right = sample_value
 			};
 		}
-		gameState->tSine = std::fmod(gameState->tSine, 2.0f * pi32);
+		game_state->t_sine = std::fmod(game_state->t_sine, 2.0f * PI32);
 	}
 
-	static void RenderGradient(const GameState* gameState, ScreenBuffer& screenBuffer) {
-		for (u32 y = 0; y < screenBuffer.height; y++) {
-			for (u32 x = 0; x < screenBuffer.width; x++) {
-				*screenBuffer.memory++ = {
-					.blue = (u8)(x + gameState->blueOffset),
-					.green = (u8)(y + gameState->greenOffset),
+	static void render_gradient(const Game_State* game_state, Screen_Buffer& screen_buffer) {
+		for (u32 y = 0; y < screen_buffer.height; y++) {
+			for (u32 x = 0; x < screen_buffer.width; x++) {
+				*screen_buffer.memory++ = {
+					.blue = (u8)(x + game_state->blue_offset),
+					.green = (u8)(y + game_state->green_offset),
 				};
 			}
 		}
 	};
 }
-
-// TODO: вынести в отдельный файл и избавиться от флага WIN32?
-#if WIN32
-	int __stdcall DllMain(_In_ void*, _In_ unsigned long, _In_ void*) { return 1; }
-#endif
