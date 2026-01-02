@@ -27,7 +27,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
 	UINT sleep_granularity_ms = 1;
 	if (timeBeginPeriod(sleep_granularity_ms) != TIMERR_NOERROR) {
-		sleep_granularity_ms = NULL;
+		sleep_granularity_ms = 0;
 	}
 
 	WNDCLASSA window_class = {
@@ -38,7 +38,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	};
 	RegisterClassA(&window_class);
 	HWND window = CreateWindowExA(
-		NULL, window_class.lpszClassName, "Handmade Hero", WS_TILEDWINDOW | WS_VISIBLE,
+		0, window_class.lpszClassName, "Handmade Hero", WS_TILEDWINDOW | WS_VISIBLE,
 		CW_USEDEFAULT, CW_USEDEFAULT, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT,
 		nullptr, nullptr, hInstance, nullptr
 	);
@@ -63,7 +63,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		clear_sound_buffer(sound);
 		// TODO: address sanitizer падает после вызова Play(), по-видимому это известная проблема DirectSound
 		// https://stackoverflow.com/questions/72511236/directsound-crashes-due-to-a-read-access-violation-when-calling-idirectsoundbuff
-		sound.buffer->Play(NULL, NULL, DSBPLAY_LOOPING);
+		sound.buffer->Play(0, 0, DSBPLAY_LOOPING);
 	}
 	Debug::Marker debug_markers_array[TARGET_UPDATE_FREQUENCY - 1] = {};
 	uptr debug_markers_index = 0;
@@ -146,7 +146,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
 		if constexpr (DEV_MODE) {
 			bool is_cursors_recorded = sound.buffer && SUCCEEDED(sound.buffer->GetCurrentPosition(
-				&debug_markers_array[debug_markers_index].flip_play_cursor, NULL
+				&debug_markers_array[debug_markers_index].flip_play_cursor, nullptr
 			));
 			if (is_cursors_recorded) {
 				Debug::sound_sync_display(
@@ -196,7 +196,7 @@ static LRESULT CALLBACK main_window_callback(HWND window, UINT message, WPARAM w
 			return DefWindowProcA(window, message, wParam, lParam);
 	}
 
-	return NULL;
+	return 0;
 }
 
 static Game_Code load_game_code() {
@@ -244,7 +244,7 @@ static void display_screen_buffer(HWND window, HDC device_context, const Screen&
 
 static void resize_screen_buffer(Screen& screen, u32 width, u32 height) {
 	if (screen.memory) {
-		VirtualFree(screen.memory, NULL, MEM_RELEASE);
+		VirtualFree(screen.memory, 0, MEM_RELEASE);
 	}
 	
 	screen.set_width(width);
@@ -321,7 +321,7 @@ static void calc_required_sound_output(Sound& sound, u64 flip_wall_clock, Debug:
 
 static void clear_sound_buffer(Sound& sound) {
 	void *region_1, *region_2; DWORD region_1_size, region_2_size;
-	if (!sound.buffer || !SUCCEEDED(sound.buffer->Lock(0, sound.get_buffer_size(), &region_1, &region_1_size, &region_2, &region_2_size, NULL))) {
+	if (!sound.buffer || !SUCCEEDED(sound.buffer->Lock(0, sound.get_buffer_size(), &region_1, &region_1_size, &region_2, &region_2_size, 0))) {
 		return;
 	}
 
@@ -332,7 +332,7 @@ static void clear_sound_buffer(Sound& sound) {
 
 static void fill_sound_buffer(const Game::Sound_Buffer& source, Sound& sound) {
 	void *region_1, *region_2; DWORD region_1_size, region_2_size;
-	if (!sound.buffer || !SUCCEEDED(sound.buffer->Lock(sound.output_location, sound.output_byte_count, &region_1, &region_1_size, &region_2, &region_2_size, NULL))) {
+	if (!sound.buffer || !SUCCEEDED(sound.buffer->Lock(sound.output_location, sound.output_byte_count, &region_1, &region_1_size, &region_2, &region_2_size, 0))) {
 		return;
 	}
 
@@ -348,7 +348,7 @@ static void fill_sound_buffer(const Game::Sound_Buffer& source, Sound& sound) {
 
 static void process_pending_messages(Game::Controller& controller) {
 	MSG message;
-	while (PeekMessageA(&message, nullptr, NULL, NULL, PM_REMOVE)) {
+	while (PeekMessageA(&message, nullptr, 0, 0, PM_REMOVE)) {
 		switch (message.message) {
 			case WM_QUIT: {
 				global_is_app_running = false;
@@ -455,26 +455,26 @@ static u64 get_performance_frequency() {
 namespace Platform {
 	Read_File_Result read_file_sync(const char* file_name) {
 		Read_File_Result result = {};
-		u32 memory_size = NULL;
+		u32 memory_size = 0;
 		void* memory = nullptr;
 
 		// похоже этот handle не надо закрывать
 		HANDLE heap_handle = GetProcessHeap();
 		if (!heap_handle) return result;
 
-		HANDLE file_handle = CreateFileA(file_name, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, NULL, nullptr);
+		HANDLE file_handle = CreateFileA(file_name, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
 		if (file_handle == INVALID_HANDLE_VALUE) return result;
 
 		LARGE_INTEGER file_size;
 		if (!GetFileSizeEx(file_handle, &file_size)) goto close_file_handle;
 
 		memory_size = safe_truncate_to_u32(file_size.QuadPart);
-		memory = HeapAlloc(heap_handle, NULL, memory_size);
+		memory = HeapAlloc(heap_handle, 0, memory_size);
 		if (!memory) goto close_file_handle;
 
 		DWORD bytes_read;
 		if (!ReadFile(file_handle, memory, memory_size, &bytes_read, nullptr) || (bytes_read != memory_size)) {
-			HeapFree(heap_handle, NULL, memory);
+			HeapFree(heap_handle, 0, memory);
 			goto close_file_handle;
 		}
 
@@ -489,7 +489,7 @@ namespace Platform {
 	bool write_file_sync(const char* file_name, const void* memory, u32 memory_size) {
 		bool result = false;
 
-		HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, NULL, nullptr, CREATE_ALWAYS, NULL, nullptr);
+		HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
 		if (file_handle == INVALID_HANDLE_VALUE) return result;
 
 		DWORD bytes_written;
@@ -507,7 +507,7 @@ namespace Platform {
 		HANDLE heap_handle = GetProcessHeap();
 		if (!heap_handle) return;
 
-		HeapFree(heap_handle, NULL, memory);
+		HeapFree(heap_handle, 0, memory);
 		memory = nullptr;
 	}
 }
