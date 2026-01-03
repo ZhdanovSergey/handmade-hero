@@ -55,8 +55,8 @@ namespace Game {
 		bool is_initialized;
 		uptr permanent_storage_size;
 		uptr transient_storage_size;
-		std::byte* permanent_storage;
-		std::byte* transient_storage;
+		u8* permanent_storage;
+		u8* transient_storage;
 
     	Platform::Read_File_Sync* read_file_sync;
     	Platform::Write_File_Sync* write_file_sync;

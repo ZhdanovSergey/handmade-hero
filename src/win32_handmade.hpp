@@ -12,8 +12,8 @@ struct Screen {
 	// biHeight отрицательный чтобы верхний левый пиксель был первым в буфере
 	void set_height(u32 height) { bitmap_info.bmiHeader.biHeight = - (LONG)height; }
 	void set_width(u32 width)	{ bitmap_info.bmiHeader.biWidth  =   (LONG)width; }
-	u32 get_height() const { return (u32)std::abs(bitmap_info.bmiHeader.biHeight); }
-	u32 get_width()	 const { return (u32)		  bitmap_info.bmiHeader.biWidth; }
+	u32 get_height() const { return (u32) - bitmap_info.bmiHeader.biHeight; }
+	u32 get_width()	 const { return (u32)	bitmap_info.bmiHeader.biWidth; }
 };
 
 struct Sound {

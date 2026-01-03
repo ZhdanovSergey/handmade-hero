@@ -76,7 +76,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		game_memory_base_address = (void*)1024_GB;
 	}
 	uptr game_memory_size = 1_GB;
-	std::byte* game_memory_storage = (std::byte*)VirtualAlloc(game_memory_base_address, game_memory_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	u8* game_memory_storage = (u8*)VirtualAlloc(game_memory_base_address, game_memory_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 	Game::Memory game_memory = {
 		.permanent_storage_size = 64_MB,
 		.transient_storage_size = game_memory_size - game_memory.permanent_storage_size,
