@@ -7,7 +7,7 @@
 
 struct Screen {
 	BITMAPINFO bitmap_info;
-	Game::Screen_Pixel* memory;
+	u32* memory;
 
 	// biHeight отрицательный чтобы верхний левый пиксель был первым в буфере
 	void set_height(u32 height) { bitmap_info.bmiHeader.biHeight = - (LONG)height; }
@@ -32,9 +32,9 @@ struct Sound {
 };
 
 struct Game_Code {
+	HMODULE game_dll;
 	Game::Update_And_Render* update_and_render;
 	Game::Get_Sound_Samples* get_sound_samples;
-	HMODULE game_dll;
 };
 
 namespace Debug {

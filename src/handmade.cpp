@@ -44,10 +44,9 @@ namespace Game {
 	static void render_gradient(const Game_State* game_state, Screen_Buffer& screen_buffer) {
 		for (u32 y = 0; y < screen_buffer.height; y++) {
 			for (u32 x = 0; x < screen_buffer.width; x++) {
-				*screen_buffer.memory++ = {
-					.blue = (u8)(x + game_state->blue_offset),
-					.green = (u8)(y + game_state->green_offset),
-				};
+				u32 green = (y + game_state->green_offset) & UINT8_MAX;
+				u32 blue  = (x + game_state->blue_offset ) & UINT8_MAX;
+				*screen_buffer.memory++ = (green << 8) | blue;
 			}
 		}
 	};

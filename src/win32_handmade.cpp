@@ -37,12 +37,14 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		.lpszClassName = "Handmade_Hero_Window_Class",
 	};
 	RegisterClassA(&window_class);
+
 	HWND window = CreateWindowExA(
 		0, window_class.lpszClassName, "Handmade Hero", WS_TILEDWINDOW | WS_VISIBLE,
 		CW_USEDEFAULT, CW_USEDEFAULT, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT,
 		nullptr, nullptr, hInstance, nullptr
 	);
 	HDC device_context = GetDC(window);
+
 	resize_screen_buffer(global_screen, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT);
 
 	Sound sound = {
@@ -58,13 +60,14 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		.safety_bytes = sound.bytes_per_frame / 3,
 	};
 	init_direct_sound(window, sound);
-	Game::Sound_Sample* game_sound_memory = (Game::Sound_Sample*)VirtualAlloc(nullptr, sound.get_buffer_size(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 	if (sound.buffer) {
 		clear_sound_buffer(sound);
 		// TODO: address sanitizer падает после вызова Play(), по-видимому это известная проблема DirectSound
 		// https://stackoverflow.com/questions/72511236/directsound-crashes-due-to-a-read-access-violation-when-calling-idirectsoundbuff
 		sound.buffer->Play(0, 0, DSBPLAY_LOOPING);
 	}
+
+	Game::Sound_Sample* game_sound_memory = (Game::Sound_Sample*)VirtualAlloc(nullptr, sound.get_buffer_size(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 	Debug::Marker debug_markers_array[TARGET_UPDATE_FREQUENCY - 1] = {};
 	uptr debug_markers_index = 0;
 
@@ -209,9 +212,9 @@ static Game_Code load_game_code() {
 	};
 
 	return {
+		.game_dll = game_dll,
 		.update_and_render = (Game::Update_And_Render*)GetProcAddress(game_dll, "update_and_render"),
 		.get_sound_samples = (Game::Get_Sound_Samples*)GetProcAddress(game_dll, "get_sound_samples"),
-		.game_dll = game_dll,
 	};
 }
 
@@ -250,7 +253,7 @@ static void resize_screen_buffer(Screen& screen, u32 width, u32 height) {
 	screen.set_width(width);
 	screen.set_height(height);
 	uptr screen_memory_size = width * height * sizeof(*screen.memory);
-	screen.memory = (Game::Screen_Pixel*)VirtualAlloc(nullptr, screen_memory_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	screen.memory = (u32*)VirtualAlloc(nullptr, screen_memory_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 }
 
 static void init_direct_sound(HWND window, Sound& sound) {
@@ -558,11 +561,10 @@ namespace Debug {
 	}
 	
 	static void draw_vertical(Screen& screen, u32 x, u32 top, u32 bottom, u32 color) {
-		Game::Screen_Pixel* pixel = screen.memory + top * screen.get_width() + x;
+		u32* pixel = screen.memory + top * screen.get_width() + x;
 
 		for (u32 y = top; y < bottom; y++) {
-			// TODO: добавить u32 конструктор либо избавиться от ScreenPixel
-			*pixel = *(Game::Screen_Pixel*)&color;
+			*pixel = color;
 			pixel += screen.get_width();
 		}
 	}

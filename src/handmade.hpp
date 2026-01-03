@@ -63,13 +63,9 @@ namespace Game {
     	Platform::Free_File_Memory* free_file_memory;
 	};
 
-	struct Screen_Pixel {
-		u8 blue, green, red, padding;
-	};
-
 	struct Screen_Buffer {
 		u32 width, height;
-		Screen_Pixel* memory;
+		u32* memory;
 	};
 
 	struct Sound_Sample {
