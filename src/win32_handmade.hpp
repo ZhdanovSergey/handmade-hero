@@ -28,53 +28,49 @@ struct Debug_Marker {
 };
 
 struct Screen {
+	u32* memory;
+	u32 get_width()	 const { return (u32)	bitmap_info.bmiHeader.biWidth; }
+	u32 get_height() const { return (u32) - bitmap_info.bmiHeader.biHeight; }
+	void resize(u32 width, u32 height);
+	void display(HWND window, HDC device_context) const;
+
+	private:
 	BITMAPINFO bitmap_info = {
 		.bmiHeader = {
 			.biSize = sizeof(BITMAPINFOHEADER),
 			.biPlanes = 1,
-			.biBitCount = 32,
+			.biBitCount = sizeof(*memory) * 8,
 			.biCompression = BI_RGB,
 		}
 	};
-	u32* memory;
-
-	// biHeight отрицательный чтобы верхний левый пиксель был первым в буфере
-	u32 get_width()	 const { return (u32)	bitmap_info.bmiHeader.biWidth; }
-	u32 get_height() const { return (u32) - bitmap_info.bmiHeader.biHeight; }
-	void set_width(u32 width)	{ bitmap_info.bmiHeader.biWidth  =   (LONG)width; }
-	void set_height(u32 height) { bitmap_info.bmiHeader.biHeight = - (LONG)height; }
-
-	void resize(u32 width, u32 height);
-	void display(HWND window, HDC device_context) const;
 };
 
 struct Sound {
 	WAVEFORMATEX wave_format = {
 		.wFormatTag = WAVE_FORMAT_PCM,
 		.nChannels = 2,
-		.nSamplesPerSec = 48000,
+		.nSamplesPerSec = 48'000,
 		.nAvgBytesPerSec = sizeof(Game::Sound_Sample) * wave_format.nSamplesPerSec,
 		.nBlockAlign = sizeof(Game::Sound_Sample),
 		.wBitsPerSample = sizeof(Game::Sound_Sample) / wave_format.nChannels * 8,
 	};
 	IDirectSoundBuffer* buffer;
-	u32 running_sample_index;
 	DWORD output_byte_count;
-
 	DWORD get_buffer_size() 	const { return wave_format.nAvgBytesPerSec; }
-	DWORD get_bytes_per_frame() const { return wave_format.nAvgBytesPerSec / TARGET_UPDATE_FREQUENCY; }
 	DWORD get_safety_bytes() 	const { return get_bytes_per_frame() / 3; }
-	DWORD get_output_location()	const { return running_sample_index * wave_format.nBlockAlign % get_buffer_size(); }
-
 	void calc_required_output(u64 flip_wall_clock, Debug_Marker* debug_markers_array, uptr debug_markers_index);
 	void fill(const Game::Sound_Buffer& source);
 	void play(HWND window);
+
+	private:
+	u32 running_sample_index;
+	DWORD get_bytes_per_frame() const { return wave_format.nAvgBytesPerSec / TARGET_UPDATE_FREQUENCY; }
+	DWORD get_output_location()	const { return running_sample_index * wave_format.nBlockAlign % get_buffer_size(); }
 };
 
 struct Game_Code {
 	Game::Update_And_Render* update_and_render;
 	Game::Get_Sound_Samples* get_sound_samples;
-	
 	Game_Code();
 	void load();
 	void reload_if_recompiled();

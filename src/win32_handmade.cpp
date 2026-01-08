@@ -231,8 +231,8 @@ void Screen::display(HWND window, HDC device_context) const {
 
 void Screen::resize(u32 width, u32 height) {
 	auto& screen = *this;
-	screen.set_width(width);
-	screen.set_height(height);
+	screen.bitmap_info.bmiHeader.biWidth  =   (LONG)width;
+	screen.bitmap_info.bmiHeader.biHeight = - (LONG)height; // отрицательный чтобы верхний левый пиксель был первым в буфере
 	uptr screen_memory_size = width * height * sizeof(*screen.memory);
 	if (screen.memory) VirtualFree(screen.memory, 0, MEM_RELEASE);
 	screen.memory = (u32*)VirtualAlloc(nullptr, screen_memory_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
