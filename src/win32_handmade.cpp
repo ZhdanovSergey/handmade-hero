@@ -284,40 +284,44 @@ void Sound::calc_required_output(u64 flip_wall_clock, Debug_Marker* debug_marker
 	// просто пишем количество сэмплов, равное bytes_per_frame + safety_bytes
 
 	auto& sound = *this;
-	f32 from_flip_to_audio_seconds = get_seconds_elapsed(flip_wall_clock);
-	if (!sound.buffer || !SUCCEEDED(sound.buffer->GetCurrentPosition(&sound.play_cursor, &sound.write_cursor))) {
-		sound.running_sample_index = sound.write_cursor / sound.wave_format.nBlockAlign;
+	DWORD play_cursor = 0, write_cursor = 0;
+	if (!sound.buffer || !SUCCEEDED(sound.buffer->GetCurrentPosition(&play_cursor, &write_cursor))) {
+		sound.output_byte_count = 0;
+		if constexpr (DEV_MODE) debug_markers_array[debug_markers_index] = {};
+		return;
 	}
 
-	DWORD expected_bytes_until_flip = sound.bytes_per_frame - (DWORD)((f32)sound.wave_format.nAvgBytesPerSec * from_flip_to_audio_seconds);
-	DWORD expected_flip_play_cursor_unwrapped = sound.play_cursor + expected_bytes_until_flip;
-	DWORD write_cursor_unwrapped = sound.play_cursor < sound.write_cursor
-		? sound.write_cursor
-		: sound.write_cursor + sound.get_buffer_size();
+	f32 from_flip_to_audio_seconds = get_seconds_elapsed(flip_wall_clock);
+	DWORD expected_bytes_until_flip = sound.get_bytes_per_frame() - (DWORD)((f32)sound.wave_format.nAvgBytesPerSec * from_flip_to_audio_seconds);
+	DWORD expected_flip_play_cursor_unwrapped = play_cursor + expected_bytes_until_flip;
+	DWORD write_cursor_unwrapped = play_cursor < write_cursor
+		? write_cursor
+		: write_cursor + sound.get_buffer_size();
 
-	bool is_low_latency_sound = (write_cursor_unwrapped + sound.safety_bytes) < expected_flip_play_cursor_unwrapped;
+	bool is_low_latency_sound = (write_cursor_unwrapped + sound.get_safety_bytes()) < expected_flip_play_cursor_unwrapped;
 	DWORD target_cursor_unwrapped = is_low_latency_sound
-		? expected_flip_play_cursor_unwrapped + sound.bytes_per_frame
-		: write_cursor_unwrapped + sound.bytes_per_frame + sound.safety_bytes;
+		? expected_flip_play_cursor_unwrapped + sound.get_bytes_per_frame()
+		: write_cursor_unwrapped + sound.get_bytes_per_frame() + sound.get_safety_bytes();
 
 	DWORD target_cursor = target_cursor_unwrapped % sound.get_buffer_size();
-	sound.output_location = sound.running_sample_index * sound.wave_format.nBlockAlign % sound.get_buffer_size();
-	sound.output_byte_count = sound.output_location < target_cursor ? 0 : sound.get_buffer_size();
-	sound.output_byte_count += target_cursor - sound.output_location;
+	sound.output_byte_count = sound.get_output_location() < target_cursor ? 0 : sound.get_buffer_size();
+	sound.output_byte_count += target_cursor - sound.get_output_location();
 
 	if constexpr (DEV_MODE) {
-		debug_markers_array[debug_markers_index].output_play_cursor = sound.play_cursor;
-		debug_markers_array[debug_markers_index].output_write_cursor = sound.write_cursor;
-		debug_markers_array[debug_markers_index].output_location = sound.output_location;
-		debug_markers_array[debug_markers_index].output_byte_count = sound.output_byte_count;
-		debug_markers_array[debug_markers_index].expected_flip_play_cursor = expected_flip_play_cursor_unwrapped % sound.get_buffer_size();
+		debug_markers_array[debug_markers_index] = {
+			.output_play_cursor = play_cursor,
+			.output_write_cursor = write_cursor,
+			.output_location = sound.get_output_location(),
+			.output_byte_count = sound.output_byte_count,
+			.expected_flip_play_cursor = expected_flip_play_cursor_unwrapped % sound.get_buffer_size()
+		};
 	}
 }
 
 void Sound::fill(const Game::Sound_Buffer& source) {
 	auto& sound = *this;
 	void *region1, *region2; DWORD region1_size, region2_size;
-	if (!sound.buffer || !SUCCEEDED(sound.buffer->Lock(sound.output_location, sound.output_byte_count, &region1, &region1_size, &region2, &region2_size, 0))) return;
+	if (!sound.buffer || !SUCCEEDED(sound.buffer->Lock(sound.get_output_location(), sound.output_byte_count, &region1, &region1_size, &region2, &region2_size, 0))) return;
 
 	u32 sample_size = sizeof(*(source.samples));
 	u32 region1_size_samples = region1_size / sample_size;
@@ -539,7 +543,7 @@ static void debug_sound_sync_display(
 		u32 top = screen.get_height() * 3/4;
 		u32 bottom = screen.get_height();
 		u32 flip_play_cursor_x = (u32)((f32)current_marker.flip_play_cursor * horizontal_scaling);
-		u32 safety_bytes_x = (u32)((f32)sound.safety_bytes * horizontal_scaling);
+		u32 safety_bytes_x = (u32)((f32)sound.get_safety_bytes() * horizontal_scaling);
 		debug_draw_vertical(screen, (flip_play_cursor_x - safety_bytes_x / 2) % screen.get_width(), top, bottom, 0x00ffffff);
 		debug_draw_vertical(screen, (flip_play_cursor_x + safety_bytes_x / 2) % screen.get_width(), top, bottom, 0x00ffffff);
 	}
