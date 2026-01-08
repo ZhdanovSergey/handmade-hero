@@ -87,5 +87,5 @@ namespace Game {
 	extern "C"	void get_sound_samples		(Memory& memory, Sound_Buffer& sound_buffer);
 				void get_sound_samples_stub	(Memory& memory, Sound_Buffer& sound_buffer){};
 
-	static void render_gradient(const Game_State* game_state, Screen_Buffer& screen_buffer);
+	static void render_gradient(const Game_State& game_state, Screen_Buffer& screen_buffer);
 }

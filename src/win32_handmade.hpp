@@ -1,3 +1,5 @@
+#pragma once
+
 #include "globals.hpp"
 #include "handmade.hpp"
 
@@ -5,71 +7,98 @@
 #include <dsound.h>
 #include <xinput.h>
 
-struct Screen {
-	BITMAPINFO bitmap_info;
-	u32* memory;
+static const u32 INITIAL_WINDOW_WIDTH = 1280;
+static const u32 INITIAL_WINDOW_HEIGHT = 720;
+static const u32 TARGET_UPDATE_FREQUENCY = 30;
+static const f32 TARGET_SECONDS_PER_FRAME = 1.0f / (f32)TARGET_UPDATE_FREQUENCY;
+static const UINT SLEEP_GRANULARITY_MS = timeBeginPeriod(1) == TIMERR_NOERROR ? 1 : 0;
+static const u64 PERFORMANCE_FREQUENCY = []() -> u64 {
+	LARGE_INTEGER query_result;
+	QueryPerformanceFrequency(&query_result);
+	return (u64)query_result.QuadPart;
+}();
 
-	// biHeight отрицательный чтобы верхний левый пиксель был первым в буфере
-	void set_height(u32 height) { bitmap_info.bmiHeader.biHeight = - (LONG)height; }
-	void set_width(u32 width)	{ bitmap_info.bmiHeader.biWidth  =   (LONG)width; }
-	u32 get_height() const { return (u32) - bitmap_info.bmiHeader.biHeight; }
-	u32 get_width()	 const { return (u32)	bitmap_info.bmiHeader.biWidth; }
+struct Debug_Marker {
+	DWORD output_play_cursor;
+	DWORD output_write_cursor;
+	DWORD output_location;
+	DWORD output_byte_count;
+	DWORD flip_play_cursor;
+	DWORD expected_flip_play_cursor;
 };
 
+struct Screen {
+	BITMAPINFO bitmap_info = {
+		.bmiHeader = {
+			.biSize = sizeof(BITMAPINFOHEADER),
+			.biPlanes = 1,
+			.biBitCount = 32,
+			.biCompression = BI_RGB,
+		}
+	};
+	u32* memory;
+
+	void resize(u32 width, u32 height);
+	void display(HWND window, HDC device_context) const;
+	// biHeight отрицательный чтобы верхний левый пиксель был первым в буфере
+	u32 get_width()	 const { return (u32)	bitmap_info.bmiHeader.biWidth; }
+	u32 get_height() const { return (u32) - bitmap_info.bmiHeader.biHeight; }
+	void set_width(u32 width)	{ bitmap_info.bmiHeader.biWidth  =   (LONG)width; }
+	void set_height(u32 height) { bitmap_info.bmiHeader.biHeight = - (LONG)height; }
+};
+
+// TODO: создать отдельную структуру для полей, которые не должны переходить границу фрейма
 struct Sound {
-	// TODO: создать отдельную структуру для полей, которые не должны переходить границу фрейма
-	WAVEFORMATEX wave_format;
+	WAVEFORMATEX wave_format = {
+		.wFormatTag = WAVE_FORMAT_PCM,
+		.nChannels = 2,
+		.nSamplesPerSec = 48000,
+		.nAvgBytesPerSec = sizeof(Game::Sound_Sample) * this->wave_format.nSamplesPerSec,
+		.nBlockAlign = sizeof(Game::Sound_Sample),
+		.wBitsPerSample = sizeof(Game::Sound_Sample) / this->wave_format.nChannels * 8,
+	};
 	IDirectSoundBuffer* buffer;
+	DWORD bytes_per_frame = this->wave_format.nAvgBytesPerSec / TARGET_UPDATE_FREQUENCY;
+	DWORD safety_bytes = this->bytes_per_frame / 3;
 	u32 running_sample_index;
 	DWORD output_location;
 	DWORD output_byte_count;
-	DWORD bytes_per_frame;
-	DWORD safety_bytes;
 	DWORD play_cursor;
 	DWORD write_cursor;
 
+	void play(HWND window);
+	void calc_required_output(u64 flip_wall_clock, Debug_Marker* debug_markers_array, uptr debug_markers_index);
+	void fill(const Game::Sound_Buffer& source);
 	DWORD get_buffer_size() const { return wave_format.nAvgBytesPerSec; }
 };
 
 struct Game_Code {
-	HMODULE game_dll;
 	Game::Update_And_Render* update_and_render;
 	Game::Get_Sound_Samples* get_sound_samples;
+	Game_Code();
+	void load();
+	void reload_if_recompiled();
+
+	private:
+	HMODULE dll;
+	FILETIME write_time;
+	char dll_path[MAX_PATH];
+	char temp_dll_path[MAX_PATH];
 };
-
-namespace Debug {
-    struct Marker {
-        DWORD output_play_cursor;
-		DWORD output_write_cursor;
-		DWORD output_location;
-		DWORD output_byte_count;
-        DWORD flip_play_cursor;
-        DWORD expected_flip_play_cursor;
-    };
-
-    static void sound_sync_display(
-		Screen& screen, const Sound& sound,
-		const Marker* markers, uptr markers_count, uptr current_marker_index
-	);
-    static void draw_vertical(Screen& screen, u32 x, u32 top, u32 bottom, u32 color);
-}
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow);
 static LRESULT CALLBACK main_window_callback(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
-static Game_Code load_game_code();
-static void unload_game_code(Game_Code& game_code);
-static void display_screen_buffer(HWND window, HDC device_context, const Screen& screen);
-static void resize_screen_buffer(Screen& screen, u32 width, u32 height);
 static void process_pending_messages(Game::Controller& controller);
-static inline u64 get_wall_clock();
+static void wait_until_end_of_frame(u64 flip_wall_clock);
+static FILETIME get_file_write_time(const char* filename);
 static inline f32 get_seconds_elapsed(u64 start);
-static u64 get_performance_frequency();
+static inline u64 get_wall_clock();
 
-// Sound
-static void init_direct_sound(HWND window, Sound& sound);
-static void calc_required_sound_output(Sound& sound, u64 flip_wall_clock, Debug::Marker* debug_markers_array, uptr debug_markers_index);
-static void clear_sound_buffer(Sound& sound);
-static void fill_sound_buffer(const Game::Sound_Buffer& source, Sound& sound);
+static void debug_draw_vertical(Screen& screen, u32 x, u32 top, u32 bottom, u32 color);
+static void debug_sound_sync_display(
+	Screen& screen, const Sound& sound,
+	const Debug_Marker* markers, uptr markers_count, uptr current_marker_index
+);
 
 // ---XInput---
 static void init_xinput();
