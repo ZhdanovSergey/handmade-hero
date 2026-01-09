@@ -30,25 +30,6 @@ namespace Game {
 
 	struct Input {
 		Controller controllers[2];
-
-		void reset_transitions_count() {
-			for (auto& controller : controllers) {
-				controller.start.transitions_count 			= 0;
-				controller.back.transitions_count  			= 0;
-				controller.left_shoulder.transitions_count  = 0;
-				controller.right_shoulder.transitions_count = 0;
-
-				controller.move_up.transitions_count    	= 0;
-				controller.move_down.transitions_count  	= 0;
-				controller.move_left.transitions_count  	= 0;
-				controller.move_right.transitions_count 	= 0;
-
-				controller.action_up.transitions_count		= 0;
-				controller.action_down.transitions_count	= 0;
-				controller.action_left.transitions_count	= 0;
-				controller.action_right.transitions_count	= 0;
-			}
-		}
 	};
 
 	struct Memory {
