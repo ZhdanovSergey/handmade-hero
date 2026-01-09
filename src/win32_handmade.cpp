@@ -36,7 +36,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     	.free_file_memory = Platform::free_file_memory,
 	};
 
-	bool debug_is_pause = false;
+	bool dev_is_pause = false;
 	u64 flip_wall_clock = get_wall_clock();
 	u64 flip_cycle_counter = __rdtsc();
 
@@ -55,7 +55,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
 					input.process_keyboard_button(message.wParam, is_key_pressed);
 					if constexpr (DEV_MODE) if (message.wParam == 'P' && is_key_pressed) {
-						debug_is_pause = !debug_is_pause;
+						dev_is_pause = !dev_is_pause;
 					}
 				} break;
 				case WM_QUIT: {
@@ -69,8 +69,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		}
 
 		if constexpr (DEV_MODE) {
-			game_code.debug_reload_if_recompiled();
-			if (debug_is_pause) {
+			game_code.dev_reload_if_recompiled();
+			if (dev_is_pause) {
 				wait_until_end_of_frame(flip_wall_clock);
 				flip_wall_clock = get_wall_clock();
 				flip_cycle_counter = __rdtsc();
@@ -87,7 +87,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		flip_wall_clock = get_wall_clock();
 		flip_cycle_counter = __rdtsc();
 
-		if constexpr (DEV_MODE) sound.debug_sync_display(global_screen);
+		if constexpr (DEV_MODE) sound.dev_sync_display(global_screen);
 		global_screen.display(window, device_context);
 	}
 
@@ -153,14 +153,14 @@ Game_Code::Game_Code() {
 	uptr main_folder_path_size = (uptr)(one_past_last_slash - main_file_path);
 	
 	const char dll_name[] = "handmade.dll";
-	utils::concat_strings(
+	utils::str_concat(
 		main_file_path, main_folder_path_size,
 		dll_name, sizeof(dll_name),
 		game_code.dll_path, sizeof(game_code.dll_path)
 	);
 
 	const char temp_dll_name[] = "handmade_temp.dll";
-	utils::concat_strings(
+	utils::str_concat(
 		main_file_path, main_folder_path_size,
 		temp_dll_name, sizeof(temp_dll_name),
 		game_code.temp_dll_path, sizeof(game_code.temp_dll_path)
@@ -192,7 +192,7 @@ void Game_Code::load() {
 	}
 }
 
-void Game_Code::debug_reload_if_recompiled() {
+void Game_Code::dev_reload_if_recompiled() {
 	auto& game_code = *this;
 	FILETIME dll_write_time = get_file_write_time(game_code.dll_path);
 	bool is_dll_recompiled = CompareFileTime(&dll_write_time, &game_code.write_time) > 0;
@@ -328,7 +328,7 @@ void Screen::display(HWND window, HDC device_context) const {
 	);
 }
 
-void Screen::debug_draw_vertical(u32 x, u32 top, u32 bottom, u32 color) {
+void Screen::dev_draw_vertical(u32 x, u32 top, u32 bottom, u32 color) {
 	auto& screen = *this;
 	u32* pixel = screen.game_buffer.memory + top * screen.game_buffer.width + x;
 
@@ -392,7 +392,7 @@ void Sound::calc_samples_to_write(u64 flip_wall_clock) {
 	DWORD play_cursor = 0, write_cursor = 0;
 	if (!sound.buffer || !SUCCEEDED(sound.buffer->GetCurrentPosition(&play_cursor, &write_cursor))) {
 		sound.game_buffer.samples_to_write = 0;
-		if constexpr (DEV_MODE) sound.debug_markers[sound.debug_markers_index] = {};
+		if constexpr (DEV_MODE) sound.dev_markers[sound.dev_markers_index] = {};
 		return;
 	}
 
@@ -414,7 +414,7 @@ void Sound::calc_samples_to_write(u64 flip_wall_clock) {
 	sound.game_buffer.samples_to_write = output_byte_count / sound.wave_format.nBlockAlign;
 
 	if constexpr (DEV_MODE) {
-		sound.debug_markers[sound.debug_markers_index] = {
+		sound.dev_markers[sound.dev_markers_index] = {
 			.output_play_cursor = play_cursor,
 			.output_write_cursor = write_cursor,
 			.output_location = sound.get_output_location(),
@@ -443,56 +443,56 @@ void Sound::submit() {
 	sound.buffer->Unlock(region1, region1_size, region2, region2_size);
 }
 
-void Sound::debug_sync_display(Screen& screen) {
+void Sound::dev_sync_display(Screen& screen) {
 	auto& sound = *this;
 	if (!sound.buffer) return;
 
 	f32 horizontal_scaling = (f32)screen.game_buffer.width / (f32)sound.get_buffer_size();
-	for (uptr i = 0; i < utils::array_count(sound.debug_markers); i++) {
+	for (uptr i = 0; i < utils::array_count(sound.dev_markers); i++) {
 		u32 top = 0;
 		u32 bottom = screen.game_buffer.height * 1/4;
-		u32 historic_output_play_cursor_x = (u32)((f32)sound.debug_markers[i].output_play_cursor * horizontal_scaling);
-		u32 historic_output_write_cursor_x = (u32)((f32)sound.debug_markers[i].output_write_cursor * horizontal_scaling);
-		screen.debug_draw_vertical(historic_output_play_cursor_x, top, bottom, 0x00ffffff);
-		screen.debug_draw_vertical(historic_output_write_cursor_x, top, bottom, 0x00ff0000);
+		u32 historic_output_play_cursor_x = (u32)((f32)sound.dev_markers[i].output_play_cursor * horizontal_scaling);
+		u32 historic_output_write_cursor_x = (u32)((f32)sound.dev_markers[i].output_write_cursor * horizontal_scaling);
+		screen.dev_draw_vertical(historic_output_play_cursor_x, top, bottom, 0x00ffffff);
+		screen.dev_draw_vertical(historic_output_write_cursor_x, top, bottom, 0x00ff0000);
 	}
 
-	if (!sound.game_buffer.samples_to_write || !SUCCEEDED(sound.buffer->GetCurrentPosition(&sound.debug_markers[sound.debug_markers_index].flip_play_cursor, nullptr))) {
-		sound.debug_markers_index = (sound.debug_markers_index + 1) % utils::array_count(sound.debug_markers);
+	if (!sound.game_buffer.samples_to_write || !SUCCEEDED(sound.buffer->GetCurrentPosition(&sound.dev_markers[sound.dev_markers_index].flip_play_cursor, nullptr))) {
+		sound.dev_markers_index = (sound.dev_markers_index + 1) % utils::array_count(sound.dev_markers);
 		return;
 	}
 
-	Debug_Marker current_marker = sound.debug_markers[sound.debug_markers_index];
+	Dev_Marker current_marker = sound.dev_markers[sound.dev_markers_index];
 	u32 expected_flip_play_cursor_x = (u32)((f32)current_marker.expected_flip_play_cursor * horizontal_scaling);
-	screen.debug_draw_vertical(expected_flip_play_cursor_x, 0, screen.game_buffer.height, 0xffffff00);
+	screen.dev_draw_vertical(expected_flip_play_cursor_x, 0, screen.game_buffer.height, 0xffffff00);
 
 	{
 		u32 top 	= screen.game_buffer.height * 1/4;
 		u32 bottom  = screen.game_buffer.height * 2/4;
 		u32 output_play_cursor_x = (u32)((f32)current_marker.output_play_cursor * horizontal_scaling);
 		u32 output_write_cursor_x = (u32)((f32)current_marker.output_write_cursor * horizontal_scaling);
-		screen.debug_draw_vertical(output_play_cursor_x, top, bottom, 0x00ffffff);
-		screen.debug_draw_vertical(output_write_cursor_x, top, bottom, 0x00ff0000);
+		screen.dev_draw_vertical(output_play_cursor_x, top, bottom, 0x00ffffff);
+		screen.dev_draw_vertical(output_write_cursor_x, top, bottom, 0x00ff0000);
 	}
 	{
 		u32 top 	= screen.game_buffer.height * 2/4;
 		u32 bottom  = screen.game_buffer.height * 3/4;
 		u32 output_location_x = (u32)((f32)current_marker.output_location * horizontal_scaling);
 		u32 output_byte_count_x = (u32)((f32)current_marker.output_byte_count * horizontal_scaling);
-		screen.debug_draw_vertical(output_location_x, top, bottom, 0x00ffffff);
-		screen.debug_draw_vertical((output_location_x + output_byte_count_x) % screen.game_buffer.width, top, bottom, 0x00ff0000);
+		screen.dev_draw_vertical(output_location_x, top, bottom, 0x00ffffff);
+		screen.dev_draw_vertical((output_location_x + output_byte_count_x) % screen.game_buffer.width, top, bottom, 0x00ff0000);
 	}
 	{
 		u32 top 	= screen.game_buffer.height * 3/4;
 		u32 bottom  = screen.game_buffer.height;
 		u32 flip_play_cursor_x = (u32)((f32)current_marker.flip_play_cursor * horizontal_scaling);
 		u32 safety_bytes_x = (u32)((f32)sound.get_safety_bytes() * horizontal_scaling);
-		screen.debug_draw_vertical((flip_play_cursor_x - safety_bytes_x / 2) % screen.game_buffer.width, top, bottom, 0x00ffffff);
-		screen.debug_draw_vertical((flip_play_cursor_x + safety_bytes_x / 2) % screen.game_buffer.width, top, bottom, 0x00ffffff);
+		screen.dev_draw_vertical((flip_play_cursor_x - safety_bytes_x / 2) % screen.game_buffer.width, top, bottom, 0x00ffffff);
+		screen.dev_draw_vertical((flip_play_cursor_x + safety_bytes_x / 2) % screen.game_buffer.width, top, bottom, 0x00ffffff);
 	}
 
-	// uptr debug_markers_index_unwrapped = sound.debug_markers_index == 0 ? utils::array_count(sound.debug_markers) : sound.debug_markers_index;
-	// Debug_Marker prev_marker = sound.debug_markers[debug_markers_index_unwrapped - 1];
+	// uptr dev_markers_index_unwrapped = sound.dev_markers_index == 0 ? utils::array_count(sound.dev_markers) : sound.dev_markers_index;
+	// Debug_Marker prev_marker = sound.dev_markers[dev_markers_index_unwrapped - 1];
 	// DWORD prev_sound_filled_cursor = (prev_marker.output_location + prev_marker.output_byte_count) % sound.get_buffer_size();
 	// // сравниваем с половиной размера буфера чтобы учесть что prev_sound_filled_cursor мог сделать оборот
 	// assert(sound.play_cursor <= prev_sound_filled_cursor || sound.play_cursor > prev_sound_filled_cursor + sound.get_buffer_size() / 2);
@@ -503,7 +503,7 @@ void Sound::debug_sync_display(Screen& screen) {
 	// sprintf_s(output_buffer, "frame ms: %.2f\n", frame_seconds_elapsed * 1000);
 	// OutputDebugStringA(output_buffer);
 
-	sound.debug_markers_index = (sound.debug_markers_index + 1) % utils::array_count(sound.debug_markers);
+	sound.dev_markers_index = (sound.dev_markers_index + 1) % utils::array_count(sound.dev_markers);
 }
 
 namespace Platform {

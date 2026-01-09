@@ -12,7 +12,7 @@ static const u32 INITIAL_WINDOW_HEIGHT = 720;
 static const u32 TARGET_UPDATE_FREQUENCY = 30;
 static const f32 TARGET_SECONDS_PER_FRAME = 1.0f / (f32)TARGET_UPDATE_FREQUENCY;
 static const UINT SLEEP_GRANULARITY_MS = timeBeginPeriod(1) == TIMERR_NOERROR ? 1 : 0;
-static const u64 PERFORMANCE_FREQUENCY = []() -> u64 {
+static const u64 PERFORMANCE_FREQUENCY = [](){
 	LARGE_INTEGER query_result;
 	QueryPerformanceFrequency(&query_result);
 	return (u64)query_result.QuadPart;
@@ -29,7 +29,7 @@ struct Game_Code {
 	Game_Code();
 	Game::Update_And_Render* update_and_render = Game::update_and_render_stub;
 	Game::Get_Sound_Samples* get_sound_samples = Game::get_sound_samples_stub;
-	void debug_reload_if_recompiled();
+	void dev_reload_if_recompiled();
 
 	private:
 	HMODULE dll = {};
@@ -60,7 +60,7 @@ struct Screen {
 	Game::Screen_Buffer game_buffer = {};
 	void resize(u32 width, u32 height);
 	void display(HWND window, HDC device_context) const;
-	void debug_draw_vertical(u32 x, u32 top, u32 bottom, u32 color);
+	void dev_draw_vertical(u32 x, u32 top, u32 bottom, u32 color);
 
 	private:
 	BITMAPINFO bitmap_info = {
@@ -73,7 +73,7 @@ struct Screen {
 	};
 };
 
-struct Debug_Marker {
+struct Dev_Marker {
 	DWORD output_play_cursor;
 	DWORD output_write_cursor;
 	DWORD output_location;
@@ -87,7 +87,7 @@ struct Sound {
 	Game::Sound_Buffer game_buffer = {};
 	void calc_samples_to_write(u64 flip_wall_clock);
 	void submit();
-	void debug_sync_display(Screen& screen);
+	void dev_sync_display(Screen& screen);
 
 	private:
 	WAVEFORMATEX wave_format = {
@@ -100,8 +100,8 @@ struct Sound {
 	};
 	IDirectSoundBuffer* buffer = {};
 	DWORD running_sample_index = {};
-	Debug_Marker debug_markers[TARGET_UPDATE_FREQUENCY - 1] = {};
-	uptr debug_markers_index = {};
+	Dev_Marker dev_markers[TARGET_UPDATE_FREQUENCY - 1] = {};
+	uptr dev_markers_index = {};
 	DWORD get_buffer_size() 	const { return wave_format.nAvgBytesPerSec; }
 	DWORD get_bytes_per_frame() const { return wave_format.nAvgBytesPerSec / TARGET_UPDATE_FREQUENCY; }
 	DWORD get_output_location()	const { return running_sample_index * wave_format.nBlockAlign % get_buffer_size(); }

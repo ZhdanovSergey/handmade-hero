@@ -50,7 +50,7 @@ namespace utils {
         }
     }
 
-    static void concat_strings(
+    static void str_concat(
         const char* src1, uptr src1_size,
         const char* src2, uptr src2_size,
               char* dest, uptr dest_size) {
