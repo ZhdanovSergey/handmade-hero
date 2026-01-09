@@ -180,10 +180,11 @@ void Game_Code::load() {
 		}
 	}
 
-	HMODULE loaded_dll = LoadLibraryA(game_code.temp_dll_path); // загружаем копию, чтобы компилятор мог писать в оригинальный файл
+	// загружаем копию, чтобы компилятор мог писать в оригинальный файл
+	HMODULE loaded_dll = LoadLibraryA(game_code.temp_dll_path);
 	if (!loaded_dll) {
-		game_code.update_and_render = Game::update_and_render_stub;
-		game_code.get_sound_samples = Game::get_sound_samples_stub;
+		game_code.update_and_render = [](auto...){};
+		game_code.get_sound_samples = [](auto...){};
 	} else {
 		game_code.dll = loaded_dll;
 		game_code.write_time = get_file_write_time(game_code.dll_path);
@@ -204,10 +205,10 @@ void Game_Code::dev_reload_if_recompiled() {
 }
 
 Input::Input() {
-	auto& input = *this;
+	auto& input = *this;	
 	HMODULE xinput_dll = LoadLibraryA("xinput1_3.dll");
 	if (!xinput_dll) return;
-	
+
 	input.XInputGetState = (Xinput_Get_State*)GetProcAddress(xinput_dll, "XInputGetState");
 	input.XInputSetState = (Xinput_Set_State*)GetProcAddress(xinput_dll, "XInputSetState");
 }
@@ -294,7 +295,17 @@ void Input::process_keyboard_button(WPARAM key_code, bool is_pressed) {
 }
 
 Screen::Screen() {
-	Screen::resize(INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT);
+	auto& screen = *this;
+	screen.bitmap_info = {
+		.bmiHeader = {
+			.biSize = sizeof(BITMAPINFOHEADER),
+			.biPlanes = 1,
+			.biBitCount = sizeof(*game_buffer.memory) * 8,
+			.biCompression = BI_RGB,
+		}
+	};
+
+	screen.resize(INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT);
 }
 
 void Screen::resize(u32 width, u32 height) {
@@ -340,15 +351,19 @@ void Screen::dev_draw_vertical(u32 x, u32 top, u32 bottom, u32 color) {
 
 Sound::Sound(HWND window) {
 	auto& sound = *this;
-	sound.game_buffer = {
-		.samples_per_second = sound.wave_format.nSamplesPerSec,
-		.samples = (Game::Sound_Sample*)VirtualAlloc(nullptr, sound.get_buffer_size(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE),
-	};
+	sound.wave_format.wFormatTag = WAVE_FORMAT_PCM;
+	sound.wave_format.nChannels = 2;
+	sound.wave_format.nSamplesPerSec = 48'000;
+	sound.wave_format.nBlockAlign = sizeof(Game::Sound_Sample);
+	sound.wave_format.nAvgBytesPerSec = sound.wave_format.nBlockAlign * sound.wave_format.nSamplesPerSec;
+	sound.wave_format.wBitsPerSample = (WORD)(sound.wave_format.nBlockAlign / sound.wave_format.nChannels * 8);
+	sound.game_buffer.samples_per_second = sound.wave_format.nSamplesPerSec;
+	sound.game_buffer.samples = (Game::Sound_Sample*)VirtualAlloc(nullptr, sound.get_buffer_size(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
 	HMODULE direct_sound_dll = LoadLibraryA("dsound.dll");
 	if (!direct_sound_dll) return;
 
-	typedef HRESULT WINAPI Direct_Sound_Create(LPGUID lpGuid, LPDIRECTSOUND* ppDS, LPUNKNOWN pUnkOuter);
+	using Direct_Sound_Create = HRESULT WINAPI(LPGUID lpGuid, LPDIRECTSOUND* ppDS, LPUNKNOWN pUnkOuter);
 	Direct_Sound_Create* DirectSoundCreate = (Direct_Sound_Create*)GetProcAddress(direct_sound_dll, "DirectSoundCreate");
 	IDirectSound* direct_sound;
 	if (!SUCCEEDED(DirectSoundCreate(nullptr, &direct_sound, nullptr))) return;

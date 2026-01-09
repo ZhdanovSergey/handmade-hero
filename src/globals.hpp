@@ -7,19 +7,19 @@
 #include <cstdint>
 #include <cstdio>
 
-typedef size_t uptr;
-typedef float f32;
-typedef double f64;
+using uptr = size_t;
+using f32  = float;
+using f64  = double;
 
-typedef uint8_t u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
+using u8  = uint8_t;
+using u16 = uint16_t;
+using u32 = uint32_t;
+using u64 = uint64_t;
 
-typedef int8_t s8;
-typedef int16_t s16;
-typedef int32_t s32;
-typedef int64_t s64;
+using s8  = int8_t;
+using s16 = int16_t;
+using s32 = int32_t;
+using s64 = int64_t;
 
 #if SLOW_MODE
     #define assert(expression) if (!(expression)) *(int*)nullptr = 0
@@ -68,12 +68,12 @@ namespace Platform {
         void* memory;
     };
 
-    typedef Read_File_Result Read_File_Sync(const char* file_name);
-            Read_File_Result read_file_sync(const char* file_name);
+    Read_File_Result read_file_sync(const char* file_name);
+    using Read_File_Sync = decltype(read_file_sync);
 
-    typedef bool Write_File_Sync(const char* file_name, const void* memory, u32 memory_size);
-            bool write_file_sync(const char* file_name, const void* memory, u32 memory_size);
+    bool write_file_sync(const char* file_name, const void* memory, u32 memory_size);
+    using Write_File_Sync = decltype(write_file_sync);
 
-    typedef void Free_File_Memory(void* memory);
-            void free_file_memory(void* memory);
+    void free_file_memory(void* memory);
+    using Free_File_Memory = decltype(free_file_memory);
 }

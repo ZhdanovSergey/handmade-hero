@@ -27,8 +27,8 @@ static inline u64 get_wall_clock();
 
 struct Game_Code {
 	Game_Code();
-	Game::Update_And_Render* update_and_render = Game::update_and_render_stub;
-	Game::Get_Sound_Samples* get_sound_samples = Game::get_sound_samples_stub;
+	Game::Update_And_Render* update_and_render = [](auto...){};
+	Game::Get_Sound_Samples* get_sound_samples = [](auto...){};
 	void dev_reload_if_recompiled();
 
 	private:
@@ -39,6 +39,9 @@ struct Game_Code {
 	void load();
 };
 
+using Xinput_Get_State = DWORD(DWORD dwUserIndex, XINPUT_STATE *pState);
+using Xinput_Set_State = DWORD(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration);
+
 struct Input {
 	Input();
 	Game::Input game_input = {};
@@ -47,10 +50,8 @@ struct Input {
 	void process_keyboard_button(WPARAM key_code, bool is_pressed);
 
 	private:
-	typedef DWORD Xinput_Get_State(DWORD dwUserIndex, XINPUT_STATE *pState);
-	typedef DWORD Xinput_Set_State(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration);
-	Xinput_Get_State* XInputGetState = [](auto...) { return (DWORD)ERROR_DLL_INIT_FAILED; };
-	Xinput_Set_State* XInputSetState = [](auto...) { return (DWORD)ERROR_DLL_INIT_FAILED; };
+	Xinput_Get_State* XInputGetState = [](auto...){ return (DWORD)ERROR_DLL_INIT_FAILED; };
+	Xinput_Set_State* XInputSetState = [](auto...){ return (DWORD)ERROR_DLL_INIT_FAILED; };
 	static f32 get_normalized_stick_value(SHORT value, SHORT deadzone);
 	static void process_gamepad_button(Game::Button_State& state, bool is_pressed);
 };
@@ -63,14 +64,7 @@ struct Screen {
 	void dev_draw_vertical(u32 x, u32 top, u32 bottom, u32 color);
 
 	private:
-	BITMAPINFO bitmap_info = {
-		.bmiHeader = {
-			.biSize = sizeof(BITMAPINFOHEADER),
-			.biPlanes = 1,
-			.biBitCount = sizeof(*game_buffer.memory) * 8,
-			.biCompression = BI_RGB,
-		}
-	};
+	BITMAPINFO bitmap_info = {};
 };
 
 struct Dev_Marker {
@@ -90,14 +84,7 @@ struct Sound {
 	void dev_sync_display(Screen& screen);
 
 	private:
-	WAVEFORMATEX wave_format = {
-		.wFormatTag = WAVE_FORMAT_PCM,
-		.nChannels = 2,
-		.nSamplesPerSec = 48'000,
-		.nAvgBytesPerSec = sizeof(Game::Sound_Sample) * wave_format.nSamplesPerSec,
-		.nBlockAlign 	 = sizeof(Game::Sound_Sample),
-		.wBitsPerSample  = sizeof(Game::Sound_Sample) / wave_format.nChannels * 8,
-	};
+	WAVEFORMATEX wave_format = {};
 	IDirectSoundBuffer* buffer = {};
 	DWORD running_sample_index = {};
 	Dev_Marker dev_markers[TARGET_UPDATE_FREQUENCY - 1] = {};

@@ -59,14 +59,12 @@ namespace Game {
 		Sound_Sample* samples;
 	};
 
-	typedef 	void Update_And_Render		(const Input& input, Memory& memory, Screen_Buffer& screen_buffer);
-	extern "C"	void update_and_render		(const Input& input, Memory& memory, Screen_Buffer& screen_buffer);
-				void update_and_render_stub	(const Input& input, Memory& memory, Screen_Buffer& screen_buffer){};
+	extern "C" void update_and_render(const Input& input, Memory& memory, Screen_Buffer& screen_buffer);
+	using Update_And_Render = decltype(update_and_render);
 
 	// get_sound_samples должен быть быстрым, не больше 1ms
-	typedef		void Get_Sound_Samples		(Memory& memory, Sound_Buffer& sound_buffer);
-	extern "C"	void get_sound_samples		(Memory& memory, Sound_Buffer& sound_buffer);
-				void get_sound_samples_stub	(Memory& memory, Sound_Buffer& sound_buffer){};
+	extern "C" void get_sound_samples(Memory& memory, Sound_Buffer& sound_buffer);
+	using Get_Sound_Samples = decltype(get_sound_samples);
 
 	static void render_gradient(const Game_State& game_state, Screen_Buffer& screen_buffer);
 }
