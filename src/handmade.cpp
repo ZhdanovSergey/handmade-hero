@@ -9,12 +9,12 @@ namespace Game {
 		for (auto& controller : input.controllers) {
 			if (controller.move_up.is_pressed)		game_state.green_offset -= 10;
 			if (controller.move_down.is_pressed)	game_state.green_offset += 10;
-			if (controller.move_right.is_pressed)	game_state.blue_offset	 += 10;
-			if (controller.move_left.is_pressed)	game_state.blue_offset	 -= 10;
+			if (controller.move_right.is_pressed)	game_state.blue_offset	+= 10;
+			if (controller.move_left.is_pressed)	game_state.blue_offset	-= 10;
 			
 			game_state.tone_hz = 256;
 			if (controller.is_analog) {
-				game_state.tone_hz		 += (u32)(128.0f * controller.end_y);
+				game_state.tone_hz		+= (u32)(128.0f * controller.end_y);
 				game_state.green_offset -= (u32)(20.0f  * controller.end_y);
 				game_state.blue_offset  += (u32)(20.0f  * controller.end_x);
 			}

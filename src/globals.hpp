@@ -36,7 +36,10 @@ static constexpr uptr operator ""_GB(u64 value) { return (uptr)(value << 30); }
 
 namespace utils {
     template <typename T, uptr N>
-    constexpr uptr array_count(const T (&)[N]) { return N; }
+    static constexpr uptr array_count(const T (&)[N]) { return N; }
+
+    template <typename T>
+    static T min(T a, T b) { return a < b ? a : b; }
 
     static void memcpy(void* dest, const void* src, uptr size) {
         for (uptr i = 0; i < size; i++) {
@@ -44,21 +47,22 @@ namespace utils {
         }
     }
 
-    static void memset(void* dest, int value, uptr size) {
+    static void memset(void* dest, u8 value, uptr size) {
         for (uptr i = 0; i < size; i++) {
-            ((u8*)dest)[i] = (u8)value;
+            ((u8*)dest)[i] = value;
         }
     }
 
-    static void str_concat(
+    static void strcat(
         const char* src1, uptr src1_size,
         const char* src2, uptr src2_size,
               char* dest, uptr dest_size) {
-        uptr src1_size_refined = src1_size < dest_size ? src1_size : dest_size;
-        uptr src2_size_refined = src1_size_refined + src2_size < dest_size ? src2_size : dest_size - src1_size_refined;
+        assert(src1_size + src2_size <= dest_size);
+        uptr src1_size_refined = min(src1_size, dest_size);
+        uptr src2_size_refined = min(src2_size, dest_size - src1_size_refined);
         memcpy(dest, src1, src1_size_refined);
         memcpy(dest + src1_size_refined, src2, src2_size_refined);
-        dest += 0;
+        *(dest + src1_size_refined + src2_size_refined) = 0;
     }
 }
 

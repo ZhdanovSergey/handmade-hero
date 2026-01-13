@@ -12,7 +12,7 @@ static const u32 INITIAL_WINDOW_HEIGHT = 720;
 static const u32 TARGET_UPDATE_FREQUENCY = 30;
 static const f32 TARGET_SECONDS_PER_FRAME = 1.0f / (f32)TARGET_UPDATE_FREQUENCY;
 static const UINT SLEEP_GRANULARITY_MS = timeBeginPeriod(1) == TIMERR_NOERROR ? 1 : 0;
-static const u64 PERFORMANCE_FREQUENCY = [](){
+static const u64 PERFORMANCE_FREQUENCY = []{
 	LARGE_INTEGER query_result;
 	QueryPerformanceFrequency(&query_result);
 	return (u64)query_result.QuadPart;
@@ -50,15 +50,15 @@ struct Input {
 	void process_keyboard_button(WPARAM key_code, bool is_pressed);
 
 	private:
-	Xinput_Get_State* XInputGetState = [](auto...){ return (DWORD)ERROR_DLL_INIT_FAILED; };
-	Xinput_Set_State* XInputSetState = [](auto...){ return (DWORD)ERROR_DLL_INIT_FAILED; };
+	Xinput_Get_State* XInputGetState = [](auto...){ return 1UL; };
+	Xinput_Set_State* XInputSetState = [](auto...){ return 1UL; };
 	static f32 get_normalized_stick_value(SHORT value, SHORT deadzone);
 	static void process_gamepad_button(Game::Button_State& state, bool is_pressed);
 };
 
 struct Screen {
 	Screen();
-	Game::Screen_Buffer game_buffer = {};
+	Game::Screen_Buffer game_screen = {};
 	void resize(u32 width, u32 height);
 	void display(HWND window, HDC device_context) const;
 	void dev_draw_vertical(u32 x, u32 top, u32 bottom, u32 color);
@@ -78,7 +78,7 @@ struct Dev_Marker {
 
 struct Sound {
 	Sound(HWND window);
-	Game::Sound_Buffer game_buffer = {};
+	Game::Sound_Buffer game_sound = {};
 	void calc_samples_to_write(u64 flip_wall_clock);
 	void submit();
 	void dev_sync_display(Screen& screen);
