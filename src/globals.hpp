@@ -34,7 +34,7 @@ static constexpr uptr operator ""_KB(u64 value) { return (uptr)(value << 10); }
 static constexpr uptr operator ""_MB(u64 value) { return (uptr)(value << 20); }
 static constexpr uptr operator ""_GB(u64 value) { return (uptr)(value << 30); }
 
-namespace utils {
+namespace hm {
     template <typename T, uptr N>
     static constexpr uptr array_count(const T (&)[N]) { return N; }
 
@@ -62,7 +62,8 @@ namespace utils {
         uptr src2_size_refined = min(src2_size, dest_size - src1_size_refined);
         memcpy(dest, src1, src1_size_refined);
         memcpy(dest + src1_size_refined, src2, src2_size_refined);
-        *(dest + src1_size_refined + src2_size_refined) = 0;
+        char* last_char = dest + src1_size_refined + src2_size_refined;
+        *last_char = 0;
     }
 }
 

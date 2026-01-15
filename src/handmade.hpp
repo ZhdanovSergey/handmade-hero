@@ -6,7 +6,9 @@ namespace Game {
 	struct Game_State {
 		f32 t_sine;
 		u32 tone_hz;
-		u32 green_offset, blue_offset;
+		u32 player_x, player_y;
+		u32 player_size;
+		u32 player_velocity;
 	};
 
 	struct Button_State {
@@ -67,4 +69,5 @@ namespace Game {
 	using Get_Sound_Samples = decltype(get_sound_samples);
 
 	static void render_gradient(const Game_State& game_state, Screen_Buffer& screen_buffer);
+	static void render_player(const Game_State& game_state, Screen_Buffer& screen_buffer);
 }

@@ -7,21 +7,24 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
 
 	WNDCLASSA window_class = {
-		.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW,
+		.style = CS_HREDRAW | CS_VREDRAW,
 		.lpfnWndProc = WindowProc,
 		.hInstance = hInstance,
 		.lpszClassName = "Handmade_Hero_Window_Class",
 	};
 	RegisterClassA(&window_class);
 
-	HWND window = CreateWindowExA(0, window_class.lpszClassName, "Handmade Hero", WS_TILEDWINDOW | WS_VISIBLE,
+	DWORD dwExStyle = 0;
+	// для отображения игры поверх редактора. Нужно еще раскомментировать SetLayeredWindowAttributes в WindowProc
+	// if (DEV_MODE) dwExStyle = WS_EX_TOPMOST | WS_EX_LAYERED;
+	HWND window = CreateWindowExA(dwExStyle, window_class.lpszClassName, "Handmade Hero", WS_TILEDWINDOW | WS_VISIBLE,
 		CW_USEDEFAULT, CW_USEDEFAULT, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT, nullptr, nullptr, hInstance, nullptr);
-	HDC device_context = GetDC(window);
 
 	Input input = Input();
 	Sound sound = Sound(window);
 	Game_Code game_code = Game_Code();
-
+	Dev_Replayer dev_replayer = Dev_Replayer();
+	
 	void* game_memory_base_address = nullptr;
 	if constexpr (DEV_MODE && UINTPTR_MAX == UINT64_MAX) game_memory_base_address = (void*)1024_GB;
 	Game::Memory game_memory = {
@@ -37,7 +40,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	};
 
 	bool dev_is_pause = false;
-	u64 flip_wall_clock = get_wall_clock();
+	u64 flip_timestamp = get_timestamp();
 	u64 flip_cycle_counter = __rdtsc();
 
 	while (true) {
@@ -54,8 +57,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 					if (is_key_pressed == was_key_pressed) continue;
 
 					input.process_keyboard_button(message.wParam, is_key_pressed);
-					if constexpr (DEV_MODE) if (message.wParam == 'P' && is_key_pressed) {
-						dev_is_pause = !dev_is_pause;
+					if constexpr (DEV_MODE) {
+						if (!is_key_pressed) continue;
+						if (message.wParam == 'P') dev_is_pause = !dev_is_pause;
+						if (message.wParam == 'L') dev_replayer.next_state(game_memory, input.game_input);
 					}
 				} break;
 				case WM_QUIT: {
@@ -70,25 +75,30 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
 		if constexpr (DEV_MODE) {
 			game_code.dev_reload_if_recompiled();
+
 			if (dev_is_pause) {
-				wait_until_end_of_frame(flip_wall_clock);
-				flip_wall_clock = get_wall_clock();
+				wait_until_end_of_frame(flip_timestamp);
+				flip_timestamp = get_timestamp();
 				flip_cycle_counter = __rdtsc();
 				continue;
 			};
+
+			dev_replayer.record_or_replace(game_memory, input.game_input);
 		}
 
 		game_code.update_and_render(input.game_input, game_memory, global_screen.game_screen);
-		sound.calc_samples_to_write(flip_wall_clock);
+		sound.calc_samples_to_write(flip_timestamp);
 		game_code.get_sound_samples(game_memory, sound.game_sound);
 		sound.submit();
 		
-		wait_until_end_of_frame(flip_wall_clock);
-		flip_wall_clock = get_wall_clock();
+		wait_until_end_of_frame(flip_timestamp);
+		flip_timestamp = get_timestamp();
 		flip_cycle_counter = __rdtsc();
 
-		if constexpr (DEV_MODE) sound.dev_sync_display(global_screen);
-		global_screen.display(window, device_context);
+		HDC device_context = GetDC(window);
+		if constexpr (DEV_MODE) sound.dev_draw_sync(global_screen);
+		global_screen.submit(window, device_context);
+		ReleaseDC(window, device_context);
 	}
 }
 
@@ -97,9 +107,13 @@ static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
 		case WM_PAINT: {
 			PAINTSTRUCT paint;
 			HDC device_context = BeginPaint(window, &paint);
-			global_screen.display(window, device_context);
+			global_screen.submit(window, device_context);
 			EndPaint(window, &paint);
 		} break;
+		// для отображения игры поверх редактора. Нужно еще раскомментировать dwExStyle в wWinMain
+		// case WM_ACTIVATEAPP: {
+		// 	if constexpr (DEV_MODE) SetLayeredWindowAttributes(window, RGB(0, 0, 0), wParam ? 255 : 64, LWA_ALPHA);
+		// } break;
 		case WM_DESTROY: {
 			PostQuitMessage(0);
 		} break;
@@ -110,31 +124,30 @@ static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
 	return 0;
 }
 
-static void wait_until_end_of_frame(u64 flip_wall_clock) {
-	f32 frame_seconds_elapsed = get_seconds_elapsed(flip_wall_clock);
+static void wait_until_end_of_frame(u64 flip_timestamp) {
+	f32 flip_seconds_elapsed = get_seconds_elapsed(flip_timestamp);
 	if (SLEEP_GRANULARITY_MS) {
-		f32 sleep_ms = 1000.0f * (TARGET_SECONDS_PER_FRAME - frame_seconds_elapsed) - (f32)SLEEP_GRANULARITY_MS;
+		f32 sleep_ms = 1000.0f * (TARGET_SECONDS_PER_FRAME - flip_seconds_elapsed) - (f32)SLEEP_GRANULARITY_MS;
 		if (sleep_ms >= 1) Sleep((DWORD)sleep_ms);
 	}
-	frame_seconds_elapsed = get_seconds_elapsed(flip_wall_clock);
-	while (frame_seconds_elapsed < TARGET_SECONDS_PER_FRAME) {
+	flip_seconds_elapsed = get_seconds_elapsed(flip_timestamp);
+	while (flip_seconds_elapsed < TARGET_SECONDS_PER_FRAME) {
 		YieldProcessor();
-		frame_seconds_elapsed = get_seconds_elapsed(flip_wall_clock);
+		flip_seconds_elapsed = get_seconds_elapsed(flip_timestamp);
 	}
 }
 
 static FILETIME get_file_write_time(const char* filename) {
 	WIN32_FILE_ATTRIBUTE_DATA file_data;
 	if (!GetFileAttributesExA(filename, GetFileExInfoStandard, &file_data)) return {};
-
 	return file_data.ftLastWriteTime;
 }
 
 static inline f32 get_seconds_elapsed(u64 start) {
-	return (f32)(get_wall_clock() - start) / (f32)PERFORMANCE_FREQUENCY;
+	return (f32)(get_timestamp() - start) / (f32)PERFORMANCE_FREQUENCY;
 }
 
-static inline u64 get_wall_clock() {
+static inline u64 get_timestamp() {
 	LARGE_INTEGER performance_counter_result;
 	QueryPerformanceCounter(&performance_counter_result);
 	return (u64)performance_counter_result.QuadPart;
@@ -142,7 +155,11 @@ static inline u64 get_wall_clock() {
 
 Game_Code::Game_Code() {
 	auto& game_code = *this;
-	char main_file_path[MAX_PATH]; // TODO: путь может быть более длинным, нужно обработать такой случай
+	hm::memset(&game_code, 0, sizeof(game_code));
+	game_code.update_and_render = [](auto...){};
+	game_code.get_sound_samples = [](auto...){};
+
+	char main_file_path[MAX_PATH]; // TODO: путь может быть более длинным
 	GetModuleFileNameA(nullptr, main_file_path, sizeof(main_file_path));
 	char* one_past_last_slash = main_file_path;
 	for (char* scan = main_file_path; *scan; scan++) {
@@ -151,14 +168,14 @@ Game_Code::Game_Code() {
 	uptr main_folder_path_size = (uptr)(one_past_last_slash - main_file_path);
 	
 	const char dll_name[] = "handmade.dll";
-	utils::strcat(
+	hm::strcat(
 		main_file_path, main_folder_path_size,
 		dll_name, sizeof(dll_name),
 		game_code.dll_path, sizeof(game_code.dll_path)
 	);
 
 	const char temp_dll_name[] = "handmade_temp.dll";
-	utils::strcat(
+	hm::strcat(
 		main_file_path, main_folder_path_size,
 		temp_dll_name, sizeof(temp_dll_name),
 		game_code.temp_dll_path, sizeof(game_code.temp_dll_path)
@@ -202,7 +219,11 @@ void Game_Code::dev_reload_if_recompiled() {
 }
 
 Input::Input() {
-	auto& input = *this;	
+	auto& input = *this;
+	hm::memset(&input, 0, sizeof(input));
+	input.XInputGetState = [](auto...){ return 1UL; };
+	input.XInputSetState = [](auto...){ return 1UL; };
+
 	HMODULE xinput_dll = LoadLibraryA("xinput1_3.dll");
 	if (!xinput_dll) return;
 
@@ -253,10 +274,10 @@ void Input::process_gamepad() {
 	process_gamepad_button(controller.move_left, 		state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_LEFT);
 	process_gamepad_button(controller.move_right, 		state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT);
 
-	process_gamepad_button(controller.action_up, 		state.Gamepad.wButtons & XINPUT_GAMEPAD_A);
-	process_gamepad_button(controller.action_down, 		state.Gamepad.wButtons & XINPUT_GAMEPAD_B);
+	process_gamepad_button(controller.action_up, 		state.Gamepad.wButtons & XINPUT_GAMEPAD_Y);
+	process_gamepad_button(controller.action_down, 		state.Gamepad.wButtons & XINPUT_GAMEPAD_A);
 	process_gamepad_button(controller.action_left, 		state.Gamepad.wButtons & XINPUT_GAMEPAD_X);
-	process_gamepad_button(controller.action_right, 	state.Gamepad.wButtons & XINPUT_GAMEPAD_Y);
+	process_gamepad_button(controller.action_right, 	state.Gamepad.wButtons & XINPUT_GAMEPAD_B);
 }
 
 f32 Input::get_normalized_stick_value(SHORT value, SHORT deadzone) {
@@ -291,8 +312,93 @@ void Input::process_keyboard_button(WPARAM key_code, bool is_pressed) {
 	button_state->transitions_count++;
 }
 
+Dev_Replayer::Dev_Replayer() {
+	hm::memset(this, 0, sizeof(*this));
+	auto& replayer = *this;
+	replayer.filename = "replay.hmi";
+}
+
+void Dev_Replayer::next_state(Game::Memory& game_memory, Game::Input& game_input) {
+	auto& replayer = *this;
+	replayer.state = (State)((replayer.state + 1) % State::Count);
+
+	switch (replayer.state) {
+		case State::Recording: {
+			replayer.start_record(game_memory);
+		} break;
+		case State::Playing: {
+			if (replayer.record_handle) {
+				CloseHandle(replayer.record_handle);
+				replayer.record_handle = nullptr;
+			}
+			replayer.start_play(game_memory);
+		} break;
+		case State::Idle: {
+			if (replayer.play_handle) {
+				CloseHandle(replayer.play_handle);
+				replayer.play_handle = nullptr;
+				game_input = {}; // принудительно отжимаем нажатые кнопки
+			}
+		} break;
+		case State::Count: break;
+	}
+}
+
+void Dev_Replayer::record_or_replace(Game::Memory& game_memory, Game::Input& game_input) {
+	auto& replayer = *this;
+
+	switch (replayer.state) {
+		case State::Recording: {
+			replayer.record(game_input);
+		} break;
+		case State::Playing: {
+			replayer.play(game_memory, game_input);
+		} break;
+		case State::Idle: case State::Count: break;
+	}
+}
+
+void Dev_Replayer::start_record(const Game::Memory& game_memory) {
+	auto& replayer = *this;
+	replayer.record_handle = CreateFileA(replayer.filename, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
+	uptr total_memory_size = game_memory.permanent_storage_size + game_memory.transient_storage_size;
+	DWORD bytes_to_write = (DWORD)total_memory_size;
+	assert(bytes_to_write == total_memory_size);
+	DWORD bytes_written;
+	WriteFile(replayer.record_handle, game_memory.permanent_storage, bytes_to_write, &bytes_written, nullptr);
+}
+
+void Dev_Replayer::start_play(Game::Memory& game_memory) {
+	auto& replayer = *this;
+	replayer.play_handle = CreateFileA(replayer.filename, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+	uptr total_memory_size = game_memory.permanent_storage_size + game_memory.transient_storage_size;
+	DWORD bytes_to_read = (DWORD)total_memory_size;
+	assert(bytes_to_read == total_memory_size);
+	DWORD bytes_read;
+	ReadFile(replayer.play_handle, game_memory.permanent_storage, bytes_to_read, &bytes_read, nullptr);
+}
+
+void Dev_Replayer::record(const Game::Input& game_input) {
+	auto& replayer = *this;
+	DWORD bytes_written;
+	WriteFile(replayer.record_handle, &game_input, sizeof(game_input), &bytes_written, nullptr);
+}
+
+void Dev_Replayer::play(Game::Memory& game_memory, Game::Input& game_input) {
+	auto& replayer = *this;
+	DWORD bytes_read;
+	ReadFile(replayer.play_handle, &game_input, sizeof(game_input), &bytes_read, nullptr);
+	if (!bytes_read) {
+		CloseHandle(replayer.play_handle);
+		replayer.play_handle = nullptr;
+		replayer.start_play(game_memory);
+		ReadFile(replayer.play_handle, &game_input, sizeof(game_input), &bytes_read, nullptr);
+	}
+}
+
 Screen::Screen() {
 	auto& screen = *this;
+	hm::memset(&screen, 0, sizeof(screen));
 	screen.bitmap_info = {
 		.bmiHeader = {
 			.biSize = sizeof(BITMAPINFOHEADER),
@@ -301,6 +407,7 @@ Screen::Screen() {
 			.biCompression = BI_RGB,
 		}
 	};
+
 	screen.resize(INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT);
 }
 
@@ -319,7 +426,7 @@ void Screen::resize(u32 width, u32 height) {
 	};
 }
 
-void Screen::display(HWND window, HDC device_context) const {
+void Screen::submit(HWND window, HDC device_context) const {
 	auto& screen = *this;
 	RECT client_rect;
 	GetClientRect(window, &client_rect);
@@ -349,6 +456,7 @@ void Screen::dev_draw_vertical(u32 x, u32 top, u32 bottom, u32 color) {
 
 Sound::Sound(HWND window) {
 	auto& sound = *this;
+	hm::memset(&sound, 0, sizeof(sound));
 	sound.wave_format.wFormatTag = WAVE_FORMAT_PCM;
 	sound.wave_format.nChannels = 2;
 	sound.wave_format.nSamplesPerSec = 48'000;
@@ -386,8 +494,8 @@ Sound::Sound(HWND window) {
 
 	void *region1, *region2; DWORD region1_size, region2_size;
 	if(!SUCCEEDED(sound.buffer->Lock(0, sound.get_buffer_size(), &region1, &region1_size, &region2, &region2_size, 0))) return;
-	utils::memset(region1, 0, region1_size);
-	utils::memset(region2, 0, region2_size);
+	hm::memset(region1, 0, region1_size);
+	hm::memset(region2, 0, region2_size);
 	sound.buffer->Unlock(region1, region1_size, region2, region2_size);
 
 	// TODO: address sanitizer падает после вызова Play(), по-видимому это известная проблема DirectSound
@@ -395,7 +503,7 @@ Sound::Sound(HWND window) {
 	sound.buffer->Play(0, 0, DSBPLAY_LOOPING);
 }
 
-void Sound::calc_samples_to_write(u64 flip_wall_clock) {
+void Sound::calc_samples_to_write(u64 flip_timestamp) {
 	// Определяем величину, на размер которой может отличаться время цикла (safety_bytes). Когда мы просыпаемся чтобы писать звук,
 	// смотрим где находится play_cursor и делаем прогноз где от будет находиться при смене кадра (expected_flip_play_cursor_unwrapped).
 	// Если write_cursor + safety_bytes < expected_flip_play_cursor_unwrapped, то это значит что у нас звуковая карта с маленькой задержкой
@@ -411,7 +519,7 @@ void Sound::calc_samples_to_write(u64 flip_wall_clock) {
 		return;
 	}
 
-	f32 from_flip_to_audio_seconds = get_seconds_elapsed(flip_wall_clock);
+	f32 from_flip_to_audio_seconds = get_seconds_elapsed(flip_timestamp);
 	DWORD expected_bytes_until_flip = sound.get_bytes_per_frame() - (DWORD)((f32)sound.wave_format.nAvgBytesPerSec * from_flip_to_audio_seconds);
 	DWORD expected_flip_play_cursor_unwrapped = play_cursor + expected_bytes_until_flip;
 	DWORD write_cursor_unwrapped = play_cursor < write_cursor
@@ -453,17 +561,17 @@ void Sound::submit() {
 	DWORD region2_size_samples = region2_size / sample_size;
 	sound.running_sample_index += region1_size_samples + region2_size_samples;
 
-	utils::memcpy(region1, sound.game_sound.samples, region1_size);
-	utils::memcpy(region2, sound.game_sound.samples + region1_size_samples, region2_size);
+	hm::memcpy(region1, sound.game_sound.samples, region1_size);
+	hm::memcpy(region2, sound.game_sound.samples + region1_size_samples, region2_size);
 	sound.buffer->Unlock(region1, region1_size, region2, region2_size);
 }
 
-void Sound::dev_sync_display(Screen& screen) {
+void Sound::dev_draw_sync(Screen& screen) {
 	auto& sound = *this;
 	if (!sound.buffer) return;
 
 	f32 horizontal_scaling = (f32)screen.game_screen.width / (f32)sound.get_buffer_size();
-	for (uptr i = 0; i < utils::array_count(sound.dev_markers); i++) {
+	for (uptr i = 0; i < hm::array_count(sound.dev_markers); i++) {
 		u32 top = 0;
 		u32 bottom = screen.game_screen.height * 1/4;
 		u32 historic_output_play_cursor_x = (u32)((f32)sound.dev_markers[i].output_play_cursor * horizontal_scaling);
@@ -473,7 +581,7 @@ void Sound::dev_sync_display(Screen& screen) {
 	}
 
 	if (!sound.game_sound.samples_to_write || !SUCCEEDED(sound.buffer->GetCurrentPosition(&sound.dev_markers[sound.dev_markers_index].flip_play_cursor, nullptr))) {
-		sound.dev_markers_index = (sound.dev_markers_index + 1) % utils::array_count(sound.dev_markers);
+		sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_count(sound.dev_markers);
 		return;
 	}
 
@@ -506,19 +614,19 @@ void Sound::dev_sync_display(Screen& screen) {
 		screen.dev_draw_vertical((flip_play_cursor_x + safety_bytes_x / 2) % screen.game_screen.width, top, bottom, 0x00ffffff);
 	}
 
-	// uptr dev_markers_index_unwrapped = sound.dev_markers_index == 0 ? utils::array_count(sound.dev_markers) : sound.dev_markers_index;
+	// uptr dev_markers_index_unwrapped = sound.dev_markers_index == 0 ? hm::array_count(sound.dev_markers) : sound.dev_markers_index;
 	// Debug_Marker prev_marker = sound.dev_markers[dev_markers_index_unwrapped - 1];
 	// DWORD prev_sound_filled_cursor = (prev_marker.output_location + prev_marker.output_byte_count) % sound.get_buffer_size();
 	// // сравниваем с половиной размера буфера чтобы учесть что prev_sound_filled_cursor мог сделать оборот
 	// assert(sound.play_cursor <= prev_sound_filled_cursor || sound.play_cursor > prev_sound_filled_cursor + sound.get_buffer_size() / 2);
 	
-	// f32 ms_per_frame = 1000 * frame_seconds_elapsed;
+	// f32 ms_per_frame = 1000 * flip_seconds_elapsed;
 	// u64 cycle_counter_elapsed = __rdtsc() - flip_cycle_counter;
 	// char output_buffer[256];
-	// sprintf_s(output_buffer, "frame ms: %.2f\n", frame_seconds_elapsed * 1000);
+	// sprintf_s(output_buffer, "frame ms: %.2f\n", flip_seconds_elapsed * 1000);
 	// OutputDebugStringA(output_buffer);
 
-	sound.dev_markers_index = (sound.dev_markers_index + 1) % utils::array_count(sound.dev_markers);
+	sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_count(sound.dev_markers);
 }
 
 namespace Platform {
