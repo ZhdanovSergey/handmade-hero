@@ -10,10 +10,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		.style = CS_HREDRAW | CS_VREDRAW,
 		.lpfnWndProc = WindowProc,
 		.hInstance = hInstance,
-		.lpszClassName = "Handmade_Hero_Window_Class",
+		.lpszClassName = "Handmade_Hero",
 	};
 	RegisterClassA(&window_class);
-
 	DWORD dwExStyle = 0;
 	// для отображения игры поверх редактора. Нужно еще раскомментировать SetLayeredWindowAttributes в WindowProc
 	// if (DEV_MODE) dwExStyle = WS_EX_TOPMOST | WS_EX_LAYERED;
@@ -32,6 +31,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		.transient_storage_size = 1_GB,
 		.permanent_storage = (u8*)VirtualAlloc(game_memory_base_address,
 			game_memory.permanent_storage_size + game_memory.transient_storage_size,
+			// TODO: использовать MEM_LARGE_PAGES и AdjustTokenPrivileges в 64-битном билде
 			MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE),
 		.transient_storage = game_memory.permanent_storage + game_memory.permanent_storage_size,
     	.read_file_sync = Platform::read_file_sync,
@@ -55,7 +55,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 					bool is_key_pressed  = !(message.lParam & (1u << 31));
 					bool was_key_pressed =   message.lParam & (1u << 30);
 					if (is_key_pressed == was_key_pressed) continue;
-
 					input.process_keyboard_button(message.wParam, is_key_pressed);
 					if constexpr (DEV_MODE) {
 						if (!is_key_pressed) continue;
@@ -75,14 +74,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
 		if constexpr (DEV_MODE) {
 			game_code.dev_reload_if_recompiled();
-
 			if (dev_is_pause) {
 				wait_until_end_of_frame(flip_timestamp);
 				flip_timestamp = get_timestamp();
 				flip_cycle_counter = __rdtsc();
 				continue;
 			};
-
 			dev_replayer.record_or_replace(game_memory, input.game_input);
 		}
 
@@ -137,6 +134,22 @@ static void wait_until_end_of_frame(u64 flip_timestamp) {
 	}
 }
 
+static void get_build_filepath(const char* filename, char* dest, uptr dest_size) {
+	char build_file_path[MAX_PATH]; // TODO: путь может быть более длинным
+	GetModuleFileNameA(nullptr, build_file_path, sizeof(build_file_path));
+	char* one_past_last_slash = build_file_path;
+	for (char* scan = build_file_path; *scan; scan++) {
+		if (*scan == '\\') one_past_last_slash = scan + 1;
+	}
+	uptr build_folder_path_size = (uptr)(one_past_last_slash - build_file_path);	
+	hm::strcat(
+		build_file_path, build_folder_path_size,
+		filename, hm::strlen(filename),
+		dest, dest_size
+	);
+
+}
+
 static FILETIME get_file_write_time(const char* filename) {
 	WIN32_FILE_ATTRIBUTE_DATA file_data;
 	if (!GetFileAttributesExA(filename, GetFileExInfoStandard, &file_data)) return {};
@@ -158,29 +171,8 @@ Game_Code::Game_Code() {
 	hm::memset(&game_code, 0, sizeof(game_code));
 	game_code.update_and_render = [](auto...){};
 	game_code.get_sound_samples = [](auto...){};
-
-	char main_file_path[MAX_PATH]; // TODO: путь может быть более длинным
-	GetModuleFileNameA(nullptr, main_file_path, sizeof(main_file_path));
-	char* one_past_last_slash = main_file_path;
-	for (char* scan = main_file_path; *scan; scan++) {
-		if (*scan == '\\') one_past_last_slash = scan + 1;
-	}
-	uptr main_folder_path_size = (uptr)(one_past_last_slash - main_file_path);
-	
-	const char dll_name[] = "handmade.dll";
-	hm::strcat(
-		main_file_path, main_folder_path_size,
-		dll_name, sizeof(dll_name),
-		game_code.dll_path, sizeof(game_code.dll_path)
-	);
-
-	const char temp_dll_name[] = "handmade_temp.dll";
-	hm::strcat(
-		main_file_path, main_folder_path_size,
-		temp_dll_name, sizeof(temp_dll_name),
-		game_code.temp_dll_path, sizeof(game_code.temp_dll_path)
-	);
-
+	get_build_filepath("handmade.dll", game_code.dll_path, sizeof(game_code.dll_path));
+	get_build_filepath("handmade_temp.dll", game_code.temp_dll_path, sizeof(game_code.temp_dll_path));
 	game_code.load();
 }
 
@@ -208,14 +200,13 @@ void Game_Code::load() {
 void Game_Code::dev_reload_if_recompiled() {
 	auto& game_code = *this;
 	FILETIME dll_write_time = get_file_write_time(game_code.dll_path);
-	bool is_dll_recompiled = CompareFileTime(&dll_write_time, &game_code.write_time) > 0;
-	if (is_dll_recompiled) {
-		FreeLibrary(game_code.dll);
-		game_code.dll = nullptr;
-		game_code.update_and_render = [](auto...){};
-		game_code.get_sound_samples = [](auto...){};
-		game_code.load();
-	}
+	if (!CompareFileTime(&dll_write_time, &game_code.write_time)) return;
+
+	FreeLibrary(game_code.dll);
+	game_code.dll = nullptr;
+	game_code.update_and_render = [](auto...){};
+	game_code.get_sound_samples = [](auto...){};
+	game_code.load();
 }
 
 Input::Input() {
@@ -223,10 +214,9 @@ Input::Input() {
 	hm::memset(&input, 0, sizeof(input));
 	input.XInputGetState = [](auto...){ return 1UL; };
 	input.XInputSetState = [](auto...){ return 1UL; };
-
 	HMODULE xinput_dll = LoadLibraryA("xinput1_3.dll");
 	if (!xinput_dll) return;
-
+	
 	input.XInputGetState = (Xinput_Get_State*)GetProcAddress(xinput_dll, "XInputGetState");
 	input.XInputSetState = (Xinput_Set_State*)GetProcAddress(xinput_dll, "XInputSetState");
 }
@@ -235,34 +225,40 @@ void Input::prepare_for_new_frame() {
 	auto& input = *this;
 
 	for (auto& controller : input.game_input.controllers) {
-		controller.start.transitions_count 			= 0;
-		controller.back.transitions_count  			= 0;
-		controller.left_shoulder.transitions_count  = 0;
+		controller.start.transitions_count = 0;
+		controller.back.transitions_count = 0;
+		controller.left_shoulder.transitions_count = 0;
 		controller.right_shoulder.transitions_count = 0;
 
-		controller.move_up.transitions_count    	= 0;
-		controller.move_down.transitions_count  	= 0;
-		controller.move_left.transitions_count  	= 0;
-		controller.move_right.transitions_count 	= 0;
+		controller.move_up.transitions_count = 0;
+		controller.move_down.transitions_count = 0;
+		controller.move_left.transitions_count = 0;
+		controller.move_right.transitions_count = 0;
 
-		controller.action_up.transitions_count		= 0;
-		controller.action_down.transitions_count	= 0;
-		controller.action_left.transitions_count	= 0;
-		controller.action_right.transitions_count	= 0;
+		controller.action_up.transitions_count = 0;
+		controller.action_down.transitions_count = 0;
+		controller.action_left.transitions_count = 0;
+		controller.action_right.transitions_count = 0;
 	}
 }
 
 void Input::process_gamepad() {
 	auto& input = *this;
 	XINPUT_STATE state;
-	if (input.XInputGetState(0, &state)) return;
-	
 	Game::Controller& controller = input.game_input.controllers[1];
-	controller.is_analog = true;
+	if (input.XInputGetState(0, &state)) {
+		controller.is_connected = false;
+		return;
+	};
+	
+	controller.is_connected = true;
 	controller.start_x = controller.end_x;
 	controller.start_y = controller.end_y;
-	controller.end_x = controller.min_x = controller.max_x = get_normalized_stick_value(state.Gamepad.sThumbLX, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
-	controller.end_y = controller.min_y = controller.max_y = get_normalized_stick_value(state.Gamepad.sThumbLY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+	controller.end_x = get_normalized_stick_value(state.Gamepad.sThumbLX, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+	controller.end_y = get_normalized_stick_value(state.Gamepad.sThumbLY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+	controller.average_x = controller.min_x = controller.max_x = controller.end_x;
+	controller.average_y = controller.min_y = controller.max_y = controller.end_y;
+	controller.is_analog = controller.average_x || controller.average_y;
 
 	process_gamepad_button(controller.start,			state.Gamepad.wButtons & XINPUT_GAMEPAD_START);
 	process_gamepad_button(controller.back,				state.Gamepad.wButtons & XINPUT_GAMEPAD_BACK);
@@ -292,6 +288,7 @@ void Input::process_gamepad_button(Game::Button_State& state, bool is_pressed) {
 void Input::process_keyboard_button(WPARAM key_code, bool is_pressed) {
 	auto& input = *this;
 	Game::Controller& controller = input.game_input.controllers[0];
+	controller.is_connected = true;
 	Game::Button_State* button_state;
 	switch (key_code) {
 		case VK_RETURN: button_state = &controller.start;			break;
@@ -313,9 +310,9 @@ void Input::process_keyboard_button(WPARAM key_code, bool is_pressed) {
 }
 
 Dev_Replayer::Dev_Replayer() {
-	hm::memset(this, 0, sizeof(*this));
 	auto& replayer = *this;
-	replayer.filename = "replay.hmi";
+	hm::memset(&replayer, 0, sizeof(replayer));
+	get_build_filepath("replay.hmi", replayer.replay_path, sizeof(replayer.replay_path));
 }
 
 void Dev_Replayer::next_state(Game::Memory& game_memory, Game::Input& game_input) {
@@ -346,7 +343,6 @@ void Dev_Replayer::next_state(Game::Memory& game_memory, Game::Input& game_input
 
 void Dev_Replayer::record_or_replace(Game::Memory& game_memory, Game::Input& game_input) {
 	auto& replayer = *this;
-
 	switch (replayer.state) {
 		case State::Recording: {
 			replayer.record(game_input);
@@ -360,7 +356,7 @@ void Dev_Replayer::record_or_replace(Game::Memory& game_memory, Game::Input& gam
 
 void Dev_Replayer::start_record(const Game::Memory& game_memory) {
 	auto& replayer = *this;
-	replayer.record_handle = CreateFileA(replayer.filename, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
+	replayer.record_handle = CreateFileA(replayer.replay_path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
 	uptr total_memory_size = game_memory.permanent_storage_size + game_memory.transient_storage_size;
 	DWORD bytes_to_write = (DWORD)total_memory_size;
 	assert(bytes_to_write == total_memory_size);
@@ -370,7 +366,7 @@ void Dev_Replayer::start_record(const Game::Memory& game_memory) {
 
 void Dev_Replayer::start_play(Game::Memory& game_memory) {
 	auto& replayer = *this;
-	replayer.play_handle = CreateFileA(replayer.filename, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+	replayer.play_handle = CreateFileA(replayer.replay_path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
 	uptr total_memory_size = game_memory.permanent_storage_size + game_memory.transient_storage_size;
 	DWORD bytes_to_read = (DWORD)total_memory_size;
 	assert(bytes_to_read == total_memory_size);
@@ -430,11 +426,16 @@ void Screen::submit(HWND window, HDC device_context) const {
 	auto& screen = *this;
 	RECT client_rect;
 	GetClientRect(window, &client_rect);
-
 	int dest_width = client_rect.right - client_rect.left;
 	int dest_height = client_rect.bottom - client_rect.top;
 	int src_width = (int)screen.game_screen.width;
 	int src_height = (int)screen.game_screen.height;
+
+	if (DEV_MODE) {
+		// выводим пиксели 1 к 1 на время разработки рендерера
+		dest_width = src_width;
+		dest_height = src_height;
+	}
 
 	StretchDIBits(device_context,
 		0, 0, dest_width, dest_height,
@@ -447,7 +448,6 @@ void Screen::submit(HWND window, HDC device_context) const {
 void Screen::dev_draw_vertical(u32 x, u32 top, u32 bottom, u32 color) {
 	auto& screen = *this;
 	u32* pixel = screen.game_screen.memory + top * screen.game_screen.width + x;
-
 	for (u32 y = top; y < bottom; y++) {
 		*pixel = color;
 		pixel += screen.game_screen.width;
@@ -585,7 +585,7 @@ void Sound::dev_draw_sync(Screen& screen) {
 		return;
 	}
 
-	Dev_Marker current_marker = sound.dev_markers[sound.dev_markers_index];
+	Dev_Sound_Time_Marker current_marker = sound.dev_markers[sound.dev_markers_index];
 	u32 expected_flip_play_cursor_x = (u32)((f32)current_marker.expected_flip_play_cursor * horizontal_scaling);
 	screen.dev_draw_vertical(expected_flip_play_cursor_x, 0, screen.game_screen.height, 0xffffff00);
 
@@ -615,7 +615,7 @@ void Sound::dev_draw_sync(Screen& screen) {
 	}
 
 	// uptr dev_markers_index_unwrapped = sound.dev_markers_index == 0 ? hm::array_count(sound.dev_markers) : sound.dev_markers_index;
-	// Debug_Marker prev_marker = sound.dev_markers[dev_markers_index_unwrapped - 1];
+	// Dev_Sound_Time_Marker prev_marker = sound.dev_markers[dev_markers_index_unwrapped - 1];
 	// DWORD prev_sound_filled_cursor = (prev_marker.output_location + prev_marker.output_byte_count) % sound.get_buffer_size();
 	// // сравниваем с половиной размера буфера чтобы учесть что prev_sound_filled_cursor мог сделать оборот
 	// assert(sound.play_cursor <= prev_sound_filled_cursor || sound.play_cursor > prev_sound_filled_cursor + sound.get_buffer_size() / 2);
@@ -630,7 +630,7 @@ void Sound::dev_draw_sync(Screen& screen) {
 }
 
 namespace Platform {
-	Read_File_Result read_file_sync(const char* file_name) {
+	Read_File_Result read_file_sync(const char* filename) {
 		Read_File_Result result = {};
 		u32 memory_size = 0;
 		void* memory = nullptr;
@@ -638,7 +638,7 @@ namespace Platform {
 		HANDLE heap_handle = GetProcessHeap();
 		if (!heap_handle) return result;
 
-		HANDLE file_handle = CreateFileA(file_name, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+		HANDLE file_handle = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
 		if (file_handle == INVALID_HANDLE_VALUE) return result;
 
 		LARGE_INTEGER file_size;
@@ -663,17 +663,15 @@ namespace Platform {
 			return result;
 	}
 
-	bool write_file_sync(const char* file_name, const void* memory, u32 memory_size) {
-		bool result = false;
-		HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
-		if (file_handle == INVALID_HANDLE_VALUE) return result;
+	bool write_file_sync(const char* filename, const void* memory, u32 memory_size) {
+		bool is_success = false;
+		HANDLE file_handle = CreateFileA(filename, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
+		if (file_handle == INVALID_HANDLE_VALUE) return is_success;
 
 		DWORD bytes_written;
-		if (WriteFile(file_handle, memory, memory_size, &bytes_written, nullptr) && (bytes_written == memory_size)) {
-			result = true;
-		}
+		is_success = WriteFile(file_handle, memory, memory_size, &bytes_written, nullptr) && (bytes_written == memory_size);
 		CloseHandle(file_handle);
-		return result;
+		return is_success;
 	}
 	
 	void free_file_memory(void* memory) {

@@ -21,6 +21,7 @@ static const u64 PERFORMANCE_FREQUENCY = []{
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow);
 static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 static void wait_until_end_of_frame(u64 flip_timestamp);
+static void get_build_filepath(const char* filename, char* dest, uptr dest_size);
 static FILETIME get_file_write_time(const char* filename);
 static inline f32 get_seconds_elapsed(u64 start);
 static inline u64 get_timestamp();
@@ -64,7 +65,7 @@ struct Dev_Replayer {
 	private:
 	enum State { Idle, Recording, Playing, Count };
 	State state;
-	const char* filename;
+	char replay_path[MAX_PATH];
 	HANDLE record_handle;
 	HANDLE play_handle;
 	void start_record(const Game::Memory& game_memory);
@@ -84,7 +85,7 @@ struct Screen {
 	BITMAPINFO bitmap_info;
 };
 
-struct Dev_Marker {
+struct Dev_Sound_Time_Marker {
 	DWORD output_play_cursor;
 	DWORD output_write_cursor;
 	DWORD output_location;
@@ -104,7 +105,7 @@ struct Sound {
 	WAVEFORMATEX wave_format;
 	IDirectSoundBuffer* buffer;
 	DWORD running_sample_index;
-	Dev_Marker dev_markers[TARGET_UPDATE_FREQUENCY - 1];
+	Dev_Sound_Time_Marker dev_markers[TARGET_UPDATE_FREQUENCY - 1];
 	uptr dev_markers_index;
 	DWORD get_buffer_size() 	const { return wave_format.nAvgBytesPerSec; }
 	DWORD get_bytes_per_frame() const { return wave_format.nAvgBytesPerSec / TARGET_UPDATE_FREQUENCY; }

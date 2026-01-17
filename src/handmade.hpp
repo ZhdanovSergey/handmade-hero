@@ -17,10 +17,12 @@ namespace Game {
 	};
 
 	struct Controller {
+		bool is_connected;
 		bool is_analog;
 
 		f32 start_x, start_y;
 		f32 end_x, end_y;
+		f32 average_x, average_y;
 		f32 min_x, min_y;
 		f32 max_x, max_y;
 

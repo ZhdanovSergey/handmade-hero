@@ -37,8 +37,7 @@ namespace Game {
 	};
 
 	extern "C" void get_sound_samples(Memory& memory, Sound_Buffer& sound_buffer) {
-		// f32 volume = 5000.0f;
-		f32 volume = 0;
+		f32 volume = 5000.0f;
 		Game_State& game_state = *(Game_State*)memory.permanent_storage;
 		f32 samples_per_wave_period = (f32)(sound_buffer.samples_per_second / game_state.tone_hz);
 		Sound_Sample* sample = sound_buffer.samples;

@@ -1,8 +1,7 @@
 #pragma once
 
-// TODO: подключить что-нибудь для вывода дебаг инфы за пределами платформенного слоя (OutputDebugStringA через Game::Memory?)
-// TODO: оживить windows xp билд (возможно нужно будет добавить WINAPI для xinput)
-
+// TODO: оживить windows xp билд
+// TODO: подключить что-нибудь для вывода инфы в консоль вне платформенного слоя
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -39,21 +38,27 @@ namespace hm {
     static constexpr uptr array_count(const T (&)[N]) { return N; }
 
     template <typename T>
-    static T min(T a, T b) { return a < b ? a : b; }
+    static inline T min(T a, T b) { return a < b ? a : b; }
 
-    static void memcpy(void* dest, const void* src, uptr size) {
+    static inline void memcpy(void* dest, const void* src, uptr size) {
         for (uptr i = 0; i < size; i++) {
             ((u8*)dest)[i] = ((u8*)src)[i];
         }
     }
 
-    static void memset(void* dest, u8 value, uptr size) {
+    static inline void memset(void* dest, u8 value, uptr size) {
         for (uptr i = 0; i < size; i++) {
             ((u8*)dest)[i] = value;
         }
     }
 
-    static void strcat(
+    static inline uptr strlen(const char* src) {
+        uptr length = 0;
+        while (*src++) { length++; }
+        return length + 1; // учитываем 0 чтобы результат был такой же как у sizeof
+    }
+
+    static inline void strcat(
         const char* src1, uptr src1_size,
         const char* src2, uptr src2_size,
               char* dest, uptr dest_size) {
@@ -73,10 +78,10 @@ namespace Platform {
         void* memory;
     };
 
-    Read_File_Result read_file_sync(const char* file_name);
+    Read_File_Result read_file_sync(const char* filename);
     using Read_File_Sync = decltype(read_file_sync);
 
-    bool write_file_sync(const char* file_name, const void* memory, u32 memory_size);
+    bool write_file_sync(const char* filename, const void* memory, u32 memory_size);
     using Write_File_Sync = decltype(write_file_sync);
 
     void free_file_memory(void* memory);
