@@ -2,7 +2,7 @@
 
 namespace Game {
 	extern "C" void update_and_render(const Input& input, Memory& memory, Screen_Buffer& screen_buffer) {
-		assert(sizeof(Game_State) <= (u64)memory.permanent_size);
+		assert(sizeof(Game_State) <= (u32)memory.permanent_size);
 		Game_State& game_state = *(Game_State*)memory.permanent_storage;
 
 		if (!memory.is_initialized) {

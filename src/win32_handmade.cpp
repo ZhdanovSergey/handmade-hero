@@ -39,7 +39,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	// u64 flip_cycle_counter = __rdtsc();
 
 	while (true) {
-		input.prepare_for_new_frame();
+		input.game_input.reset_counters();
 		input.process_gamepad();
 		if constexpr (DEV_MODE) input.dev_process_mouse(window);
 
@@ -160,7 +160,7 @@ static inline i64 get_timestamp() {
 
 Game_Code::Game_Code() {
 	auto& game_code = *this;
-	hm::memset(&game_code, 0, sizeof(game_code));
+	memset(&game_code, 0, sizeof(game_code));
 	game_code.update_and_render = [](auto...){};
 	game_code.get_sound_samples = [](auto...){};
 	get_build_file_path("handmade.dll", game_code.dll_path, sizeof(game_code.dll_path));
@@ -203,7 +203,7 @@ void Game_Code::dev_reload_if_recompiled() {
 
 Input::Input() {
 	auto& input = *this;
-	hm::memset(&input, 0, sizeof(input));
+	memset(&input, 0, sizeof(input));
 	input.XInputGetState = [](auto...){ return 1UL; };
 	input.XInputSetState = [](auto...){ return 1UL; };
 	HMODULE xinput_dll = LoadLibraryA("xinput1_3.dll");
@@ -211,32 +211,6 @@ Input::Input() {
 	
 	input.XInputGetState = (Xinput_Get_State*)GetProcAddress(xinput_dll, "XInputGetState");
 	input.XInputSetState = (Xinput_Set_State*)GetProcAddress(xinput_dll, "XInputSetState");
-}
-
-void Input::prepare_for_new_frame() {
-	auto& input = *this;
-
-	if constexpr (DEV_MODE) {
-		input.game_input.dev_mouse.left_button.transitions_count = 0;
-		input.game_input.dev_mouse.right_button.transitions_count = 0;
-	}
-
-	for (auto& controller : input.game_input.controllers) {
-		controller.start.transitions_count = 0;
-		controller.back.transitions_count = 0;
-		controller.left_shoulder.transitions_count = 0;
-		controller.right_shoulder.transitions_count = 0;
-
-		controller.move_up.transitions_count = 0;
-		controller.move_down.transitions_count = 0;
-		controller.move_left.transitions_count = 0;
-		controller.move_right.transitions_count = 0;
-
-		controller.action_up.transitions_count = 0;
-		controller.action_down.transitions_count = 0;
-		controller.action_left.transitions_count = 0;
-		controller.action_right.transitions_count = 0;
-	}
 }
 
 void Input::process_gamepad() {
@@ -329,7 +303,7 @@ void Input::dev_process_mouse(HWND window) {
 
 Dev_Replayer::Dev_Replayer(const Game::Memory& game_memory) {
 	auto& replayer = *this;
-	hm::memset(&replayer, 0, sizeof(replayer));
+	memset(&replayer, 0, sizeof(replayer));
 	if constexpr (!DEV_MODE) return;
 
 	get_build_file_path("replay_state.hmi", replayer.state_path, sizeof(replayer.state_path));
@@ -409,7 +383,7 @@ void Dev_Replayer::play(Game::Memory& game_memory, Game::Input& game_input) {
 
 Screen::Screen() {
 	auto& screen = *this;
-	hm::memset(&screen, 0, sizeof(screen));
+	memset(&screen, 0, sizeof(screen));
 	screen.bitmap_info = {
 		.bmiHeader = {
 			.biSize = sizeof(BITMAPINFOHEADER),
@@ -470,13 +444,13 @@ void Screen::dev_draw_vertical(i32 x, i32 top, i32 bottom, u32 color) {
 
 Sound::Sound(HWND window) {
 	auto& sound = *this;
-	hm::memset(&sound, 0, sizeof(sound));
+	memset(&sound, 0, sizeof(sound));
 	sound.wave_format.wFormatTag = WAVE_FORMAT_PCM;
 	sound.wave_format.nChannels = 2;
 	sound.wave_format.nSamplesPerSec = 48'000;
 	sound.wave_format.nBlockAlign = sizeof(Game::Sound_Sample);
 	sound.wave_format.nAvgBytesPerSec = sound.wave_format.nBlockAlign * sound.wave_format.nSamplesPerSec;
-	sound.wave_format.wBitsPerSample = (WORD)(sound.wave_format.nBlockAlign / sound.wave_format.nChannels * 8);
+	sound.wave_format.wBitsPerSample = sound.wave_format.nBlockAlign / sound.wave_format.nChannels * 8U;
 	sound.game_sound.samples_per_second = (i32)sound.wave_format.nSamplesPerSec;
 	sound.game_sound.samples = (Game::Sound_Sample*)VirtualAlloc(nullptr, sound.get_buffer_size(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
@@ -540,15 +514,15 @@ void Sound::calc_samples_to_write(i64 flip_timestamp) {
 		: write_cursor_unwrapped + sound.get_bytes_per_frame() + sound.get_safety_bytes();
 
 	DWORD target_cursor = target_cursor_unwrapped % sound.get_buffer_size();
-	DWORD output_byte_count = sound.get_output_location() < target_cursor ? 0 : sound.get_buffer_size();
-	output_byte_count += target_cursor - sound.get_output_location();
+	DWORD output_byte_count = sound.output_location < target_cursor ? 0 : sound.get_buffer_size();
+	output_byte_count += target_cursor - sound.output_location;
 	sound.game_sound.samples_to_write = (i32)(output_byte_count / sound.wave_format.nBlockAlign);
 
 	if constexpr (DEV_MODE) {
 		sound.dev_markers[sound.dev_markers_index] = {
 			.output_play_cursor = play_cursor,
 			.output_write_cursor = write_cursor,
-			.output_location = sound.get_output_location(),
+			.output_location = sound.output_location,
 			.output_byte_count = output_byte_count,
 			.expected_flip_play_cursor = expected_flip_play_cursor_unwrapped % sound.get_buffer_size()
 		};
@@ -558,19 +532,15 @@ void Sound::calc_samples_to_write(i64 flip_timestamp) {
 void Sound::submit() {
 	auto& sound = *this;
 	void *region1, *region2; DWORD region1_size, region2_size;
-	if (!sound.buffer || !SUCCEEDED(sound.buffer->Lock(sound.get_output_location(),
+	if (!sound.buffer || !SUCCEEDED(sound.buffer->Lock(sound.output_location,
 		(DWORD)(sound.game_sound.samples_to_write * sound.wave_format.nBlockAlign),
 		&region1, &region1_size, &region2, &region2_size, 0))) {
 		return;
 	}
 
-	DWORD sample_size = sizeof(*(sound.game_sound.samples));
-	DWORD region1_size_samples = region1_size / sample_size;
-	DWORD region2_size_samples = region2_size / sample_size;
-	sound.running_sample_index += region1_size_samples + region2_size_samples;
-
+	sound.output_location = (sound.output_location + region1_size + region2_size) % get_buffer_size();
 	memcpy(region1, sound.game_sound.samples, region1_size);
-	memcpy(region2, sound.game_sound.samples + region1_size_samples, region2_size);
+	memcpy(region2, (u8*)sound.game_sound.samples + region1_size, region2_size);
 	sound.buffer->Unlock(region1, region1_size, region2, region2_size);
 }
 
