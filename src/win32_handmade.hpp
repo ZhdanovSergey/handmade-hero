@@ -11,19 +11,19 @@ using Direct_Sound_Create = HRESULT WINAPI(LPGUID lpGuid, LPDIRECTSOUND* ppDS, L
 using Xinput_Get_State = DWORD(DWORD dwUserIndex, XINPUT_STATE *pState);
 using Xinput_Set_State = DWORD(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration);
 
-static const u32 INITIAL_WINDOW_WIDTH = 1280;
-static const u32 INITIAL_WINDOW_HEIGHT = 720;
+static const i32 INITIAL_WINDOW_WIDTH = 1280;
+static const i32 INITIAL_WINDOW_HEIGHT = 720;
 static const UINT SLEEP_GRANULARITY_MS = timeBeginPeriod(1) == TIMERR_NOERROR ? 1 : 0;
-static const u64 PERFORMANCE_FREQUENCY = []{
+static const i64 PERFORMANCE_FREQUENCY = []{
 	LARGE_INTEGER query_result;
 	QueryPerformanceFrequency(&query_result);
-	return (u64)query_result.QuadPart;
+	return query_result.QuadPart;
 }();
 
 static const f32 TARGET_SECONDS_PER_FRAME = []{
-	u32 default_frame_rate = 33;
+	i32 default_frame_rate = 33;
     HDC device_context = GetDC(0);
-    u32 refresh_rate = (u32)GetDeviceCaps(device_context, VREFRESH);
+    i32 refresh_rate = GetDeviceCaps(device_context, VREFRESH);
     ReleaseDC(0, device_context);
 	if (refresh_rate == 0 || refresh_rate == 1) return 1.0f / (f32)default_frame_rate;
 
@@ -36,11 +36,11 @@ static const f32 TARGET_SECONDS_PER_FRAME = []{
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow);
 static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
-static void wait_until_end_of_frame(u64 flip_timestamp);
-static void get_build_file_path(const char* file_name, char* dest, usize dest_size);
+static void wait_until_end_of_frame(i64 flip_timestamp);
+static void get_build_file_path(const char* file_name, char* dest, i32 dest_size);
 static FILETIME get_file_write_time(const char* file_name);
-static inline f32 get_seconds_elapsed(u64 start);
-static inline u64 get_timestamp();
+static inline f32 get_seconds_elapsed(i64 start);
+static inline i64 get_timestamp();
 
 struct Game_Code {
 	Game_Code();
@@ -93,9 +93,9 @@ struct Dev_Replayer {
 struct Screen {
 	Screen();
 	Game::Screen_Buffer game_screen;
-	void resize(u32 width, u32 height);
+	void resize(i32 width, i32 height);
 	void submit(HWND window, HDC device_context) const;
-	void dev_draw_vertical(u32 x, u32 top, u32 bottom, u32 color);
+	void dev_draw_vertical(i32 x, i32 top, i32 bottom, u32 color);
 
 	private:
 	BITMAPINFO bitmap_info;
@@ -113,7 +113,7 @@ struct Dev_Sound_Time_Marker {
 struct Sound {
 	Sound(HWND window);
 	Game::Sound_Buffer game_sound;
-	void calc_samples_to_write(u64 flip_timestamp);
+	void calc_samples_to_write(i64 flip_timestamp);
 	void submit();
 	void dev_draw_sync(Screen& screen);
 
@@ -122,7 +122,7 @@ struct Sound {
 	IDirectSoundBuffer* buffer;
 	DWORD running_sample_index;
 	Dev_Sound_Time_Marker dev_markers[32]; // ожидаемый фреймрейт - 1
-	usize dev_markers_index;
+	i32 dev_markers_index;
 	DWORD get_buffer_size() 	const { return wave_format.nAvgBytesPerSec; }
 	DWORD get_bytes_per_frame() const { return (DWORD)((f32)wave_format.nAvgBytesPerSec * TARGET_SECONDS_PER_FRAME); }
 	DWORD get_output_location()	const { return running_sample_index * wave_format.nBlockAlign % get_buffer_size(); }

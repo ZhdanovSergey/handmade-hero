@@ -5,15 +5,15 @@
 namespace Game {
 	struct Game_State {
 		f32 t_sine;
-		u32 tone_hz;
-		u32 player_x, player_y;
-		u32 player_size;
-		u32 player_velocity;
+		i32 tone_hz;
+		i32 player_x, player_y;
+		i32 player_size;
+		i32 player_velocity;
 	};
 
 	struct Button_State {
 		bool is_pressed;
-		u32 transitions_count;
+		i32 transitions_count;
 	};
 
 	struct Controller {
@@ -45,20 +45,20 @@ namespace Game {
 
 	struct Memory {
 		bool is_initialized;
-		usize permanent_size;
-		usize transient_size;
+		i32 permanent_size;
+		i64 transient_size;
 		u8* permanent_storage;
 		u8* transient_storage;
     	Platform::Read_File_Sync* read_file_sync;
     	Platform::Write_File_Sync* write_file_sync;
     	Platform::Free_File_Memory* free_file_memory;
 
-		usize get_total_size() const { return permanent_size + transient_size; }
+		i64 get_total_size() const { return permanent_size + transient_size; }
 	};
 
 	struct Screen_Buffer {
-		u32 width, height;
-		u32* memory;
+		i32 width, height;
+		u32* pixels;
 	};
 
 	struct Sound_Sample {
@@ -66,8 +66,8 @@ namespace Game {
 	};
 
 	struct Sound_Buffer {
-		u32 samples_per_second;
-		u32 samples_to_write;
+		i32 samples_per_second;
+		i32 samples_to_write;
 		Sound_Sample* samples;
 	};
 
