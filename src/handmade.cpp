@@ -2,7 +2,7 @@
 
 namespace Game {
 	extern "C" void update_and_render(const Input& input, Memory& memory, Screen_Buffer& screen_buffer) {
-		assert(sizeof(Game_State) <= memory.permanent_storage_size);
+		assert(sizeof(Game_State) <= memory.permanent_size);
 		Game_State& game_state = *(Game_State*)memory.permanent_storage;
 
 		if (!memory.is_initialized) {
@@ -33,7 +33,13 @@ namespace Game {
 		}
 
 		render_gradient(game_state, screen_buffer);
-		render_player(game_state, screen_buffer);
+		render_rectangle(screen_buffer, (i32)game_state.player_x, (i32)game_state.player_y, (i32)game_state.player_size, (i32)game_state.player_size, 0x00ffffff);
+
+		if constexpr (DEV_MODE) {
+			render_rectangle(screen_buffer, input.dev_mouse.x, input.dev_mouse.y, 10, 10, 0x00ff00ff);
+			if (input.dev_mouse.left_button.is_pressed) render_rectangle(screen_buffer, 10, 10, 10, 10, 0x00ff00ff);
+			if (input.dev_mouse.right_button.is_pressed) render_rectangle(screen_buffer, 30, 10, 10, 10, 0x00ff00ff);
+		}
 	};
 
 	extern "C" void get_sound_samples(Memory& memory, Sound_Buffer& sound_buffer) {
@@ -43,7 +49,7 @@ namespace Game {
 		Sound_Sample* sample = sound_buffer.samples;
 
 		for (u32 i = 0; i < sound_buffer.samples_to_write; i++) {
-			s16 value = (s16)(std::sinf(game_state.t_sine) * volume);
+			i16 value = (i16)(std::sinf(game_state.t_sine) * volume);
 			game_state.t_sine += DOUBLE_PI32 / samples_per_wave_period;
 			if (game_state.t_sine >= DOUBLE_PI32) game_state.t_sine -= DOUBLE_PI32;
 			*sample++ = {
@@ -62,16 +68,22 @@ namespace Game {
 		}
 	};
 
-	static void render_player(const Game_State& game_state, Screen_Buffer& screen_buffer) {
-		u32 top = game_state.player_y;
-		u32 bottom = game_state.player_y + game_state.player_size;
-		u32 left = game_state.player_x;
-		u32 right = game_state.player_x + game_state.player_size;
+	static void render_rectangle(Screen_Buffer& screen_buffer, i32 x, i32 y, i32 width, i32 height, u32 color) {
+		i32 top = y;
+		i32 bottom = top + height;
+		i32 left = x;
+		i32 right = left + width;
 
-		for (u32 y = top; y < bottom; y++) {
-			for (u32 x = left; x < right; x++) {
-				u32* pixel = screen_buffer.memory + y * screen_buffer.width + x;
-				*pixel = 0x00ffffff;
+		top    = top    < 0 ? 0 : top    > (i32)screen_buffer.height ? (i32)screen_buffer.height : top;
+		bottom = bottom < 0 ? 0 : bottom > (i32)screen_buffer.height ? (i32)screen_buffer.height : bottom;
+
+		left  = left  < 0 ? 0 : left  > (i32)screen_buffer.width ? (i32)screen_buffer.width : left;
+		right = right < 0 ? 0 : right > (i32)screen_buffer.width ? (i32)screen_buffer.width : right;
+
+		for (i32 pixel_y = top; pixel_y < bottom; pixel_y++) {
+			for (i32 pixel_x = left; pixel_x < right; pixel_x++) {
+				u32* pixel = screen_buffer.memory + pixel_y * (i32)screen_buffer.width + pixel_x;
+				*pixel = color;
 			}
 		}
 	};

@@ -32,20 +32,28 @@ namespace Game {
 		Button_State action_up, action_down, action_left, action_right;
 	};
 
+	struct Dev_Mouse {
+		Button_State left_button;
+		Button_State right_button;
+		i32 x, y;
+	};
+
 	struct Input {
 		Controller controllers[2];
+		Dev_Mouse dev_mouse;
 	};
 
 	struct Memory {
 		bool is_initialized;
-		uptr permanent_storage_size;
-		uptr transient_storage_size;
+		usize permanent_size;
+		usize transient_size;
 		u8* permanent_storage;
 		u8* transient_storage;
-
     	Platform::Read_File_Sync* read_file_sync;
     	Platform::Write_File_Sync* write_file_sync;
     	Platform::Free_File_Memory* free_file_memory;
+
+		usize get_total_size() const { return permanent_size + transient_size; }
 	};
 
 	struct Screen_Buffer {
@@ -54,7 +62,7 @@ namespace Game {
 	};
 
 	struct Sound_Sample {
-		s16 left, right;
+		i16 left, right;
 	};
 
 	struct Sound_Buffer {
@@ -72,4 +80,5 @@ namespace Game {
 
 	static void render_gradient(const Game_State& game_state, Screen_Buffer& screen_buffer);
 	static void render_player(const Game_State& game_state, Screen_Buffer& screen_buffer);
+	static void render_rectangle(Screen_Buffer& screen_buffer, i32 x, i32 y, i32 width, i32 height, u32 color);
 }

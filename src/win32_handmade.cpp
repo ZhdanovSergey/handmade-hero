@@ -13,31 +13,26 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		.lpszClassName = "Handmade_Hero",
 	};
 	RegisterClassA(&window_class);
-	DWORD dwExStyle = 0;
-	// для отображения игры поверх редактора. Нужно еще раскомментировать SetLayeredWindowAttributes в WindowProc
-	// if (DEV_MODE) dwExStyle = WS_EX_TOPMOST | WS_EX_LAYERED;
-	HWND window = CreateWindowExA(dwExStyle, window_class.lpszClassName, "Handmade Hero", WS_TILEDWINDOW | WS_VISIBLE,
+	HWND window = CreateWindowExA(0, window_class.lpszClassName, "Handmade Hero", WS_TILEDWINDOW | WS_VISIBLE,
 		CW_USEDEFAULT, CW_USEDEFAULT, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT, nullptr, nullptr, hInstance, nullptr);
-
-	Input input = Input();
-	Sound sound = Sound(window);
-	Game_Code game_code = Game_Code();
-	Dev_Replayer dev_replayer = Dev_Replayer();
 	
 	void* game_memory_base_address = nullptr;
 	if constexpr (DEV_MODE && UINTPTR_MAX == UINT64_MAX) game_memory_base_address = (void*)1024_GB;
 	Game::Memory game_memory = {
-		.permanent_storage_size = 64_MB,
-		.transient_storage_size = 1_GB,
-		.permanent_storage = (u8*)VirtualAlloc(game_memory_base_address,
-			game_memory.permanent_storage_size + game_memory.transient_storage_size,
-			// TODO: использовать MEM_LARGE_PAGES и AdjustTokenPrivileges в 64-битном билде
-			MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE),
-		.transient_storage = game_memory.permanent_storage + game_memory.permanent_storage_size,
+		.permanent_size = 64_MB,
+		.transient_size = 1_GB,
+		// TODO: использовать MEM_LARGE_PAGES и AdjustTokenPrivileges в 64-битном билде
+		.permanent_storage = (u8*)VirtualAlloc(game_memory_base_address, game_memory.get_total_size(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE),
+		.transient_storage = game_memory.permanent_storage + game_memory.permanent_size,
     	.read_file_sync = Platform::read_file_sync,
     	.write_file_sync = Platform::write_file_sync,
     	.free_file_memory = Platform::free_file_memory,
 	};
+
+	Input input = Input();
+	Sound sound = Sound(window);
+	Game_Code game_code = Game_Code();
+	Dev_Replayer dev_replayer = Dev_Replayer(game_memory);
 
 	bool dev_is_pause = false;
 	u64 flip_timestamp = get_timestamp();
@@ -46,14 +41,15 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	while (true) {
 		input.prepare_for_new_frame();
 		input.process_gamepad();
+		if constexpr (DEV_MODE) input.dev_process_mouse(window);
 
 		MSG message;
 		while (PeekMessageA(&message, nullptr, 0, 0, PM_REMOVE)) {
 			switch (message.message) {
 				case WM_KEYUP:
 				case WM_KEYDOWN: {
-					bool is_key_pressed  = !(message.lParam & (1u << 31));
-					bool was_key_pressed =   message.lParam & (1u << 30);
+					bool is_key_pressed  = !(message.lParam & (1U << 31));
+					bool was_key_pressed =   message.lParam & (1U << 30);
 					if (is_key_pressed == was_key_pressed) continue;
 					input.process_keyboard_button(message.wParam, is_key_pressed);
 					if constexpr (DEV_MODE) {
@@ -92,8 +88,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		flip_timestamp = get_timestamp();
 		flip_cycle_counter = __rdtsc();
 
+		// if constexpr (DEV_MODE) sound.dev_draw_sync(global_screen);
 		HDC device_context = GetDC(window);
-		if constexpr (DEV_MODE) sound.dev_draw_sync(global_screen);
 		global_screen.submit(window, device_context);
 		ReleaseDC(window, device_context);
 	}
@@ -107,10 +103,6 @@ static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
 			global_screen.submit(window, device_context);
 			EndPaint(window, &paint);
 		} break;
-		// для отображения игры поверх редактора. Нужно еще раскомментировать dwExStyle в wWinMain
-		// case WM_ACTIVATEAPP: {
-		// 	if constexpr (DEV_MODE) SetLayeredWindowAttributes(window, RGB(0, 0, 0), wParam ? 255 : 64, LWA_ALPHA);
-		// } break;
 		case WM_DESTROY: {
 			PostQuitMessage(0);
 		} break;
@@ -134,25 +126,25 @@ static void wait_until_end_of_frame(u64 flip_timestamp) {
 	}
 }
 
-static void get_build_filepath(const char* filename, char* dest, uptr dest_size) {
+static void get_build_file_path(const char* file_name, char* dest, usize dest_size) {
 	char build_file_path[MAX_PATH]; // TODO: путь может быть более длинным
 	GetModuleFileNameA(nullptr, build_file_path, sizeof(build_file_path));
 	char* one_past_last_slash = build_file_path;
 	for (char* scan = build_file_path; *scan; scan++) {
 		if (*scan == '\\') one_past_last_slash = scan + 1;
 	}
-	uptr build_folder_path_size = (uptr)(one_past_last_slash - build_file_path);	
+	usize build_folder_path_size = (usize)(one_past_last_slash - build_file_path);
 	hm::strcat(
 		build_file_path, build_folder_path_size,
-		filename, hm::strlen(filename),
+		file_name, hm::strlen(file_name),
 		dest, dest_size
 	);
 
 }
 
-static FILETIME get_file_write_time(const char* filename) {
+static FILETIME get_file_write_time(const char* file_name) {
 	WIN32_FILE_ATTRIBUTE_DATA file_data;
-	if (!GetFileAttributesExA(filename, GetFileExInfoStandard, &file_data)) return {};
+	if (!GetFileAttributesExA(file_name, GetFileExInfoStandard, &file_data)) return {};
 	return file_data.ftLastWriteTime;
 }
 
@@ -171,8 +163,8 @@ Game_Code::Game_Code() {
 	hm::memset(&game_code, 0, sizeof(game_code));
 	game_code.update_and_render = [](auto...){};
 	game_code.get_sound_samples = [](auto...){};
-	get_build_filepath("handmade.dll", game_code.dll_path, sizeof(game_code.dll_path));
-	get_build_filepath("handmade_temp.dll", game_code.temp_dll_path, sizeof(game_code.temp_dll_path));
+	get_build_file_path("handmade.dll", game_code.dll_path, sizeof(game_code.dll_path));
+	get_build_file_path("handmade_temp.dll", game_code.temp_dll_path, sizeof(game_code.temp_dll_path));
 	game_code.load();
 }
 
@@ -223,6 +215,11 @@ Input::Input() {
 
 void Input::prepare_for_new_frame() {
 	auto& input = *this;
+
+	if constexpr (DEV_MODE) {
+		input.game_input.dev_mouse.left_button.transitions_count = 0;
+		input.game_input.dev_mouse.right_button.transitions_count = 0;
+	}
 
 	for (auto& controller : input.game_input.controllers) {
 		controller.start.transitions_count = 0;
@@ -309,86 +306,104 @@ void Input::process_keyboard_button(WPARAM key_code, bool is_pressed) {
 	button_state->transitions_count++;
 }
 
-Dev_Replayer::Dev_Replayer() {
+void Input::dev_process_mouse(HWND window) {
+	auto& input = *this;
+	Game::Dev_Mouse& mouse = input.game_input.dev_mouse;
+
+	POINT point;
+	GetCursorPos(&point);
+	ScreenToClient(window, &point);
+	mouse.x = (i32)point.x;
+	mouse.y = (i32)point.y;
+
+	if (mouse.left_button.is_pressed != bool(GetKeyState(VK_LBUTTON) & (1 << 15))) {
+		mouse.left_button.is_pressed = !mouse.left_button.is_pressed;
+		mouse.left_button.transitions_count++;
+	}
+
+	if (mouse.right_button.is_pressed != bool(GetKeyState(VK_RBUTTON) & (1 << 15))) {
+		mouse.right_button.is_pressed = !mouse.right_button.is_pressed;
+		mouse.right_button.transitions_count++;
+	}
+}
+
+Dev_Replayer::Dev_Replayer(const Game::Memory& game_memory) {
 	auto& replayer = *this;
 	hm::memset(&replayer, 0, sizeof(replayer));
-	get_build_filepath("replay.hmi", replayer.replay_path, sizeof(replayer.replay_path));
+	if constexpr (!DEV_MODE) return;
+
+	get_build_file_path("replay_state.hmi", replayer.state_path, sizeof(replayer.state_path));
+	get_build_file_path("replay_input.hmi", replayer.input_path, sizeof(replayer.input_path));
+	replayer.state_handle = CreateFileA(replayer.state_path, GENERIC_READ | GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_FLAG_NO_BUFFERING, nullptr);
+	replayer.input_handle = CreateFileA(replayer.input_path, GENERIC_READ | GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
 }
 
 void Dev_Replayer::next_state(Game::Memory& game_memory, Game::Input& game_input) {
 	auto& replayer = *this;
-	replayer.state = (State)((replayer.state + 1) % State::Count);
+	replayer.replayer_state = (Dev_Replayer_State)((replayer.replayer_state + 1) % Dev_Replayer_State::Count);
 
-	switch (replayer.state) {
-		case State::Recording: {
+	switch (replayer.replayer_state) {
+		case Dev_Replayer_State::Recording: {
 			replayer.start_record(game_memory);
 		} break;
-		case State::Playing: {
-			if (replayer.record_handle) {
-				CloseHandle(replayer.record_handle);
-				replayer.record_handle = nullptr;
-			}
+		case Dev_Replayer_State::Playing: {
 			replayer.start_play(game_memory);
 		} break;
-		case State::Idle: {
-			if (replayer.play_handle) {
-				CloseHandle(replayer.play_handle);
-				replayer.play_handle = nullptr;
-				game_input = {}; // принудительно отжимаем нажатые кнопки
-			}
+		case Dev_Replayer_State::Idle: {
+			game_input = {}; // принудительно отжимаем нажатые кнопки
 		} break;
-		case State::Count: break;
+		case Dev_Replayer_State::Count: break;
 	}
 }
 
 void Dev_Replayer::record_or_replace(Game::Memory& game_memory, Game::Input& game_input) {
 	auto& replayer = *this;
-	switch (replayer.state) {
-		case State::Recording: {
+	switch (replayer.replayer_state) {
+		case Dev_Replayer_State::Recording: {
 			replayer.record(game_input);
 		} break;
-		case State::Playing: {
+		case Dev_Replayer_State::Playing: {
 			replayer.play(game_memory, game_input);
 		} break;
-		case State::Idle: case State::Count: break;
+		case Dev_Replayer_State::Idle: case Dev_Replayer_State::Count: break;
 	}
 }
 
 void Dev_Replayer::start_record(const Game::Memory& game_memory) {
 	auto& replayer = *this;
-	replayer.record_handle = CreateFileA(replayer.replay_path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
-	uptr total_memory_size = game_memory.permanent_storage_size + game_memory.transient_storage_size;
-	DWORD bytes_to_write = (DWORD)total_memory_size;
-	assert(bytes_to_write == total_memory_size);
+	SetFilePointer(replayer.state_handle, 0, 0, FILE_BEGIN);
+	SetFilePointer(replayer.input_handle, 0, 0, FILE_BEGIN);
+	usize state_total_size = game_memory.get_total_size();
+	DWORD bytes_to_write = (DWORD)state_total_size;
+	assert(bytes_to_write == state_total_size);
 	DWORD bytes_written;
-	WriteFile(replayer.record_handle, game_memory.permanent_storage, bytes_to_write, &bytes_written, nullptr);
+	WriteFile(replayer.state_handle, game_memory.permanent_storage, bytes_to_write, &bytes_written, nullptr);
 }
 
 void Dev_Replayer::start_play(Game::Memory& game_memory) {
 	auto& replayer = *this;
-	replayer.play_handle = CreateFileA(replayer.replay_path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
-	uptr total_memory_size = game_memory.permanent_storage_size + game_memory.transient_storage_size;
-	DWORD bytes_to_read = (DWORD)total_memory_size;
-	assert(bytes_to_read == total_memory_size);
+	SetFilePointer(replayer.state_handle, 0, 0, FILE_BEGIN);
+	SetFilePointer(replayer.input_handle, 0, 0, FILE_BEGIN);
+	usize state_total_size = game_memory.get_total_size();
+	DWORD bytes_to_read = (DWORD)state_total_size;
+	assert(bytes_to_read == state_total_size);
 	DWORD bytes_read;
-	ReadFile(replayer.play_handle, game_memory.permanent_storage, bytes_to_read, &bytes_read, nullptr);
+	ReadFile(replayer.state_handle, game_memory.permanent_storage, bytes_to_read, &bytes_read, nullptr);
 }
 
 void Dev_Replayer::record(const Game::Input& game_input) {
 	auto& replayer = *this;
 	DWORD bytes_written;
-	WriteFile(replayer.record_handle, &game_input, sizeof(game_input), &bytes_written, nullptr);
+	WriteFile(replayer.input_handle, &game_input, sizeof(game_input), &bytes_written, nullptr);
 }
 
 void Dev_Replayer::play(Game::Memory& game_memory, Game::Input& game_input) {
 	auto& replayer = *this;
 	DWORD bytes_read;
-	ReadFile(replayer.play_handle, &game_input, sizeof(game_input), &bytes_read, nullptr);
+	ReadFile(replayer.input_handle, &game_input, sizeof(game_input), &bytes_read, nullptr);
 	if (!bytes_read) {
-		CloseHandle(replayer.play_handle);
-		replayer.play_handle = nullptr;
 		replayer.start_play(game_memory);
-		ReadFile(replayer.play_handle, &game_input, sizeof(game_input), &bytes_read, nullptr);
+		ReadFile(replayer.input_handle, &game_input, sizeof(game_input), &bytes_read, nullptr);
 	}
 }
 
@@ -403,7 +418,6 @@ Screen::Screen() {
 			.biCompression = BI_RGB,
 		}
 	};
-
 	screen.resize(INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT);
 }
 
@@ -414,7 +428,7 @@ void Screen::resize(u32 width, u32 height) {
 	VirtualFree(screen.game_screen.memory, 0, MEM_RELEASE);
 	screen.bitmap_info.bmiHeader.biWidth = (LONG)width;
 	screen.bitmap_info.bmiHeader.biHeight = - (LONG)height; // отрицательный чтобы верхний левый пиксель был первым в буфере
-	uptr memory_size = width * height * sizeof(*screen.game_screen.memory);
+	usize memory_size = width * height * sizeof(*screen.game_screen.memory);
 	screen.game_screen = {
 		.width = width,
 		.height = height,
@@ -431,7 +445,7 @@ void Screen::submit(HWND window, HDC device_context) const {
 	int src_width = (int)screen.game_screen.width;
 	int src_height = (int)screen.game_screen.height;
 
-	if (DEV_MODE) {
+	if constexpr (DEV_MODE) {
 		// выводим пиксели 1 к 1 на время разработки рендерера
 		dest_width = src_width;
 		dest_height = src_height;
@@ -463,15 +477,12 @@ Sound::Sound(HWND window) {
 	sound.wave_format.nBlockAlign = sizeof(Game::Sound_Sample);
 	sound.wave_format.nAvgBytesPerSec = sound.wave_format.nBlockAlign * sound.wave_format.nSamplesPerSec;
 	sound.wave_format.wBitsPerSample = (WORD)(sound.wave_format.nBlockAlign / sound.wave_format.nChannels * 8);
-	sound.game_sound = {
-		.samples_per_second = sound.wave_format.nSamplesPerSec,
-		.samples = (Game::Sound_Sample*)VirtualAlloc(nullptr, sound.get_buffer_size(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE),
-	};
+	sound.game_sound.samples_per_second = sound.wave_format.nSamplesPerSec;
+	sound.game_sound.samples = (Game::Sound_Sample*)VirtualAlloc(nullptr, sound.get_buffer_size(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
 	HMODULE direct_sound_dll = LoadLibraryA("dsound.dll");
 	if (!direct_sound_dll) return;
 
-	using Direct_Sound_Create = HRESULT WINAPI(LPGUID lpGuid, LPDIRECTSOUND* ppDS, LPUNKNOWN pUnkOuter);
 	Direct_Sound_Create* DirectSoundCreate = (Direct_Sound_Create*)GetProcAddress(direct_sound_dll, "DirectSoundCreate");
 	IDirectSound* direct_sound;
 	if (!SUCCEEDED(DirectSoundCreate(nullptr, &direct_sound, nullptr))) return;
@@ -497,9 +508,6 @@ Sound::Sound(HWND window) {
 	hm::memset(region1, 0, region1_size);
 	hm::memset(region2, 0, region2_size);
 	sound.buffer->Unlock(region1, region1_size, region2, region2_size);
-
-	// TODO: address sanitizer падает после вызова Play(), по-видимому это известная проблема DirectSound
-	// https://stackoverflow.com/questions/72511236/directsound-crashes-due-to-a-read-access-violation-when-calling-idirectsoundbuff
 	sound.buffer->Play(0, 0, DSBPLAY_LOOPING);
 }
 
@@ -571,7 +579,7 @@ void Sound::dev_draw_sync(Screen& screen) {
 	if (!sound.buffer) return;
 
 	f32 horizontal_scaling = (f32)screen.game_screen.width / (f32)sound.get_buffer_size();
-	for (uptr i = 0; i < hm::array_count(sound.dev_markers); i++) {
+	for (usize i = 0; i < hm::array_count(sound.dev_markers); i++) {
 		u32 top = 0;
 		u32 bottom = screen.game_screen.height * 1/4;
 		u32 historic_output_play_cursor_x = (u32)((f32)sound.dev_markers[i].output_play_cursor * horizontal_scaling);
@@ -614,7 +622,7 @@ void Sound::dev_draw_sync(Screen& screen) {
 		screen.dev_draw_vertical((flip_play_cursor_x + safety_bytes_x / 2) % screen.game_screen.width, top, bottom, 0x00ffffff);
 	}
 
-	// uptr dev_markers_index_unwrapped = sound.dev_markers_index == 0 ? hm::array_count(sound.dev_markers) : sound.dev_markers_index;
+	// usize dev_markers_index_unwrapped = sound.dev_markers_index == 0 ? hm::array_count(sound.dev_markers) : sound.dev_markers_index;
 	// Dev_Sound_Time_Marker prev_marker = sound.dev_markers[dev_markers_index_unwrapped - 1];
 	// DWORD prev_sound_filled_cursor = (prev_marker.output_location + prev_marker.output_byte_count) % sound.get_buffer_size();
 	// // сравниваем с половиной размера буфера чтобы учесть что prev_sound_filled_cursor мог сделать оборот
@@ -630,15 +638,13 @@ void Sound::dev_draw_sync(Screen& screen) {
 }
 
 namespace Platform {
-	Read_File_Result read_file_sync(const char* filename) {
+	Read_File_Result read_file_sync(const char* file_name) {
 		Read_File_Result result = {};
 		u32 memory_size = 0;
 		void* memory = nullptr;
-
+		
 		HANDLE heap_handle = GetProcessHeap();
-		if (!heap_handle) return result;
-
-		HANDLE file_handle = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+		HANDLE file_handle = CreateFileA(file_name, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
 		if (file_handle == INVALID_HANDLE_VALUE) return result;
 
 		LARGE_INTEGER file_size;
@@ -663,23 +669,19 @@ namespace Platform {
 			return result;
 	}
 
-	bool write_file_sync(const char* filename, const void* memory, u32 memory_size) {
-		bool is_success = false;
-		HANDLE file_handle = CreateFileA(filename, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
-		if (file_handle == INVALID_HANDLE_VALUE) return is_success;
+	bool write_file_sync(const char* file_name, const void* memory, u32 memory_size) {
+		HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
+		if (file_handle == INVALID_HANDLE_VALUE) return false;
 
 		DWORD bytes_written;
-		is_success = WriteFile(file_handle, memory, memory_size, &bytes_written, nullptr) && (bytes_written == memory_size);
+		bool is_success = WriteFile(file_handle, memory, memory_size, &bytes_written, nullptr) && (bytes_written == memory_size);
 		CloseHandle(file_handle);
 		return is_success;
 	}
 	
 	void free_file_memory(void* memory) {
 		if (!memory) return;
-
 		HANDLE heap_handle = GetProcessHeap();
-		if (!heap_handle) return;
-
 		HeapFree(heap_handle, 0, memory);
 		memory = nullptr;
 	}
