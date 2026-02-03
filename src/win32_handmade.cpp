@@ -549,50 +549,50 @@ void Sound::dev_draw_sync(Screen& screen) {
 	if (!sound.buffer) return;
 
 	f32 horizontal_scaling = (f32)screen.game_screen.width / (f32)sound.get_buffer_size();
-	for (i32 i = 0; i < hm::array_count(sound.dev_markers); i++) {
+	for (i32 i = 0; i < hm::array_size(sound.dev_markers); i++) {
 		i32 top = 0;
 		i32 bottom = screen.game_screen.height * 1/4;
 		i32 historic_output_play_cursor_x = (i32)((f32)sound.dev_markers[i].output_play_cursor * horizontal_scaling);
 		i32 historic_output_write_cursor_x = (i32)((f32)sound.dev_markers[i].output_write_cursor * horizontal_scaling);
-		screen.dev_draw_vertical(historic_output_play_cursor_x, top, bottom, 0x00ffffff);
-		screen.dev_draw_vertical(historic_output_write_cursor_x, top, bottom, 0x00ff0000);
+		screen.dev_draw_vertical(historic_output_play_cursor_x, top, bottom, 0xffffff);
+		screen.dev_draw_vertical(historic_output_write_cursor_x, top, bottom, 0xff0000);
 	}
 
 	if (!sound.game_sound.samples_to_write || !SUCCEEDED(sound.buffer->GetCurrentPosition(&sound.dev_markers[sound.dev_markers_index].flip_play_cursor, nullptr))) {
-		sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_count(sound.dev_markers);
+		sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_size(sound.dev_markers);
 		return;
 	}
 
 	Dev_Sound_Time_Marker current_marker = sound.dev_markers[sound.dev_markers_index];
 	i32 expected_flip_play_cursor_x = (i32)((f32)current_marker.expected_flip_play_cursor * horizontal_scaling);
-	screen.dev_draw_vertical(expected_flip_play_cursor_x, 0, screen.game_screen.height, 0xffffff00);
+	screen.dev_draw_vertical(expected_flip_play_cursor_x, 0, screen.game_screen.height, 0xffff00);
 
 	{
 		i32 top 	= screen.game_screen.height * 1/4;
 		i32 bottom  = screen.game_screen.height * 2/4;
 		i32 output_play_cursor_x = (i32)((f32)current_marker.output_play_cursor * horizontal_scaling);
 		i32 output_write_cursor_x = (i32)((f32)current_marker.output_write_cursor * horizontal_scaling);
-		screen.dev_draw_vertical(output_play_cursor_x, top, bottom, 0x00ffffff);
-		screen.dev_draw_vertical(output_write_cursor_x, top, bottom, 0x00ff0000);
+		screen.dev_draw_vertical(output_play_cursor_x, top, bottom, 0xffffff);
+		screen.dev_draw_vertical(output_write_cursor_x, top, bottom, 0xff0000);
 	}
 	{
 		i32 top 	= screen.game_screen.height * 2/4;
 		i32 bottom  = screen.game_screen.height * 3/4;
 		i32 output_location_x = (i32)((f32)current_marker.output_location * horizontal_scaling);
 		i32 output_byte_count_x = (i32)((f32)current_marker.output_byte_count * horizontal_scaling);
-		screen.dev_draw_vertical(output_location_x, top, bottom, 0x00ffffff);
-		screen.dev_draw_vertical((output_location_x + output_byte_count_x) % screen.game_screen.width, top, bottom, 0x00ff0000);
+		screen.dev_draw_vertical(output_location_x, top, bottom, 0xffffff);
+		screen.dev_draw_vertical((output_location_x + output_byte_count_x) % screen.game_screen.width, top, bottom, 0xff0000);
 	}
 	{
 		i32 top 	= screen.game_screen.height * 3/4;
 		i32 bottom  = screen.game_screen.height;
 		i32 flip_play_cursor_x = (i32)((f32)current_marker.flip_play_cursor * horizontal_scaling);
 		i32 safety_bytes_x = (i32)((f32)sound.get_safety_bytes() * horizontal_scaling);
-		screen.dev_draw_vertical((flip_play_cursor_x - safety_bytes_x / 2) % screen.game_screen.width, top, bottom, 0x00ffffff);
-		screen.dev_draw_vertical((flip_play_cursor_x + safety_bytes_x / 2) % screen.game_screen.width, top, bottom, 0x00ffffff);
+		screen.dev_draw_vertical((flip_play_cursor_x - safety_bytes_x / 2) % screen.game_screen.width, top, bottom, 0xffffff);
+		screen.dev_draw_vertical((flip_play_cursor_x + safety_bytes_x / 2) % screen.game_screen.width, top, bottom, 0xffffff);
 	}
 
-	// size_t dev_markers_index_unwrapped = sound.dev_markers_index == 0 ? hm::array_count(sound.dev_markers) : sound.dev_markers_index;
+	// size_t dev_markers_index_unwrapped = sound.dev_markers_index == 0 ? hm::array_size(sound.dev_markers) : sound.dev_markers_index;
 	// Dev_Sound_Time_Marker prev_marker = sound.dev_markers[dev_markers_index_unwrapped - 1];
 	// DWORD prev_sound_filled_cursor = (prev_marker.output_location + prev_marker.output_byte_count) % sound.get_buffer_size();
 	// // сравниваем с половиной размера буфера чтобы учесть что prev_sound_filled_cursor мог сделать оборот
@@ -604,7 +604,7 @@ void Sound::dev_draw_sync(Screen& screen) {
 	// sprintf_s(output_buffer, "frame ms: %.2f\n", flip_seconds_elapsed * 1000);
 	// OutputDebugStringA(output_buffer);
 
-	sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_count(sound.dev_markers);
+	sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_size(sound.dev_markers);
 }
 
 namespace Platform {

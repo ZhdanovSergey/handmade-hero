@@ -1,6 +1,5 @@
 @echo off
-
-if %VSCMD_ARG_TGT_ARCH%=="x86" (set "subsystem=-subsystem:windows,5.1")
+if %VSCMD_ARG_TGT_ARCH%==x86 (set subsystem=-subsystem:windows,5.1)
 
 @REM TODO: устанавливать флаги компиляции в зависимости от dev/slow режима
 set common_flags=-DDEV_MODE=1 -DSLOW_MODE=1^

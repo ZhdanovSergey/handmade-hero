@@ -34,7 +34,7 @@ static constexpr i64 operator ""_GB(u64 value) { return (i64)(value << 30); }
 
 namespace hm {
     template <typename T, i32 N>
-    static constexpr i32 array_count(const T (&)[N]) { return N; }
+    static constexpr i32 array_size(const T (&)[N]) { return N; }
 
     static inline i32 min(i32 a, i32 b) { return a < b ? a : b; }
 

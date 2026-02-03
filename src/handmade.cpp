@@ -36,14 +36,14 @@ namespace Game {
 			game_state.player_x = updated_player_x < 0 ? 0 : updated_player_x > max_player_x ? max_player_x : updated_player_x;
 			game_state.player_y = updated_player_y < 0 ? 0 : updated_player_y > max_player_y ? max_player_y : updated_player_y;
 		}
-
+		
 		render_gradient(game_state, screen_buffer);
-		render_rectangle(screen_buffer, game_state.player_x, game_state.player_y, game_state.player_size, game_state.player_size, 0x00ffffff);
+		render_rectangle(screen_buffer, game_state.player_x, game_state.player_y, game_state.player_size, game_state.player_size, 0xffffff);
 
 		if constexpr (DEV_MODE) {
-			render_rectangle(screen_buffer, input.dev_mouse.x, input.dev_mouse.y, 10, 10, 0x00ff00ff);
-			if (input.dev_mouse.left_button.is_pressed) render_rectangle(screen_buffer, 10, 10, 10, 10, 0x00ff00ff);
-			if (input.dev_mouse.right_button.is_pressed) render_rectangle(screen_buffer, 30, 10, 10, 10, 0x00ff00ff);
+			render_rectangle(screen_buffer, input.dev_mouse.x, input.dev_mouse.y, 10, 10, 0xff00ff);
+			if (input.dev_mouse.left_button.is_pressed) render_rectangle(screen_buffer, 10, 10, 10, 10, 0xff00ff);
+			if (input.dev_mouse.right_button.is_pressed) render_rectangle(screen_buffer, 30, 10, 10, 10, 0xff00ff);
 		}
 	};
 
