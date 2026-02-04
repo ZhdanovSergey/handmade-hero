@@ -13,7 +13,7 @@ using Xinput_Set_State = DWORD(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration);
 
 static const i32 INITIAL_WINDOW_WIDTH = 1280;
 static const i32 INITIAL_WINDOW_HEIGHT = 720;
-static const UINT SLEEP_GRANULARITY_MS = timeBeginPeriod(1) == TIMERR_NOERROR ? 1 : 0;
+static const UINT SLEEP_GRANULARITY_MS = timeBeginPeriod(1) == TIMERR_NOERROR ? 1U : 0U;
 static const i64 PERFORMANCE_FREQUENCY = []{
 	LARGE_INTEGER query_result;
 	QueryPerformanceFrequency(&query_result);

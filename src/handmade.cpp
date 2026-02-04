@@ -57,10 +57,9 @@ namespace Game {
 			i16 value = (i16)(std::sinf(game_state.t_sine) * volume);
 			game_state.t_sine += DOUBLE_PI32 / samples_per_wave_period;
 			if (game_state.t_sine >= DOUBLE_PI32) game_state.t_sine -= DOUBLE_PI32;
-			*sample++ = {
-				.left = value,
-				.right = value
-			};
+			sample->left = value;
+			sample->right = value;
+			++sample;
 		}
 	}
 

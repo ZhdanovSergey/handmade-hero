@@ -6,28 +6,27 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	static_assert(DEV_MODE || !SLOW_MODE);
     SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
 
-	WNDCLASSA window_class = {
-		.style = CS_HREDRAW | CS_VREDRAW,
-		.lpfnWndProc = WindowProc,
-		.hInstance = hInstance,
-		.lpszClassName = "Handmade_Hero",
-	};
+	WNDCLASSA window_class = {};
+	window_class.style = CS_HREDRAW | CS_VREDRAW;
+	window_class.lpfnWndProc = WindowProc;
+	window_class.hInstance = hInstance;
+	window_class.lpszClassName = "Handmade_Hero";
+
 	RegisterClassA(&window_class);
 	HWND window = CreateWindowExA(0, window_class.lpszClassName, "Handmade Hero", WS_TILEDWINDOW | WS_VISIBLE,
 		CW_USEDEFAULT, CW_USEDEFAULT, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT, nullptr, nullptr, hInstance, nullptr);
 	
 	void* game_memory_base_address = nullptr;
 	if constexpr (DEV_MODE && UINTPTR_MAX == UINT64_MAX) game_memory_base_address = (void*)1024_GB;
-	Game::Memory game_memory = {
-		.permanent_size = (i32)64_MB,
-		.transient_size = 1_GB,
-		// TODO: использовать MEM_LARGE_PAGES и AdjustTokenPrivileges в 64-битном билде
-		.permanent_storage = (u8*)VirtualAlloc(game_memory_base_address, (SIZE_T)game_memory.get_total_size(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE),
-		.transient_storage = game_memory.permanent_storage + game_memory.permanent_size,
-    	.read_file_sync = Platform::read_file_sync,
-    	.write_file_sync = Platform::write_file_sync,
-    	.free_file_memory = Platform::free_file_memory,
-	};
+	Game::Memory game_memory = {};
+	game_memory.permanent_size = (i32)64_MB;
+	game_memory.transient_size = 1_GB;
+	// TODO: использовать MEM_LARGE_PAGES и AdjustTokenPrivileges в 64-битном билде
+	game_memory.permanent_storage = (u8*)VirtualAlloc(game_memory_base_address, (SIZE_T)game_memory.get_total_size(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	game_memory.transient_storage = game_memory.permanent_storage + game_memory.permanent_size;
+	game_memory.read_file_sync = Platform::read_file_sync;
+	game_memory.write_file_sync = Platform::write_file_sync;
+	game_memory.free_file_memory = Platform::free_file_memory;
 
 	Input input = Input();
 	Sound sound = Sound(window);
@@ -384,14 +383,10 @@ void Dev_Replayer::play(Game::Memory& game_memory, Game::Input& game_input) {
 Screen::Screen() {
 	auto& screen = *this;
 	memset(&screen, 0, sizeof(screen));
-	screen.bitmap_info = {
-		.bmiHeader = {
-			.biSize = sizeof(BITMAPINFOHEADER),
-			.biPlanes = 1,
-			.biBitCount = sizeof(*screen.game_screen.pixels) * 8,
-			.biCompression = BI_RGB,
-		}
-	};
+	screen.bitmap_info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+	screen.bitmap_info.bmiHeader.biPlanes = 1;
+	screen.bitmap_info.bmiHeader.biBitCount = sizeof(*screen.game_screen.pixels) * 8;
+	screen.bitmap_info.bmiHeader.biCompression = BI_RGB;
 	screen.resize(INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT);
 }
 
@@ -402,12 +397,10 @@ void Screen::resize(i32 width, i32 height) {
 	VirtualFree(screen.game_screen.pixels, 0, MEM_RELEASE);
 	screen.bitmap_info.bmiHeader.biWidth = (LONG)width;
 	screen.bitmap_info.bmiHeader.biHeight = - (LONG)height; // отрицательный чтобы верхний левый пиксель был первым в буфере
+	screen.game_screen.width = width;
+	screen.game_screen.height = height;
 	SIZE_T memory_size = width * height * sizeof(*screen.game_screen.pixels);
-	screen.game_screen = {
-		.width = width,
-		.height = height,
-		.pixels = (u32*)VirtualAlloc(nullptr, memory_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE),
-	};
+	screen.game_screen.pixels = (u32*)VirtualAlloc(nullptr, memory_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 }
 
 void Screen::submit(HWND window, HDC device_context) const {
@@ -462,19 +455,18 @@ Sound::Sound(HWND window) {
 	if (!SUCCEEDED(DirectSoundCreate(nullptr, &direct_sound, nullptr))) return;
 	if (!SUCCEEDED(direct_sound->SetCooperativeLevel(window, DSSCL_PRIORITY))) return;
 
-	DSBUFFERDESC primary_buffer_desc = {
-		.dwSize = sizeof(primary_buffer_desc),
-		.dwFlags = DSBCAPS_PRIMARYBUFFER
-	};
+	DSBUFFERDESC primary_buffer_desc = {};
+	primary_buffer_desc.dwSize = sizeof(primary_buffer_desc);
+	primary_buffer_desc.dwFlags = DSBCAPS_PRIMARYBUFFER;
+
 	IDirectSoundBuffer* primary_buffer;
 	if (!SUCCEEDED(direct_sound->CreateSoundBuffer(&primary_buffer_desc, &primary_buffer, nullptr))) return;
 	if (!SUCCEEDED(primary_buffer->SetFormat(&sound.wave_format))) return;
 
-	DSBUFFERDESC sound_buffer_desc = {
-		.dwSize = sizeof(sound_buffer_desc),
-		.dwBufferBytes = sound.get_buffer_size(),
-		.lpwfxFormat = &sound.wave_format
-	};
+	DSBUFFERDESC sound_buffer_desc = {};
+	sound_buffer_desc.dwSize = sizeof(sound_buffer_desc);
+	sound_buffer_desc.dwBufferBytes = sound.get_buffer_size();
+	sound_buffer_desc.lpwfxFormat = &sound.wave_format;
 	if (!SUCCEEDED(direct_sound->CreateSoundBuffer(&sound_buffer_desc, &sound.buffer, nullptr))) return;
 
 	void *region1, *region2; DWORD region1_size, region2_size;
@@ -519,13 +511,12 @@ void Sound::calc_samples_to_write(i64 flip_timestamp) {
 	sound.game_sound.samples_to_write = (i32)(output_byte_count / sound.wave_format.nBlockAlign);
 
 	if constexpr (DEV_MODE) {
-		sound.dev_markers[sound.dev_markers_index] = {
-			.output_play_cursor = play_cursor,
-			.output_write_cursor = write_cursor,
-			.output_location = sound.output_location,
-			.output_byte_count = output_byte_count,
-			.expected_flip_play_cursor = expected_flip_play_cursor_unwrapped % sound.get_buffer_size()
-		};
+		sound.dev_markers[sound.dev_markers_index] = {};
+		sound.dev_markers[sound.dev_markers_index].output_play_cursor = play_cursor;
+		sound.dev_markers[sound.dev_markers_index].output_write_cursor = write_cursor;
+		sound.dev_markers[sound.dev_markers_index].output_location = sound.output_location;
+		sound.dev_markers[sound.dev_markers_index].output_byte_count = output_byte_count;
+		sound.dev_markers[sound.dev_markers_index].expected_flip_play_cursor = expected_flip_play_cursor_unwrapped % sound.get_buffer_size();
 	}
 }
 
