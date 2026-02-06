@@ -305,7 +305,7 @@ Dev_Replayer::Dev_Replayer(const Game::Memory& game_memory) {
 	memset(&replayer, 0, sizeof(replayer));
 	if constexpr (!DEV_MODE) return;
 
-	get_build_file_path("replay_state.hmi", replayer.state_path, sizeof(replayer.state_path));
+	get_build_file_path("replay_state.hms", replayer.state_path, sizeof(replayer.state_path));
 	get_build_file_path("replay_input.hmi", replayer.input_path, sizeof(replayer.input_path));
 	replayer.state_handle = CreateFileA(replayer.state_path, GENERIC_READ | GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_FLAG_NO_BUFFERING, nullptr);
 	replayer.input_handle = CreateFileA(replayer.input_path, GENERIC_READ | GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
