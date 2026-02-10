@@ -3,13 +3,7 @@
 #include "globals.hpp"
 
 namespace Game {
-	struct Game_State {
-		f32 t_sine;
-		i32 tone_hz;
-		i32 player_x, player_y;
-		i32 player_size;
-		i32 player_velocity;
-	};
+	struct Game_State {};
 
 	struct Button_State {
 		bool is_pressed;
@@ -41,12 +35,11 @@ namespace Game {
 	struct Input {
 		Controller controllers[2];
 		Dev_Mouse dev_mouse;
+		f32 seconds_per_frame;
 
 		void reset_counters() {
-			if constexpr (DEV_MODE) {
-				dev_mouse.left_button.transitions_count = 0;
-				dev_mouse.right_button.transitions_count = 0;
-			}
+			dev_mouse.left_button.transitions_count = 0;
+			dev_mouse.right_button.transitions_count = 0;
 
 			for (auto& controller : controllers) {
 				controller.start.transitions_count = 0;
@@ -102,7 +95,7 @@ namespace Game {
 	extern "C" void get_sound_samples(Memory& memory, Sound_Buffer& sound_buffer);
 	using Get_Sound_Samples = decltype(get_sound_samples);
 
-	static void render_gradient(const Game_State& game_state, Screen_Buffer& screen_buffer);
-	static void render_player(const Game_State& game_state, Screen_Buffer& screen_buffer);
-	static void render_rectangle(Screen_Buffer& screen_buffer, i32 x, i32 y, i32 width, i32 height, u32 color);
+	static void draw_rectangle(Screen_Buffer& screen_buffer, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32, u32 color);
+	static void dev_render_gradient(const Game_State& game_state, Screen_Buffer& screen_buffer);
+	static void dev_render_mouse_test(const Input& input, Screen_Buffer& screen_buffer);
 }

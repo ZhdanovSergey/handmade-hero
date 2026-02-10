@@ -1,7 +1,6 @@
 #pragma once
 
 // TODO: подключить что-нибудь для вывода инфы в консоль вне платформенного слоя
-#include <cmath>
 #include <cstdint>
 #include <cstdio>
 
@@ -25,7 +24,7 @@ using u64 = uint64_t;
 #endif
 
 static constexpr f64 PI64 = 3.14159265358979323846;
-static constexpr f32 DOUBLE_PI32 = 2.0f * (f32)PI64;
+static constexpr f32 DOUBLE_PI32 = 2.f * (f32)PI64;
 
 static constexpr i64 operator ""_KB(u64 value) { return (i64)(value << 10); }
 static constexpr i64 operator ""_MB(u64 value) { return (i64)(value << 20); }
@@ -34,13 +33,14 @@ static constexpr i64 operator ""_GB(u64 value) { return (i64)(value << 30); }
 namespace hm {
     template <typename T, i32 N>
     static constexpr i32 array_size(const T (&)[N]) { return N; }
-
-    static inline f32 ceilf(f32 x) {
-        f32 x_trunc = (f32)(i32)x;
-        return x > 0 && x > x_trunc ? x_trunc + 1.0f : x_trunc;
-    }
-
     static inline i32 min(i32 a, i32 b) { return a < b ? a : b; }
+    static inline i32 max(i32 a, i32 b) { return a > b ? a : b; }
+    static inline f32 round(f32 x) { return (f32)(i32)(x + 0.5f * (x > 0) - 0.5f * (x < 0)); }
+
+    static inline f32 ceil(f32 x) {
+        f32 x_trunc = (f32)(i32)x;
+        return x_trunc + 1.f * (x > 0 && x > x_trunc);
+    }
 
     static inline void memcpy(void* dest, const void* src, i32 size) {
         for (i32 i = 0; i < size; i++) {

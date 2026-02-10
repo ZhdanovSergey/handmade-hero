@@ -40,7 +40,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	while (true) {
 		input.game_input.reset_counters();
 		input.process_gamepad();
-		if constexpr (DEV_MODE) input.dev_process_mouse(window);
+		input.dev_process_mouse(window);
 
 		MSG message;
 		while (PeekMessageA(&message, nullptr, 0, 0, PM_REMOVE)) {
@@ -87,7 +87,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		flip_timestamp = get_timestamp();
 		// flip_cycle_counter = __rdtsc();
 
-		// if constexpr (DEV_MODE) sound.dev_draw_sync(global_screen);
+		// sound.dev_draw_sync(global_screen);
 		HDC device_context = GetDC(window);
 		global_screen.submit(window, device_context);
 		ReleaseDC(window, device_context);
@@ -115,7 +115,7 @@ static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
 static void wait_until_end_of_frame(i64 flip_timestamp) {
 	f32 flip_seconds_elapsed = get_seconds_elapsed(flip_timestamp);
 	if (SLEEP_GRANULARITY_MS) {
-		f32 sleep_ms = 1000.0f * (TARGET_SECONDS_PER_FRAME - flip_seconds_elapsed) - (f32)SLEEP_GRANULARITY_MS;
+		f32 sleep_ms = 1000.f * (TARGET_SECONDS_PER_FRAME - flip_seconds_elapsed) - (f32)SLEEP_GRANULARITY_MS;
 		if (sleep_ms >= 1) Sleep((DWORD)sleep_ms);
 	}
 	flip_seconds_elapsed = get_seconds_elapsed(flip_timestamp);
@@ -189,6 +189,7 @@ void Game_Code::load() {
 }
 
 void Game_Code::dev_reload_if_recompiled() {
+	if constexpr (!DEV_MODE) return;
 	auto& game_code = *this;
 	FILETIME dll_write_time = get_file_write_time(game_code.dll_path);
 	if (!CompareFileTime(&dll_write_time, &game_code.write_time)) return;
@@ -203,8 +204,9 @@ void Game_Code::dev_reload_if_recompiled() {
 Input::Input() {
 	auto& input = *this;
 	memset(&input, 0, sizeof(input));
-	input.XInputGetState = [](auto...){ return 1UL; };
-	input.XInputSetState = [](auto...){ return 1UL; };
+	input.XInputGetState = [](auto...){ return 1ul; };
+	input.XInputSetState = [](auto...){ return 1ul; };
+	input.game_input.seconds_per_frame = TARGET_SECONDS_PER_FRAME;
 	HMODULE xinput_dll = LoadLibraryA("xinput1_3.dll");
 	if (!xinput_dll) return;
 	
@@ -247,7 +249,7 @@ void Input::process_gamepad() {
 }
 
 f32 Input::get_normalized_stick_value(SHORT value, SHORT deadzone) {
-	return (-deadzone <= value && value < 0) || (0 < value && value <= deadzone) ? 0 : value / 32768.0f;
+	return (-deadzone <= value && value < 0) || (0 < value && value <= deadzone) ? 0 : value / 32768.f;
 }
 
 void Input::process_gamepad_button(Game::Button_State& state, bool is_pressed) {
@@ -280,6 +282,7 @@ void Input::process_keyboard_button(WPARAM key_code, bool is_pressed) {
 }
 
 void Input::dev_process_mouse(HWND window) {
+	if constexpr (!DEV_MODE) return;
 	auto& input = *this;
 	Game::Dev_Mouse& mouse = input.game_input.dev_mouse;
 
@@ -312,6 +315,7 @@ Dev_Replayer::Dev_Replayer(const Game::Memory& game_memory) {
 }
 
 void Dev_Replayer::next_state(Game::Memory& game_memory, Game::Input& game_input) {
+	if constexpr (!DEV_MODE) return;
 	auto& replayer = *this;
 	replayer.replayer_state = (Dev_Replayer_State)((replayer.replayer_state + 1) % Dev_Replayer_State::Count);
 
@@ -330,6 +334,7 @@ void Dev_Replayer::next_state(Game::Memory& game_memory, Game::Input& game_input
 }
 
 void Dev_Replayer::record_or_replace(Game::Memory& game_memory, Game::Input& game_input) {
+	if constexpr (!DEV_MODE) return;
 	auto& replayer = *this;
 	switch (replayer.replayer_state) {
 		case Dev_Replayer_State::Recording: {
@@ -343,6 +348,7 @@ void Dev_Replayer::record_or_replace(Game::Memory& game_memory, Game::Input& gam
 }
 
 void Dev_Replayer::start_record(const Game::Memory& game_memory) {
+	if constexpr (!DEV_MODE) return;
 	auto& replayer = *this;
 	SetFilePointer(replayer.state_handle, 0, 0, FILE_BEGIN);
 	SetFilePointer(replayer.input_handle, 0, 0, FILE_BEGIN);
@@ -354,6 +360,7 @@ void Dev_Replayer::start_record(const Game::Memory& game_memory) {
 }
 
 void Dev_Replayer::start_play(Game::Memory& game_memory) {
+	if constexpr (!DEV_MODE) return;
 	auto& replayer = *this;
 	SetFilePointer(replayer.state_handle, 0, 0, FILE_BEGIN);
 	SetFilePointer(replayer.input_handle, 0, 0, FILE_BEGIN);
@@ -365,12 +372,14 @@ void Dev_Replayer::start_play(Game::Memory& game_memory) {
 }
 
 void Dev_Replayer::record(const Game::Input& game_input) {
+	if constexpr (!DEV_MODE) return;
 	auto& replayer = *this;
 	DWORD bytes_written;
 	WriteFile(replayer.input_handle, &game_input, sizeof(game_input), &bytes_written, nullptr);
 }
 
 void Dev_Replayer::play(Game::Memory& game_memory, Game::Input& game_input) {
+	if constexpr (!DEV_MODE) return;
 	auto& replayer = *this;
 	DWORD bytes_read;
 	ReadFile(replayer.input_handle, &game_input, sizeof(game_input), &bytes_read, nullptr);
@@ -407,16 +416,15 @@ void Screen::submit(HWND window, HDC device_context) const {
 	auto& screen = *this;
 	RECT client_rect;
 	GetClientRect(window, &client_rect);
+
 	int dest_width = client_rect.right - client_rect.left;
 	int dest_height = client_rect.bottom - client_rect.top;
 	int src_width = (int)screen.game_screen.width;
 	int src_height = (int)screen.game_screen.height;
 
-	if constexpr (DEV_MODE) {
-		// выводим пиксели 1 к 1 на время разработки рендерера
-		dest_width = src_width;
-		dest_height = src_height;
-	}
+	// выводим пиксели 1 к 1 на время разработки рендерера
+	dest_width = src_width;
+	dest_height = src_height;
 
 	StretchDIBits(device_context,
 		0, 0, dest_width, dest_height,
@@ -427,6 +435,7 @@ void Screen::submit(HWND window, HDC device_context) const {
 }
 
 void Screen::dev_draw_vertical(i32 x, i32 top, i32 bottom, u32 color) {
+	if constexpr (!DEV_MODE) return;
 	auto& screen = *this;
 	u32* pixel = screen.game_screen.pixels + top * screen.game_screen.width + x;
 	for (i32 y = top; y < bottom; y++) {
@@ -443,7 +452,7 @@ Sound::Sound(HWND window) {
 	sound.wave_format.nSamplesPerSec = 48'000;
 	sound.wave_format.nBlockAlign = sizeof(Game::Sound_Sample);
 	sound.wave_format.nAvgBytesPerSec = sound.wave_format.nBlockAlign * sound.wave_format.nSamplesPerSec;
-	sound.wave_format.wBitsPerSample = sound.wave_format.nBlockAlign / sound.wave_format.nChannels * 8U;
+	sound.wave_format.wBitsPerSample = sound.wave_format.nBlockAlign / sound.wave_format.nChannels * 8u;
 	sound.game_sound.samples_per_second = (i32)sound.wave_format.nSamplesPerSec;
 	sound.game_sound.samples = (Game::Sound_Sample*)VirtualAlloc(nullptr, sound.get_buffer_size(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
@@ -489,7 +498,7 @@ void Sound::calc_samples_to_write(i64 flip_timestamp) {
 	DWORD play_cursor = 0, write_cursor = 0;
 	if (!sound.buffer || !SUCCEEDED(sound.buffer->GetCurrentPosition(&play_cursor, &write_cursor))) {
 		sound.game_sound.samples_to_write = 0;
-		if constexpr (DEV_MODE) sound.dev_markers[sound.dev_markers_index] = {};
+		sound.dev_markers[sound.dev_markers_index] = {};
 		return;
 	}
 
@@ -536,6 +545,7 @@ void Sound::submit() {
 }
 
 void Sound::dev_draw_sync(Screen& screen) {
+	if constexpr (!DEV_MODE) return;
 	auto& sound = *this;
 	if (!sound.buffer) return;
 

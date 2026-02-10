@@ -11,24 +11,24 @@ using Direct_Sound_Create = HRESULT WINAPI(LPGUID lpGuid, LPDIRECTSOUND* ppDS, L
 using Xinput_Get_State = DWORD(DWORD dwUserIndex, XINPUT_STATE *pState);
 using Xinput_Set_State = DWORD(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration);
 
-static const i32 INITIAL_WINDOW_WIDTH = 1280;
-static const i32 INITIAL_WINDOW_HEIGHT = 720;
-static const UINT SLEEP_GRANULARITY_MS = timeBeginPeriod(1) == TIMERR_NOERROR ? 1U : 0U;
+static const i32 INITIAL_WINDOW_WIDTH = 960;
+static const i32 INITIAL_WINDOW_HEIGHT = 540;
+static const UINT SLEEP_GRANULARITY_MS = timeBeginPeriod(1) == TIMERR_NOERROR ? 1u : 0u;
 static const i64 PERFORMANCE_FREQUENCY = []{
 	LARGE_INTEGER query_result;
 	QueryPerformanceFrequency(&query_result);
 	return query_result.QuadPart;
 }();
 static const f32 TARGET_SECONDS_PER_FRAME = []{
-	f32 target_frame_rate = 33.0f;
+	f32 target_frame_rate = 33.f;
     HDC device_context = GetDC(0);
     f32 refresh_rate = (f32)GetDeviceCaps(device_context, VREFRESH);
     ReleaseDC(0, device_context);
-	if (refresh_rate > 1.0f) {
-		f32 sync_frame_rate = refresh_rate / hm::ceilf(refresh_rate / target_frame_rate);
-		if (sync_frame_rate >= 30.0f) target_frame_rate = sync_frame_rate;
+	if (refresh_rate > 1.f) {
+		f32 sync_frame_rate = refresh_rate / hm::ceil(refresh_rate / target_frame_rate);
+		if (sync_frame_rate >= 30.f) target_frame_rate = sync_frame_rate;
 	}
-	return 1.0f / target_frame_rate;
+	return 1.f / target_frame_rate;
 }();
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow);
