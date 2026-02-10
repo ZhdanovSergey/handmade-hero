@@ -582,66 +582,46 @@ void Sound::dev_draw_sync(Screen& screen) {
 		screen.dev_draw_vertical((flip_play_cursor_x - safety_bytes_x / 2) % screen.game_screen.width, top, bottom, 0xffffff);
 		screen.dev_draw_vertical((flip_play_cursor_x + safety_bytes_x / 2) % screen.game_screen.width, top, bottom, 0xffffff);
 	}
-
-	// size_t dev_markers_index_unwrapped = sound.dev_markers_index == 0 ? hm::array_size(sound.dev_markers) : sound.dev_markers_index;
-	// Dev_Sound_Time_Marker prev_marker = sound.dev_markers[dev_markers_index_unwrapped - 1];
-	// DWORD prev_sound_filled_cursor = (prev_marker.output_location + prev_marker.output_byte_count) % sound.get_buffer_size();
-	// // сравниваем с половиной размера буфера чтобы учесть что prev_sound_filled_cursor мог сделать оборот
-	// assert(sound.play_cursor <= prev_sound_filled_cursor || sound.play_cursor > prev_sound_filled_cursor + sound.get_buffer_size() / 2);
+	sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_size(sound.dev_markers);
 	
 	// f32 ms_per_frame = 1000 * flip_seconds_elapsed;
 	// u64 cycle_counter_elapsed = __rdtsc() - flip_cycle_counter;
 	// char output_buffer[256];
 	// sprintf_s(output_buffer, "frame ms: %.2f\n", flip_seconds_elapsed * 1000);
 	// OutputDebugStringA(output_buffer);
-
-	sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_size(sound.dev_markers);
 }
 
 namespace Platform {
 	Read_File_Result read_file_sync(const char* file_name) {
 		Read_File_Result result = {};
-		i32 memory_size = 0;
-		void* memory = nullptr;
-		
 		HANDLE heap_handle = GetProcessHeap();
+		result.memory = HeapAlloc(heap_handle, 0, (DWORD)result.memory_size);
+
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
-		if (file_handle == INVALID_HANDLE_VALUE) return result;
-
-		LARGE_INTEGER file_size;
-		if (!GetFileSizeEx(file_handle, &file_size)) goto close_file_handle;
-
-		memory_size = (i32)file_size.QuadPart;
-		assert(memory_size == file_size.QuadPart);
-		memory = HeapAlloc(heap_handle, 0, (DWORD)memory_size);
-		if (!memory) goto close_file_handle;
+		LARGE_INTEGER file_size = {};
+		GetFileSizeEx(file_handle, &file_size);
+		result.memory_size = (i32)file_size.QuadPart;
+		assert(result.memory_size == file_size.QuadPart);
 
 		DWORD bytes_read;
-		if (!ReadFile(file_handle, memory, (DWORD)memory_size, &bytes_read, nullptr) || (bytes_read != (DWORD)memory_size)) {
-			HeapFree(heap_handle, 0, memory);
-			goto close_file_handle;
+		if (!ReadFile(file_handle, result.memory, (DWORD)result.memory_size, &bytes_read, nullptr) || (bytes_read != (DWORD)result.memory_size)) {
+			HeapFree(heap_handle, 0, result.memory);
+			result = {};
 		}
 
-		result.memory_size = memory_size;
-		result.memory = memory;
-
-		close_file_handle:
-			CloseHandle(file_handle);
-			return result;
+		CloseHandle(file_handle);
+		return result;
 	}
 
 	bool write_file_sync(const char* file_name, const void* memory, i32 memory_size) {
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
-		if (file_handle == INVALID_HANDLE_VALUE) return false;
-
 		DWORD bytes_written;
 		bool is_success = WriteFile(file_handle, memory, (DWORD)memory_size, &bytes_written, nullptr) && (bytes_written == (DWORD)memory_size);
 		CloseHandle(file_handle);
 		return is_success;
 	}
 	
-	void free_file_memory(void* memory) {
-		if (!memory) return;
+	void free_file_memory(void*& memory) {
 		HANDLE heap_handle = GetProcessHeap();
 		HeapFree(heap_handle, 0, memory);
 		memory = nullptr;

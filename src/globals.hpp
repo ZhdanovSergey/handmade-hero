@@ -35,6 +35,11 @@ namespace hm {
     template <typename T, i32 N>
     static constexpr i32 array_size(const T (&)[N]) { return N; }
 
+    static inline f32 ceilf(f32 x) {
+        f32 x_trunc = (f32)(i32)x;
+        return x > 0 && x > x_trunc ? x_trunc + 1.0f : x_trunc;
+    }
+
     static inline i32 min(i32 a, i32 b) { return a < b ? a : b; }
 
     static inline void memcpy(void* dest, const void* src, i32 size) {
@@ -55,7 +60,7 @@ namespace hm {
         return length + 1; // учитываем 0 чтобы результат был такой же как у sizeof
     }
 
-    static inline void strcat(
+    static void strcat(
         const char* src1, i32 src1_size,
         const char* src2, i32 src2_size,
               char* dest, i32 dest_size) {
@@ -81,6 +86,6 @@ namespace Platform {
     bool write_file_sync(const char* filename, const void* memory, i32 memory_size);
     using Write_File_Sync = decltype(write_file_sync);
 
-    void free_file_memory(void* memory);
+    void free_file_memory(void*& memory);
     using Free_File_Memory = decltype(free_file_memory);
 }

@@ -19,19 +19,16 @@ static const i64 PERFORMANCE_FREQUENCY = []{
 	QueryPerformanceFrequency(&query_result);
 	return query_result.QuadPart;
 }();
-
 static const f32 TARGET_SECONDS_PER_FRAME = []{
-	i32 default_frame_rate = 33;
+	f32 target_frame_rate = 33.0f;
     HDC device_context = GetDC(0);
-    i32 refresh_rate = GetDeviceCaps(device_context, VREFRESH);
+    f32 refresh_rate = (f32)GetDeviceCaps(device_context, VREFRESH);
     ReleaseDC(0, device_context);
-	if (refresh_rate == 0 || refresh_rate == 1) return 1.0f / (f32)default_frame_rate;
-
-	default_frame_rate = min(refresh_rate, default_frame_rate);
-	if (refresh_rate % default_frame_rate == 0) return 1.0f / (f32)default_frame_rate;
-
-	f32 sync_factor = (f32)(refresh_rate / default_frame_rate) + 1.0f;
-	return sync_factor / (f32)refresh_rate;
+	if (refresh_rate > 1.0f) {
+		f32 sync_frame_rate = refresh_rate / hm::ceilf(refresh_rate / target_frame_rate);
+		if (sync_frame_rate >= 30.0f) target_frame_rate = sync_frame_rate;
+	}
+	return 1.0f / target_frame_rate;
 }();
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow);
