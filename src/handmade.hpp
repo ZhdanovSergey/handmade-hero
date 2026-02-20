@@ -3,9 +3,12 @@
 #include "globals.hpp"
 
 namespace Game {
-	struct Game_State {};
+	struct Game_State {
+		f32 player_x;
+		f32 player_y;
+	};
 
-	struct Button_State {
+	struct Button {
 		bool is_pressed;
 		i32 transitions_count;
 	};
@@ -20,22 +23,22 @@ namespace Game {
 		f32 min_x, min_y;
 		f32 max_x, max_y;
 
-		Button_State start, back;
-		Button_State left_shoulder, right_shoulder;
-		Button_State move_up, move_down, move_left, move_right;
-		Button_State action_up, action_down, action_left, action_right;
+		Button start, back;
+		Button left_shoulder, right_shoulder;
+		Button move_up, move_down, move_left, move_right;
+		Button action_up, action_down, action_left, action_right;
 	};
 
 	struct Dev_Mouse {
-		Button_State left_button;
-		Button_State right_button;
 		i32 x, y;
+		Button left_button;
+		Button right_button;
 	};
 
 	struct Input {
 		Controller controllers[2];
 		Dev_Mouse dev_mouse;
-		f32 seconds_per_frame;
+		f32 frame_dt;
 
 		void reset_counters() {
 			dev_mouse.left_button.transitions_count = 0;
@@ -62,7 +65,7 @@ namespace Game {
 
 	struct Memory {
 		bool is_initialized;
-		i32 permanent_size;
+		i64 permanent_size;
 		i64 transient_size;
 		u8* permanent_storage;
 		u8* transient_storage;
@@ -88,6 +91,15 @@ namespace Game {
 		Sound_Sample* samples;
 	};
 
+	struct Color {
+		f32 red, green, blue;
+		u32 to_hex() {
+			return ((u32)hm::round(red   * 255.0f) << 16)
+				 | ((u32)hm::round(green * 255.0f) << 8)
+				 | ((u32)hm::round(blue  * 255.0f));
+		}
+	};
+
 	extern "C" void update_and_render(const Input& input, Memory& memory, Screen_Buffer& screen_buffer);
 	using Update_And_Render = decltype(update_and_render);
 
@@ -95,7 +107,6 @@ namespace Game {
 	extern "C" void get_sound_samples(Memory& memory, Sound_Buffer& sound_buffer);
 	using Get_Sound_Samples = decltype(get_sound_samples);
 
-	static void draw_rectangle(Screen_Buffer& screen_buffer, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32, u32 color);
-	static void dev_render_gradient(const Game_State& game_state, Screen_Buffer& screen_buffer);
+	static void draw_rectangle(Screen_Buffer& screen_buffer, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32, Color color);
 	static void dev_render_mouse_test(const Input& input, Screen_Buffer& screen_buffer);
 }

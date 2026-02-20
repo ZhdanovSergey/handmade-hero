@@ -19,7 +19,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	void* game_memory_base_address = nullptr;
 	if constexpr (DEV_MODE && UINTPTR_MAX == UINT64_MAX) game_memory_base_address = (void*)1024_GB;
 	Game::Memory game_memory = {};
-	game_memory.permanent_size = (i32)64_MB;
+	game_memory.permanent_size = 64_MB;
 	game_memory.transient_size = 1_GB;
 	// TODO: использовать MEM_LARGE_PAGES и AdjustTokenPrivileges в 64-битном билде
 	game_memory.permanent_storage = (u8*)VirtualAlloc(game_memory_base_address, (SIZE_T)game_memory.get_total_size(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
@@ -72,7 +72,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 			if (dev_is_pause) {
 				wait_until_end_of_frame(flip_timestamp);
 				flip_timestamp = get_timestamp();
-				// flip_cycle_counter = __rdtsc();
 				continue;
 			};
 			dev_replayer.record_or_replace(game_memory, input.game_input);
@@ -84,8 +83,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		sound.submit();
 		
 		wait_until_end_of_frame(flip_timestamp);
+		// char output_buffer[256];
+		// sprintf_s(output_buffer, "frame ms: %.2f\n", get_seconds_elapsed(flip_timestamp) * 1000);
+		// OutputDebugStringA(output_buffer);
 		flip_timestamp = get_timestamp();
-		// flip_cycle_counter = __rdtsc();
 
 		// sound.dev_draw_sync(global_screen);
 		HDC device_context = GetDC(window);
@@ -115,7 +116,7 @@ static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
 static void wait_until_end_of_frame(i64 flip_timestamp) {
 	f32 flip_seconds_elapsed = get_seconds_elapsed(flip_timestamp);
 	if (SLEEP_GRANULARITY_MS) {
-		f32 sleep_ms = 1000.f * (TARGET_SECONDS_PER_FRAME - flip_seconds_elapsed) - (f32)SLEEP_GRANULARITY_MS;
+		f32 sleep_ms = 1000.0f * (TARGET_SECONDS_PER_FRAME - flip_seconds_elapsed) - SLEEP_GRANULARITY_MS;
 		if (sleep_ms >= 1) Sleep((DWORD)sleep_ms);
 	}
 	flip_seconds_elapsed = get_seconds_elapsed(flip_timestamp);
@@ -206,7 +207,7 @@ Input::Input() {
 	memset(&input, 0, sizeof(input));
 	input.XInputGetState = [](auto...){ return 1ul; };
 	input.XInputSetState = [](auto...){ return 1ul; };
-	input.game_input.seconds_per_frame = TARGET_SECONDS_PER_FRAME;
+	input.game_input.frame_dt = TARGET_SECONDS_PER_FRAME;
 	HMODULE xinput_dll = LoadLibraryA("xinput1_3.dll");
 	if (!xinput_dll) return;
 	
@@ -216,8 +217,8 @@ Input::Input() {
 
 void Input::process_gamepad() {
 	auto& input = *this;
-	XINPUT_STATE state;
 	Game::Controller& controller = input.game_input.controllers[1];
+	XINPUT_STATE state;
 	if (input.XInputGetState(0, &state)) {
 		controller.is_connected = false;
 		return;
@@ -249,10 +250,10 @@ void Input::process_gamepad() {
 }
 
 f32 Input::get_normalized_stick_value(SHORT value, SHORT deadzone) {
-	return (-deadzone <= value && value < 0) || (0 < value && value <= deadzone) ? 0 : value / 32768.f;
+	return (-deadzone <= value && value < 0) || (0 < value && value <= deadzone) ? 0 : value / ((f32)INT16_MAX + 1.0f);
 }
 
-void Input::process_gamepad_button(Game::Button_State& state, bool is_pressed) {
+void Input::process_gamepad_button(Game::Button& state, bool is_pressed) {
 	state.transitions_count += is_pressed != state.is_pressed;
 	state.is_pressed = is_pressed;
 }
@@ -261,7 +262,7 @@ void Input::process_keyboard_button(WPARAM key_code, bool is_pressed) {
 	auto& input = *this;
 	Game::Controller& controller = input.game_input.controllers[0];
 	controller.is_connected = true;
-	Game::Button_State* button_state;
+	Game::Button* button_state;
 	switch (key_code) {
 		case VK_RETURN: button_state = &controller.start;			break;
 		case VK_ESCAPE: button_state = &controller.back;			break;
@@ -593,12 +594,6 @@ void Sound::dev_draw_sync(Screen& screen) {
 		screen.dev_draw_vertical((flip_play_cursor_x + safety_bytes_x / 2) % screen.game_screen.width, top, bottom, 0xffffff);
 	}
 	sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_size(sound.dev_markers);
-	
-	// f32 ms_per_frame = 1000 * flip_seconds_elapsed;
-	// u64 cycle_counter_elapsed = __rdtsc() - flip_cycle_counter;
-	// char output_buffer[256];
-	// sprintf_s(output_buffer, "frame ms: %.2f\n", flip_seconds_elapsed * 1000);
-	// OutputDebugStringA(output_buffer);
 }
 
 namespace Platform {

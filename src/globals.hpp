@@ -24,7 +24,7 @@ using u64 = uint64_t;
 #endif
 
 static constexpr f64 PI64 = 3.14159265358979323846;
-static constexpr f32 DOUBLE_PI32 = 2.f * (f32)PI64;
+static constexpr f32 DOUBLE_PI32 = 2.0f * (f32)PI64;
 
 static constexpr i64 operator ""_KB(u64 value) { return (i64)(value << 10); }
 static constexpr i64 operator ""_MB(u64 value) { return (i64)(value << 20); }
@@ -35,21 +35,21 @@ namespace hm {
     static constexpr i32 array_size(const T (&)[N]) { return N; }
     static inline i32 min(i32 a, i32 b) { return a < b ? a : b; }
     static inline i32 max(i32 a, i32 b) { return a > b ? a : b; }
-    static inline f32 round(f32 x) { return (f32)(i32)(x + 0.5f * (x > 0) - 0.5f * (x < 0)); }
+    static inline f32 round(f32 x) { return (f32)(i32)(x + 0.5f * ((x > 0) - (x < 0))); }
 
     static inline f32 ceil(f32 x) {
         f32 x_trunc = (f32)(i32)x;
-        return x_trunc + 1.f * (x > 0 && x > x_trunc);
+        return x_trunc + 1.0f * (x > 0 && x > x_trunc);
     }
 
-    static inline void memcpy(void* dest, const void* src, i32 size) {
-        for (i32 i = 0; i < size; i++) {
+    static inline void memcpy(void* dest, const void* src, i64 size) {
+        for (i64 i = 0; i < size; i++) {
             ((u8*)dest)[i] = ((u8*)src)[i];
         }
     }
 
-    static inline void memset(void* dest, u8 value, i32 size) {
-        for (i32 i = 0; i < size; i++) {
+    static inline void memset(void* dest, u8 value, i64 size) {
+        for (i64 i = 0; i < size; i++) {
             ((u8*)dest)[i] = value;
         }
     }
@@ -57,7 +57,8 @@ namespace hm {
     static inline i32 strlen(const char* src) {
         i32 length = 0;
         while (*src++) { length++; }
-        return length + 1; // учитываем 0 чтобы результат был такой же как у sizeof
+        // учитываем 0 чтобы результат был такой же как у sizeof
+        return length + 1;
     }
 
     static void strcat(
