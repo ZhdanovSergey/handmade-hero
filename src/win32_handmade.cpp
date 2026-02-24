@@ -11,10 +11,18 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	window_class.lpfnWndProc = WindowProc;
 	window_class.hInstance = hInstance;
 	window_class.lpszClassName = "Handmade_Hero";
-
 	RegisterClassA(&window_class);
-	HWND window = CreateWindowExA(0, window_class.lpszClassName, "Handmade Hero", WS_TILEDWINDOW | WS_VISIBLE,
-		CW_USEDEFAULT, CW_USEDEFAULT, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT, nullptr, nullptr, hInstance, nullptr);
+
+	RECT window_rect = {};
+	window_rect.right = INITIAL_WINDOW_WIDTH;
+	window_rect.bottom = INITIAL_WINDOW_HEIGHT;
+	DWORD dwStyle = WS_TILEDWINDOW | WS_VISIBLE;
+	AdjustWindowRectEx(&window_rect, dwStyle, FALSE, 0);
+	
+	int adj_window_width = window_rect.right - window_rect.left;
+	int adj_window_height = window_rect.bottom - window_rect.top;
+	HWND window = CreateWindowExA(0, window_class.lpszClassName, "Handmade Hero", dwStyle,
+		CW_USEDEFAULT, CW_USEDEFAULT, adj_window_width, adj_window_height, nullptr, nullptr, hInstance, nullptr);
 	
 	void* game_memory_base_address = nullptr;
 	if constexpr (DEV_MODE && UINTPTR_MAX == UINT64_MAX) game_memory_base_address = (void*)1024_GB;

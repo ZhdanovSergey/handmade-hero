@@ -93,11 +93,23 @@ namespace Game {
 
 	struct Color {
 		f32 red, green, blue;
-		u32 to_hex() {
+		u32 to_hex() const {
 			return ((u32)hm::round(red   * 255.0f) << 16)
 				 | ((u32)hm::round(green * 255.0f) << 8)
 				 | ((u32)hm::round(blue  * 255.0f));
 		}
+	};
+
+	struct Tile_Map {
+		f32 start_x, start_y;
+		f32 tile_width, tile_height;
+		i32 count_x, count_y;
+		i32* tiles;
+	};
+
+	struct World_Map {
+		i32 count_x, count_y;
+		Tile_Map* tile_maps;
 	};
 
 	extern "C" void update_and_render(const Input& input, Memory& memory, Screen_Buffer& screen_buffer);
@@ -107,6 +119,9 @@ namespace Game {
 	extern "C" void get_sound_samples(Memory& memory, Sound_Buffer& sound_buffer);
 	using Get_Sound_Samples = decltype(get_sound_samples);
 
-	static void draw_rectangle(Screen_Buffer& screen_buffer, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32, Color color);
+	static bool check_world_point_empty(const World_Map& world_map, i32 world_x, i32 world_y, f32 tile_test_x, f32 tile_test_y);
+	static bool check_tile_point_empty(const Tile_Map& tile_map, f32 tile_test_x, f32 tile_test_y);
+	static Tile_Map* get_tile_map(const World_Map& world_map, i32 world_x, i32 world_y);
+	static void draw_rectangle(Screen_Buffer& screen_buffer, const Color& color, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32);
 	static void dev_render_mouse_test(const Input& input, Screen_Buffer& screen_buffer);
 }
