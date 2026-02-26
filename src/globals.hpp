@@ -35,12 +35,9 @@ namespace hm {
     static constexpr i32 array_size(const T (&)[N]) { return N; }
     static inline i32 min(i32 a, i32 b) { return a < b ? a : b; }
     static inline i32 max(i32 a, i32 b) { return a > b ? a : b; }
-    static inline f32 round(f32 x) { return (f32)(i32)(x + 0.5f * ((x > 0) - (x < 0))); }
-
-    static inline f32 ceil(f32 x) {
-        f32 x_trunc = (f32)(i32)x;
-        return x_trunc + 1.0f * (x > 0 && x > x_trunc);
-    }
+    static inline i32 round(f32 x) { return (i32)(x + 0.5f * ((x > 0) - (x < 0))); }
+    static inline i32 floor(f32 x) { return (i32)x - (x < (i32)x); }
+    static inline i32 ceil (f32 x) { return (i32)x + (x > (i32)x); }
 
     static inline void memcpy(void* dest, const void* src, i64 size) {
         for (i64 i = 0; i < size; i++) {

@@ -3,10 +3,7 @@
 #include "globals.hpp"
 
 namespace Game {
-	struct Game_State {
-		f32 player_x;
-		f32 player_y;
-	};
+	struct World;
 
 	struct Button {
 		bool is_pressed;
@@ -100,28 +97,44 @@ namespace Game {
 		}
 	};
 
-	struct Tile_Map {
-		f32 start_x, start_y;
-		f32 tile_width, tile_height;
-		i32 count_x, count_y;
-		i32* tiles;
+	struct Position {
+		// TODO: сделать методы для изменения с автоматической нормализацией после введения векторов
+		i32 scene_x, scene_y;
+		f32 point_x, point_y;
+
+		i32 get_tile_x(f32 tile_width) const { return (i32)hm::floor(point_x / tile_width); }
+		i32 get_tile_y(f32 tile_height) const { return (i32)hm::floor(point_y / tile_height); }
+		void normalize(const World& world);
 	};
 
-	struct World_Map {
-		i32 count_x, count_y;
-		Tile_Map* tile_maps;
+	struct Scene {
+		i32* tiles;
+		// TODO: добавить геттер
+		// i32 get_tile() const { return tiles[tile_y * world.scene_width + tile_x]; };
+	};
+
+	struct World {
+		i32 width, height;
+		i32 scene_width, scene_height;
+		f32 tile_width, tile_height;
+		Scene* scenes;
+
+		f32 get_scene_width_pixels()  const { return scene_width  * tile_width; };
+		f32 get_scene_height_pixels() const { return scene_height * tile_height; };
+		Scene& get_scene(const Position& player_pos) const { return scenes[player_pos.scene_y * width + player_pos.scene_x]; };
+	};
+
+	struct Game_State {
+		Position player_pos;
 	};
 
 	extern "C" void update_and_render(const Input& input, Memory& memory, Screen_Buffer& screen_buffer);
 	using Update_And_Render = decltype(update_and_render);
-
 	// get_sound_samples должен быть быстрым, не больше 1ms
 	extern "C" void get_sound_samples(Memory& memory, Sound_Buffer& sound_buffer);
 	using Get_Sound_Samples = decltype(get_sound_samples);
 
-	static bool check_world_point_empty(const World_Map& world_map, i32 world_x, i32 world_y, f32 tile_test_x, f32 tile_test_y);
-	static bool check_tile_point_empty(const Tile_Map& tile_map, f32 tile_test_x, f32 tile_test_y);
-	static Tile_Map* get_tile_map(const World_Map& world_map, i32 world_x, i32 world_y);
+	static bool check_empty_tile(const World& world, const Position& position);
 	static void draw_rectangle(Screen_Buffer& screen_buffer, const Color& color, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32);
 	static void dev_render_mouse_test(const Input& input, Screen_Buffer& screen_buffer);
 }

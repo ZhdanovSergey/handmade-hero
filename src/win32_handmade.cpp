@@ -123,8 +123,8 @@ static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
 
 static void wait_until_end_of_frame(i64 flip_timestamp) {
 	f32 flip_seconds_elapsed = get_seconds_elapsed(flip_timestamp);
-	if (SLEEP_GRANULARITY_MS) {
-		f32 sleep_ms = 1000.0f * (TARGET_SECONDS_PER_FRAME - flip_seconds_elapsed) - SLEEP_GRANULARITY_MS;
+	if (SLEEP_GRANULARITY_SECONDS) {
+		f32 sleep_ms = 1000.0f * (TARGET_SECONDS_PER_FRAME - SLEEP_GRANULARITY_SECONDS - flip_seconds_elapsed);
 		if (sleep_ms >= 1) Sleep((DWORD)sleep_ms);
 	}
 	flip_seconds_elapsed = get_seconds_elapsed(flip_timestamp);
@@ -171,8 +171,8 @@ Game_Code::Game_Code() {
 	memset(&game_code, 0, sizeof(game_code));
 	game_code.update_and_render = [](auto...){};
 	game_code.get_sound_samples = [](auto...){};
-	get_build_file_path("handmade.dll", game_code.dll_path, sizeof(game_code.dll_path));
-	get_build_file_path("handmade_temp.dll", game_code.temp_dll_path, sizeof(game_code.temp_dll_path));
+	get_build_file_path("game.dll", game_code.dll_path, sizeof(game_code.dll_path));
+	get_build_file_path("game_temp.dll", game_code.temp_dll_path, sizeof(game_code.temp_dll_path));
 	game_code.load();
 }
 
