@@ -1,5 +1,4 @@
 #include "game.hpp"
-#include "game_tiles.cpp"
 
 namespace Game {
 	extern "C" void get_sound_samples(Memory& memory, Sound_Buffer& sound_buffer) {
@@ -9,29 +8,12 @@ namespace Game {
 			sample++;
 		}
 	}
-	
-	extern "C" void update_and_render(const Input& input, Memory& memory, Screen_Buffer& screen_buffer) {
-		assert((i64)sizeof(Game_State) <= memory.permanent_size);
-		
-		World world = {};
-		world.width = WORLD_WIDTH;
-		world.height = WORLD_HEIGHT;
-		world.scene_width = SCENE_WIDTH;
-		world.scene_height = SCENE_HEIGHT;
-		world.tile_size = 60.0f;
-		world.scenes = *SCENES;
-		
-		Game_State& game_state = *(Game_State*)memory.permanent_storage;
-		if (!memory.is_initialized) {
-			memory.is_initialized = true;
-			game_state.player_pos.point_x = 100.0f;
-			game_state.player_pos.point_y = 100.0f;
-			assert(check_empty_tile(world, game_state.player_pos));
-		}
 
+	extern "C" void update_and_render(const Input& input, Memory& memory, Screen_Buffer& screen_buffer) {		
+		Game_State& game_state = memory.get_game_state();
 		f32 player_speed  = 200.0f;
-		f32 player_width  = world.tile_size * 0.75f;
-		f32 player_height = world.tile_size;
+		f32 player_width  = game_state.world.tile_size * 0.75f;
+		f32 player_height = game_state.world.tile_size;
 
 		Position new_player_pos = game_state.player_pos;
 		for (auto& controller : input.controllers) {
@@ -43,30 +25,32 @@ namespace Game {
 			if (controller.move_down.is_pressed)  player_dy =   player_speed;
 			new_player_pos.point_x += player_dx * input.frame_dt;
 			new_player_pos.point_y += player_dy * input.frame_dt;
-			new_player_pos.normalize(world);
+			new_player_pos.normalize(game_state.world.tile_size);
 		}
 
 		Position new_player_pos_left  = new_player_pos;
 		new_player_pos_left.point_x  -= player_width / 2;
-		new_player_pos_left.normalize(world);
+		new_player_pos_left.normalize(game_state.world.tile_size);
 
 		Position new_player_pos_right = new_player_pos;
 		new_player_pos_right.point_x += player_width / 2;
-		new_player_pos_right.normalize(world);
+		new_player_pos_right.normalize(game_state.world.tile_size);
 
-		if (check_empty_tile(world, new_player_pos_left) && check_empty_tile(world, new_player_pos) && check_empty_tile(world, new_player_pos_right)) {
+		if (check_empty_tile(game_state.world, new_player_pos_left)
+		 && check_empty_tile(game_state.world, new_player_pos)
+		 && check_empty_tile(game_state.world, new_player_pos_right)) {
 			game_state.player_pos = new_player_pos;
 		}
-		Scene current_scene = world.get_scene(game_state.player_pos);
+		Scene current_scene = game_state.world.get_scene(game_state.player_pos);
 
 		draw_rectangle(screen_buffer, Color{ 1.0f, 0.0f, 1.0f }, 0.0f, (f32)screen_buffer.width, 0.0f, (f32)screen_buffer.height);
-		for (i32 tile_y = 0; tile_y < world.scene_height; tile_y++) {
-			for (i32 tile_x = 0; tile_x < world.scene_width; tile_x++) {
-				f32 min_x = tile_x * world.tile_size;
-				f32 min_y = tile_y * world.tile_size;
-				f32 max_x = min_x + world.tile_size;
-				f32 max_y = min_y + world.tile_size;
-				Color color = current_scene.tiles[tile_y * world.scene_width + tile_x] ? Color{ 1.0f, 1.0f, 1.0f } : Color{ 0.5f, 0.5f, 0.5f };
+		for (i32 tile_y = 0; tile_y < Scene::HEIGHT; tile_y++) {
+			for (i32 tile_x = 0; tile_x < Scene::WIDTH; tile_x++) {
+				f32 min_x = tile_x * game_state.world.tile_size;
+				f32 min_y = tile_y * game_state.world.tile_size;
+				f32 max_x = min_x + game_state.world.tile_size;
+				f32 max_y = min_y + game_state.world.tile_size;
+				Color color = current_scene.tiles[tile_y][tile_x] ? Color{ 1.0f, 1.0f, 1.0f } : Color{ 0.5f, 0.5f, 0.5f };
 				draw_rectangle(screen_buffer, color, min_x, max_x, min_y, max_y);
 			}
 		}
@@ -82,20 +66,20 @@ namespace Game {
 		i32 tile_x = position.get_tile_x(world.tile_size);
 		i32 tile_y = position.get_tile_y(world.tile_size);
 
-		return tile_x >= 0 && tile_x < world.scene_width  &&
-		       tile_y >= 0 && tile_y < world.scene_height &&
-	           world.get_scene(position).tiles[tile_y * world.scene_width + tile_x] == 0;
+		return tile_x >= 0 && tile_x < Scene::WIDTH  &&
+		       tile_y >= 0 && tile_y < Scene::HEIGHT &&
+	           world.get_scene(position).tiles[tile_y][tile_x] == 0;
 	}
 
-	void Position::normalize(const World& world) {
+	void Position::normalize(f32 tile_size) {
 		auto& position = *this;
-		f32 scene_width_pixels  = world.get_scene_width_pixels();
-		f32 scene_height_pixels = world.get_scene_height_pixels();
+		f32 scene_width_pixels  = Scene::get_width_pixels(tile_size);
+		f32 scene_height_pixels = Scene::get_height_pixels(tile_size);
 
 		if (position.point_x < 0 && position.scene_x - 1 >= 0) {
 			position.scene_x -= 1;
 			position.point_x += scene_width_pixels;
-		} else if (position.point_x >= scene_width_pixels && position.scene_x + 1 < world.width) {
+		} else if (position.point_x >= scene_width_pixels && position.scene_x + 1 < World::WIDTH) {
 			position.scene_x += 1;
 			position.point_x -= scene_width_pixels;
 		}
@@ -103,7 +87,7 @@ namespace Game {
 		if (position.point_y < 0 && position.scene_y - 1 >= 0) {
 			position.scene_y -= 1;
 			position.point_y += scene_height_pixels;
-		} else if (position.point_y >= scene_height_pixels && position.scene_y + 1 < world.height) {
+		} else if (position.point_y >= scene_height_pixels && position.scene_y + 1 < World::HEIGHT) {
 			position.scene_y += 1;
 			position.point_y -= scene_height_pixels;
 		}
@@ -144,4 +128,85 @@ namespace Game {
 		if (input.dev_mouse.left_button.is_pressed) draw_rectangle(screen_buffer, Color{ 1.0f, 1.0f, 1.0f }, 10.0f, 20.0f, 10.0f, 20.0f);
 		if (input.dev_mouse.right_button.is_pressed) draw_rectangle(screen_buffer, Color{ 1.0f, 1.0f, 1.0f }, 30.0f, 40.0f, 10.0f, 20.0f);
 	};
+
+	Game_State& Memory::get_game_state() {
+		auto& memory = *this;
+		Game_State& game_state = *(Game_State*)memory.permanent_storage;
+		if (memory.is_initialized) return game_state;
+
+		i32 TILES_00[Scene::HEIGHT][Scene::WIDTH] = {
+			{ 1,1,1,1,1,1, 1,1,1,1,1, 1,1,1,1,1,1 },
+			{ 1,0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0,1 },
+			{ 1,0,0,0,0,0, 1,0,0,0,0, 1,0,0,0,0,1 },
+
+			{ 1,0,0,0,0,1, 1,0,0,0,1, 1,0,0,0,0,1 },
+			{ 1,0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0,0 },
+			{ 1,0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0,1 },
+			
+			{ 1,0,0,0,0,1, 1,1,1,1,1, 1,0,0,0,0,1 },
+			{ 1,0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0,1 },
+			{ 1,1,1,1,1,1, 1,1,0,1,1, 1,1,1,1,1,1 },
+		};
+		i32 TILES_01[Scene::HEIGHT][Scene::WIDTH] = {
+			{ 1,1,1,1,1,1, 1,1,1,1,1, 1,1,1,1,1,1 },
+			{ 1,0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0,1 },
+			{ 1,0,0,0,0,1, 0,0,0,0,1, 0,0,0,0,0,1 },
+
+			{ 1,0,0,0,0,1, 1,0,0,0,1, 1,0,0,0,0,1 },
+			{ 0,0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0,1 },
+			{ 1,0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0,1 },
+			
+			{ 1,0,0,0,0,1, 1,1,1,1,1, 1,0,0,0,0,1 },
+			{ 1,0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0,1 },
+			{ 1,1,1,1,1,1, 1,1,0,1,1, 1,1,1,1,1,1 },
+		};
+		i32 TILES_10[Scene::HEIGHT][Scene::WIDTH] = {
+			{ 1,1,1,1,1,1, 1,1,0,1,1, 1,1,1,1,1,1 },
+			{ 1,0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0,1 },
+			{ 1,0,0,0,0,1, 1,0,0,0,1, 1,0,0,0,0,1 },
+
+			{ 1,0,0,0,0,0, 1,0,0,0,0, 1,0,0,0,0,1 },
+			{ 1,0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0,0 },
+			{ 1,0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0,1 },
+			
+			{ 1,0,0,0,0,1, 1,1,1,1,1, 1,0,0,0,0,1 },
+			{ 1,0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0,1 },
+			{ 1,1,1,1,1,1, 1,1,1,1,1, 1,1,1,1,1,1 },
+		};
+		i32 TILES_11[Scene::HEIGHT][Scene::WIDTH] = {
+			{ 1,1,1,1,1,1, 1,1,0,1,1, 1,1,1,1,1,1 },
+			{ 1,0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0,1 },
+			{ 1,0,0,0,0,1, 1,0,0,0,1, 1,0,0,0,0,1 },
+
+			{ 1,0,0,0,0,1, 0,0,0,0,1, 0,0,0,0,0,1 },
+			{ 0,0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0,1 },
+			{ 1,0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0,1 },
+			
+			{ 1,0,0,0,0,1, 1,1,1,1,1, 1,0,0,0,0,1 },
+			{ 1,0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0,1 },
+			{ 1,1,1,1,1,1, 1,1,1,1,1, 1,1,1,1,1,1 },
+		};
+
+		hm::memcpy((void*)game_state.TILES_00, TILES_00, sizeof(TILES_00));
+		hm::memcpy((void*)game_state.TILES_01, TILES_01, sizeof(TILES_01));
+		hm::memcpy((void*)game_state.TILES_10, TILES_10, sizeof(TILES_10));
+		hm::memcpy((void*)game_state.TILES_11, TILES_11, sizeof(TILES_11));
+
+		Scene SCENES[World::HEIGHT][World::WIDTH] = {
+			{ Scene{ game_state.TILES_00 }, Scene{ game_state.TILES_01 } },
+			{ Scene{ game_state.TILES_10 }, Scene{ game_state.TILES_11 } },
+		};
+		hm::memcpy((Scene*)game_state.SCENES, SCENES, sizeof(SCENES));
+
+		game_state.world.scenes = (Scene*)game_state.SCENES;
+		game_state.world.tile_size = 60.0f;
+		game_state.player_pos.point_x = 100.0f;
+		game_state.player_pos.point_y = 100.0f;
+		
+		assert((i64)sizeof(Game_State) <= memory.permanent_size);
+		assert(check_empty_tile(game_state.world, game_state.player_pos));
+		
+		memory.is_initialized = true;
+		return game_state;
+	}
 }

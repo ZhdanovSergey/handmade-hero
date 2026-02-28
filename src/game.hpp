@@ -3,8 +3,6 @@
 #include "globals.hpp"
 
 namespace Game {
-	struct World;
-
 	struct Button {
 		bool is_pressed;
 		i32 transitions_count;
@@ -60,19 +58,6 @@ namespace Game {
 		}
 	};
 
-	struct Memory {
-		bool is_initialized;
-		i64 permanent_size;
-		i64 transient_size;
-		u8* permanent_storage;
-		u8* transient_storage;
-    	Platform::Read_File_Sync* read_file_sync;
-    	Platform::Write_File_Sync* write_file_sync;
-    	Platform::Free_File_Memory* free_file_memory;
-
-		i64 get_total_size() const { return permanent_size + transient_size; }
-	};
-
 	struct Screen_Buffer {
 		i32 width, height;
 		u32* pixels;
@@ -104,28 +89,51 @@ namespace Game {
 
 		i32 get_tile_x(f32 tile_size) const { return hm::floor(point_x / tile_size); }
 		i32 get_tile_y(f32 tile_size) const { return hm::floor(point_y / tile_size); }
-		void normalize(const World& world);
+		void normalize(f32 tile_size);
 	};
 
 	struct Scene {
-		i32* tiles;
-		// TODO: добавить геттер?
-		// i32 get_tile() const { return tiles[tile_y * world.scene_width + tile_x]; };
+		static const i32 WIDTH = 17;
+		static const i32 HEIGHT = 9;
+		static f32 get_width_pixels (f32 tile_size) { return Scene::WIDTH  * tile_size; };
+		static f32 get_height_pixels(f32 tile_size) { return Scene::HEIGHT * tile_size; };
+
+		const i32 (*tiles)[Scene::WIDTH];
 	};
 
 	struct World {
-		i32 width, height;
-		i32 scene_width, scene_height;
-		f32 tile_size;
-		Scene* scenes;
+		static const i32 WIDTH = 2;
+		static const i32 HEIGHT = 2;
 
-		f32 get_scene_width_pixels()  const { return scene_width  * tile_size; };
-		f32 get_scene_height_pixels() const { return scene_height * tile_size; };
-		Scene get_scene(const Position& player_pos) const { return scenes[player_pos.scene_y * width + player_pos.scene_x]; };
+		f32 tile_size;
+		const Scene* scenes;
+		
+		Scene get_scene(const Position& player_pos) const { return scenes[player_pos.scene_y * World::WIDTH + player_pos.scene_x]; };
 	};
 
 	struct Game_State {
+		// TODO: const для TILES и SCENES? компилятор удаляет конструктор по умолчанию
+		i32 TILES_00[Scene::HEIGHT][Scene::WIDTH];
+		i32 TILES_01[Scene::HEIGHT][Scene::WIDTH];
+		i32 TILES_10[Scene::HEIGHT][Scene::WIDTH];
+		i32 TILES_11[Scene::HEIGHT][Scene::WIDTH];
+		Scene SCENES[World::HEIGHT][World::WIDTH];
+		World world;
 		Position player_pos;
+	};
+
+	struct Memory {
+		bool is_initialized;
+		i64 permanent_size;
+		i64 transient_size;
+		u8* permanent_storage;
+		u8* transient_storage;
+    	Platform::Read_File_Sync* read_file_sync;
+    	Platform::Write_File_Sync* write_file_sync;
+    	Platform::Free_File_Memory* free_file_memory;
+
+		Game_State& get_game_state();
+		i64 get_total_size() const { return permanent_size + transient_size; }
 	};
 
 	extern "C" void update_and_render(const Input& input, Memory& memory, Screen_Buffer& screen_buffer);
