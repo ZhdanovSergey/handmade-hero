@@ -1,6 +1,9 @@
 #include "globals.hpp"
+#include "game.hpp"
 
 namespace Game {
+    static const i32 WORLD_WIDTH = 2;
+    static const i32 WORLD_HEIGHT = 2;
     static const i32 SCENE_WIDTH = 17;
     static const i32 SCENE_HEIGHT = 9;
 
@@ -59,5 +62,10 @@ namespace Game {
         { 1,0,0,0,0,1, 1,1,1,1,1, 1,0,0,0,0,1 },
         { 1,0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0,1 },
         { 1,1,1,1,1,1, 1,1,1,1,1, 1,1,1,1,1,1 },
+    };
+    
+    static Scene SCENES[WORLD_HEIGHT][WORLD_WIDTH] = {
+        { Scene{ *TILES_00 }, Scene{ *TILES_01 } },
+        { Scene{ *TILES_10 }, Scene{ *TILES_11 } },
     };
 }

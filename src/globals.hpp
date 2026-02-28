@@ -35,9 +35,9 @@ namespace hm {
     static constexpr i32 array_size(const T (&)[N]) { return N; }
     static inline i32 min(i32 a, i32 b) { return a < b ? a : b; }
     static inline i32 max(i32 a, i32 b) { return a > b ? a : b; }
-    static inline i32 round(f32 x) { return (i32)(x + 0.5f * ((x > 0) - (x < 0))); }
-    static inline i32 floor(f32 x) { return (i32)x - (x < (i32)x); }
     static inline i32 ceil (f32 x) { return (i32)x + (x > (i32)x); }
+    static inline i32 floor(f32 x) { return (i32)x - (x < (i32)x); }
+    static inline i32 round(f32 x) { return (i32)(x + 0.5f * ((x > 0) - (x < 0))); }
 
     static inline void memcpy(void* dest, const void* src, i64 size) {
         for (i64 i = 0; i < size; i++) {
@@ -54,8 +54,7 @@ namespace hm {
     static inline i32 strlen(const char* src) {
         i32 length = 0;
         while (*src++) { length++; }
-        // учитываем 0 чтобы результат был такой же как у sizeof
-        return length + 1;
+        return length + 1; // учитываем 0
     }
 
     static void strcat(

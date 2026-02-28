@@ -258,7 +258,7 @@ void Input::process_gamepad() {
 }
 
 f32 Input::get_normalized_stick_value(SHORT value, SHORT deadzone) {
-	return (-deadzone <= value && value < 0) || (0 < value && value <= deadzone) ? 0 : value / ((f32)INT16_MAX + 1.0f);
+	return value / 32768.0f * (value < -deadzone || value > deadzone);
 }
 
 void Input::process_gamepad_button(Game::Button& state, bool is_pressed) {

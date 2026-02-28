@@ -98,30 +98,30 @@ namespace Game {
 	};
 
 	struct Position {
-		// TODO: сделать методы для изменения с автоматической нормализацией после введения векторов
+		// TODO: сделать сеттеры с автоматической нормализацией после введения векторов
 		i32 scene_x, scene_y;
 		f32 point_x, point_y;
 
-		i32 get_tile_x(f32 tile_width) const { return (i32)hm::floor(point_x / tile_width); }
-		i32 get_tile_y(f32 tile_height) const { return (i32)hm::floor(point_y / tile_height); }
+		i32 get_tile_x(f32 tile_size) const { return hm::floor(point_x / tile_size); }
+		i32 get_tile_y(f32 tile_size) const { return hm::floor(point_y / tile_size); }
 		void normalize(const World& world);
 	};
 
 	struct Scene {
 		i32* tiles;
-		// TODO: добавить геттер
+		// TODO: добавить геттер?
 		// i32 get_tile() const { return tiles[tile_y * world.scene_width + tile_x]; };
 	};
 
 	struct World {
 		i32 width, height;
 		i32 scene_width, scene_height;
-		f32 tile_width, tile_height;
+		f32 tile_size;
 		Scene* scenes;
 
-		f32 get_scene_width_pixels()  const { return scene_width  * tile_width; };
-		f32 get_scene_height_pixels() const { return scene_height * tile_height; };
-		Scene& get_scene(const Position& player_pos) const { return scenes[player_pos.scene_y * width + player_pos.scene_x]; };
+		f32 get_scene_width_pixels()  const { return scene_width  * tile_size; };
+		f32 get_scene_height_pixels() const { return scene_height * tile_size; };
+		Scene get_scene(const Position& player_pos) const { return scenes[player_pos.scene_y * width + player_pos.scene_x]; };
 	};
 
 	struct Game_State {
