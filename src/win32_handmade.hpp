@@ -31,7 +31,6 @@ static const f32 TARGET_SECONDS_PER_FRAME = []{
 	return 1.0f / target_frame_rate;
 }();
 
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow);
 static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 static void wait_until_end_of_frame(i64 flip_timestamp);
 static void get_build_file_path(const char* file_name, char* dest, i32 dest_size);
@@ -88,7 +87,7 @@ struct Dev_Replayer {
 
 struct Screen {
 	Screen();
-	Game::Screen_Buffer game_screen;
+	Game::Screen game_screen;
 	void resize(i32 width, i32 height);
 	void submit(HWND window, HDC device_context) const;
 	void dev_draw_vertical(i32 x, i32 top, i32 bottom, u32 color);
@@ -108,7 +107,7 @@ struct Dev_Sound_Time_Marker {
 
 struct Sound {
 	Sound(HWND window);
-	Game::Sound_Buffer game_sound;
+	Game::Sound game_sound;
 	void calc_samples_to_write(i64 flip_timestamp);
 	void submit();
 	void dev_draw_sync(Screen& screen);

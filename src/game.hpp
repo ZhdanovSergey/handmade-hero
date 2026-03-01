@@ -58,21 +58,6 @@ namespace Game {
 		}
 	};
 
-	struct Screen_Buffer {
-		i32 width, height;
-		u32* pixels;
-	};
-
-	struct Sound_Sample {
-		i16 left, right;
-	};
-
-	struct Sound_Buffer {
-		i32 samples_per_second;
-		i32 samples_to_write;
-		Sound_Sample* samples;
-	};
-
 	struct Color {
 		f32 red, green, blue;
 		u32 to_hex() const {
@@ -82,33 +67,52 @@ namespace Game {
 		}
 	};
 
+	struct Screen {
+		i32 width, height;
+		u32* pixels;
+
+		// TODO: прокидывание tile_size_pixels это костыль для смещения по горизонтали, придумать как можно обойтись без этого
+		void draw_rectangle(const Color& color, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32, f32 tile_size_pixels);
+		void dev_draw_mouse_test(const Input& input, f32 tile_size_pixels);
+	};
+
+	struct Sound_Sample {
+		i16 left, right;
+	};
+
+	struct Sound {
+		i32 samples_per_second;
+		i32 samples_to_write;
+		Sound_Sample* samples;
+	};
+
 	struct Position {
 		// TODO: сделать сеттеры с автоматической нормализацией после введения векторов
 		i32 scene_x, scene_y;
-		f32 point_x, point_y;
+		f32 point_x, point_y; // в пикселях
 
-		i32 get_tile_x(f32 tile_size) const { return hm::floor(point_x / tile_size); }
-		i32 get_tile_y(f32 tile_size) const { return hm::floor(point_y / tile_size); }
-		void normalize(f32 tile_size);
+		i32 get_tile_x(f32 tile_size_pixels) const { return hm::floor(point_x / tile_size_pixels); }
+		i32 get_tile_y(f32 tile_size_pixels) const { return hm::floor(point_y / tile_size_pixels); }
+		void normalize(f32 tile_size_pixels);
 	};
 
 	struct Scene {
-		static const i32 WIDTH = 17;
-		static const i32 HEIGHT = 9;
-		static f32 get_width_pixels (f32 tile_size) { return Scene::WIDTH  * tile_size; };
-		static f32 get_height_pixels(f32 tile_size) { return Scene::HEIGHT * tile_size; };
+		static constexpr i32 WIDTH = 17;
+		static constexpr i32 HEIGHT = 9;
 
 		const i32 (*tiles)[Scene::WIDTH];
 	};
 
 	struct World {
-		static const i32 WIDTH = 2;
-		static const i32 HEIGHT = 2;
+		static constexpr i32 WIDTH = 2;
+		static constexpr i32 HEIGHT = 2;
+		static constexpr f32 TILE_SIZE_METERS = 1.4f;
 
-		f32 tile_size;
+		f32 tile_size_pixels; // TODO: сделать i32?
 		const Scene* scenes;
 		
 		Scene get_scene(const Position& player_pos) const { return scenes[player_pos.scene_y * World::WIDTH + player_pos.scene_x]; };
+		bool check_empty_tile(const Position& position);
 	};
 
 	struct Game_State {
@@ -136,13 +140,9 @@ namespace Game {
 		i64 get_total_size() const { return permanent_size + transient_size; }
 	};
 
-	extern "C" void update_and_render(const Input& input, Memory& memory, Screen_Buffer& screen_buffer);
+	extern "C" void update_and_render(const Input& input, Memory& memory, Screen& screen_buffer);
 	using Update_And_Render = decltype(update_and_render);
 	// get_sound_samples должен быть быстрым, не больше 1ms
-	extern "C" void get_sound_samples(Memory& memory, Sound_Buffer& sound_buffer);
+	extern "C" void get_sound_samples(Memory& memory, Sound& sound_buffer);
 	using Get_Sound_Samples = decltype(get_sound_samples);
-
-	static bool check_empty_tile(const World& world, const Position& position);
-	static void draw_rectangle(Screen_Buffer& screen_buffer, const Color& color, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32);
-	static void dev_render_mouse_test(const Input& input, Screen_Buffer& screen_buffer);
 }

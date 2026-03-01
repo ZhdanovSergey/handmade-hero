@@ -189,25 +189,25 @@ void Game_Code::load() {
 
 	// загружаем копию, чтобы компилятор мог писать в оригинальный файл
 	HMODULE loaded_dll = LoadLibraryA(game_code.temp_dll_path);
-	if (!loaded_dll) return;
-
-	game_code.dll = loaded_dll;
-	game_code.write_time = get_file_write_time(game_code.dll_path);
-	game_code.update_and_render = (Game::Update_And_Render*)GetProcAddress(loaded_dll, "update_and_render");
-	game_code.get_sound_samples = (Game::Get_Sound_Samples*)GetProcAddress(loaded_dll, "get_sound_samples");
+	if (loaded_dll) {
+		game_code.dll = loaded_dll;
+		game_code.write_time = get_file_write_time(game_code.dll_path);
+		game_code.update_and_render = (Game::Update_And_Render*)GetProcAddress(loaded_dll, "update_and_render");
+		game_code.get_sound_samples = (Game::Get_Sound_Samples*)GetProcAddress(loaded_dll, "get_sound_samples");
+	}
 }
 
 void Game_Code::dev_reload_if_recompiled() {
 	if constexpr (!DEV_MODE) return;
 	auto& game_code = *this;
 	FILETIME dll_write_time = get_file_write_time(game_code.dll_path);
-	if (!CompareFileTime(&dll_write_time, &game_code.write_time)) return;
-
-	FreeLibrary(game_code.dll);
-	game_code.dll = nullptr;
-	game_code.update_and_render = [](auto...){};
-	game_code.get_sound_samples = [](auto...){};
-	game_code.load();
+	if (CompareFileTime(&dll_write_time, &game_code.write_time)) {
+		FreeLibrary(game_code.dll);
+		game_code.dll = nullptr;
+		game_code.update_and_render = [](auto...){};
+		game_code.get_sound_samples = [](auto...){};
+		game_code.load();
+	}
 }
 
 Input::Input() {
@@ -217,10 +217,10 @@ Input::Input() {
 	input.XInputSetState = [](auto...){ return 1ul; };
 	input.game_input.frame_dt = TARGET_SECONDS_PER_FRAME;
 	HMODULE xinput_dll = LoadLibraryA("xinput1_3.dll");
-	if (!xinput_dll) return;
-	
-	input.XInputGetState = (Xinput_Get_State*)GetProcAddress(xinput_dll, "XInputGetState");
-	input.XInputSetState = (Xinput_Set_State*)GetProcAddress(xinput_dll, "XInputSetState");
+	if (xinput_dll) {
+		input.XInputGetState = (Xinput_Get_State*)GetProcAddress(xinput_dll, "XInputGetState");
+		input.XInputSetState = (Xinput_Set_State*)GetProcAddress(xinput_dll, "XInputSetState");
+	}	
 }
 
 void Input::process_gamepad() {
@@ -410,8 +410,6 @@ Screen::Screen() {
 
 void Screen::resize(i32 width, i32 height) {
 	auto& screen = *this;
-	if (width == screen.game_screen.width && height == screen.game_screen.height) return;
-
 	VirtualFree(screen.game_screen.pixels, 0, MEM_RELEASE);
 	screen.bitmap_info.bmiHeader.biWidth = (LONG)width;
 	screen.bitmap_info.bmiHeader.biHeight = - (LONG)height; // отрицательный чтобы верхний левый пиксель был первым в буфере
