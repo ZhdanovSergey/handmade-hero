@@ -35,8 +35,8 @@ static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
 static void wait_until_end_of_frame(i64 flip_timestamp);
 static void get_build_file_path(const char* file_name, char* dest, i32 dest_size);
 static FILETIME get_file_write_time(const char* file_name);
-static inline f32 get_seconds_elapsed(i64 start);
-static inline i64 get_timestamp();
+static f32 get_seconds_elapsed(i64 start);
+static i64 get_timestamp();
 
 struct Game_Code {
 	Game_Code();

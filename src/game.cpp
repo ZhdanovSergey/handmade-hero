@@ -9,11 +9,11 @@ namespace Game {
 		}
 	}
 
-	extern "C" void update_and_render(const Input& input, Memory& memory, Screen& screen) {		
+	extern "C" void update_and_render(const Input& input, Memory& memory, Screen& screen) {
 		Game_State& state = memory.get_game_state();
-		f32 player_speed  = 200.0f;
-		f32 player_width  = state.world.tile_size_pixels * 0.75f;
-		f32 player_height = state.world.tile_size_pixels;
+		f32 player_speed  = 5.0f;
+		f32 player_height = 1.4f;
+		f32 player_width  = 1.0f;
 
 		Position new_player_pos = state.player_pos;
 		for (auto& controller : input.controllers) {
@@ -25,16 +25,16 @@ namespace Game {
 			if (controller.move_down.is_pressed)  player_dy =   player_speed;
 			new_player_pos.point_x += player_dx * input.frame_dt;
 			new_player_pos.point_y += player_dy * input.frame_dt;
-			new_player_pos.normalize(state.world.tile_size_pixels);
+			new_player_pos.normalize();
 		}
 
 		Position new_player_pos_left  = new_player_pos;
 		new_player_pos_left.point_x  -= player_width / 2;
-		new_player_pos_left.normalize(state.world.tile_size_pixels);
+		new_player_pos_left.normalize();
 
 		Position new_player_pos_right = new_player_pos;
 		new_player_pos_right.point_x += player_width / 2;
-		new_player_pos_right.normalize(state.world.tile_size_pixels);
+		new_player_pos_right.normalize();
 
 		if (state.world.check_empty_tile(new_player_pos_left)
 		 && state.world.check_empty_tile(new_player_pos)
@@ -43,58 +43,103 @@ namespace Game {
 		}
 		Scene current_scene = state.world.get_scene(state.player_pos);
 
-		screen.draw_rectangle(Color{ 1.0f, 0.0f, 1.0f }, 0.0f, (f32)screen.width, 0.0f, (f32)screen.height, state.world.tile_size_pixels);
+		f32 tile_size_pixels = World::TILE_SIZE * state.pixels_per_unit;
+		screen.draw_rectangle(Color{ 1.0f, 0.0f, 1.0f }, 0.0f, (f32)screen.width, 0.0f, (f32)screen.height, tile_size_pixels);
 		for (i32 tile_y = 0; tile_y < Scene::HEIGHT; tile_y++) {
 			for (i32 tile_x = 0; tile_x < Scene::WIDTH; tile_x++) {
-				f32 min_x = tile_x * state.world.tile_size_pixels;
-				f32 min_y = tile_y * state.world.tile_size_pixels;
-				f32 max_x = min_x + state.world.tile_size_pixels;
-				f32 max_y = min_y + state.world.tile_size_pixels;
+				f32 min_x = tile_x * tile_size_pixels;
+				f32 min_y = tile_y * tile_size_pixels;
+				f32 max_x = min_x + tile_size_pixels;
+				f32 max_y = min_y + tile_size_pixels;
 				Color color = current_scene.tiles[tile_y][tile_x] ? Color{ 1.0f, 1.0f, 1.0f } : Color{ 0.5f, 0.5f, 0.5f };
-				screen.draw_rectangle(color, min_x, max_x, min_y, max_y, state.world.tile_size_pixels);
+
+				// в какой клетке находится игрок по мнению игры
+				if constexpr (DEV_MODE) if (state.player_pos.tile_x == tile_x && state.player_pos.tile_y == tile_y) {
+					color = Color{ 0.0f, 0.0f, 0.0f };
+				}
+
+				screen.draw_rectangle(color, min_x, max_x, min_y, max_y, tile_size_pixels);
 			}
 		}
 
-		f32 player_min_x = state.player_pos.point_x - player_width / 2;
-		f32 player_min_y = state.player_pos.point_y - player_height;
-		f32 player_max_x = player_min_x + player_width;
-		f32 player_max_y = player_min_y + player_height;
-		screen.draw_rectangle(Color{ 1.0f, 0.0f, 0.0f }, player_min_x, player_max_x, player_min_y, player_max_y, state.world.tile_size_pixels);
+		f32 player_min_x = (state.player_pos.tile_x * World::TILE_SIZE + state.player_pos.point_x - player_width / 2) * state.pixels_per_unit;
+		f32 player_min_y = (state.player_pos.tile_y * World::TILE_SIZE + state.player_pos.point_y - player_height   ) * state.pixels_per_unit;
+		f32 player_max_x = player_min_x + player_width  * state.pixels_per_unit;
+		f32 player_max_y = player_min_y + player_height * state.pixels_per_unit;
+		screen.draw_rectangle(Color{ 1.0f, 0.0f, 0.0f }, player_min_x, player_max_x, player_min_y, player_max_y, tile_size_pixels);
 	};
 
 	bool World::check_empty_tile(const Position& position) {
 		auto& world = *this;
-		i32 tile_x = position.get_tile_x(world.tile_size_pixels);
-		i32 tile_y = position.get_tile_y(world.tile_size_pixels);
-
-		return tile_x >= 0 && tile_x < Scene::WIDTH  &&
-		       tile_y >= 0 && tile_y < Scene::HEIGHT &&
-	           world.get_scene(position).tiles[tile_y][tile_x] == 0;
+		return world.get_scene(position).tiles[position.tile_y][position.tile_x] == 0;
 	}
 
-	void Position::normalize(f32 tile_size_pixels) {
+	// TODO: учесть возможность смещения больше чем на 1 клетку
+	void Position::normalize() {
 		auto& position = *this;
-		f32 scene_width_pixels  = Scene::WIDTH  * tile_size_pixels;
-		f32 scene_height_pixels = Scene::HEIGHT * tile_size_pixels;
 
-		if (position.point_x < 0 && position.scene_x - 1 >= 0) {
+		if (position.point_x < 0) {
+			position.tile_x  -= 1;
+			position.point_x += World::TILE_SIZE;
+		} else if (position.point_x >= World::TILE_SIZE) {
+			position.tile_x  += 1;
+			position.point_x -= World::TILE_SIZE;
+		}
+
+		if (position.point_y < 0) {
+			position.tile_y  -= 1;
+			position.point_y += World::TILE_SIZE;
+		} else if (position.point_y >= World::TILE_SIZE) {
+			position.tile_y  += 1;
+			position.point_y -= World::TILE_SIZE;
+		}
+
+		if (position.tile_x < 0) {
 			position.scene_x -= 1;
-			position.point_x += scene_width_pixels;
-		} else if (position.point_x >= scene_width_pixels && position.scene_x + 1 < World::WIDTH) {
+			position.tile_x  += Scene::WIDTH;
+		} else if (position.tile_x >= Scene::WIDTH) {
 			position.scene_x += 1;
-			position.point_x -= scene_width_pixels;
+			position.tile_x  -= Scene::WIDTH;
 		}
 
-		if (position.point_y < 0 && position.scene_y - 1 >= 0) {
+		if (position.tile_y < 0) {
 			position.scene_y -= 1;
-			position.point_y += scene_height_pixels;
-		} else if (position.point_y >= scene_height_pixels && position.scene_y + 1 < World::HEIGHT) {
+			position.tile_y  += Scene::HEIGHT;
+		} else if (position.tile_y >= Scene::HEIGHT) {
 			position.scene_y += 1;
-			position.point_y -= scene_height_pixels;
+			position.tile_y  -= Scene::HEIGHT;
 		}
 
-		assert(position.point_x >= 0 && position.point_x < scene_width_pixels);
-		assert(position.point_y >= 0 && position.point_y < scene_height_pixels);
+		if (position.scene_x < 0) {
+			position.scene_x = 0;
+			position.tile_x  = 0;
+			position.point_x = 0;
+		} else if (position.scene_x >= World::WIDTH) {
+			position.scene_x = World::WIDTH - 1;
+			position.tile_x  = Scene::WIDTH - 1;
+			position.point_x = World::TILE_SIZE - 0.001f;
+		}
+
+		if (position.scene_y < 0) {
+			position.scene_y = 0;
+			position.tile_y  = 0;
+			position.point_y = 0;
+		} else if (position.scene_y >= World::HEIGHT) {
+			position.scene_y = World::HEIGHT - 1;
+			position.tile_y  = Scene::HEIGHT - 1;
+			position.point_y = World::TILE_SIZE - 0.001f;
+		}
+
+		// TODO: при получении дробной части через деление можно получить ненормализованное значение из-за округления
+		// можно на время сделать <= World::TILE_SIZE
+		assert(position.point_x >= 0 && position.point_x < World::TILE_SIZE);
+		assert(position.point_y >= 0 && position.point_y < World::TILE_SIZE);
+
+		assert(position.tile_x >= 0 && position.tile_x < Scene::WIDTH);
+		assert(position.tile_y >= 0 && position.tile_y < Scene::HEIGHT);
+
+		assert(position.scene_x >= 0 && position.scene_x < World::WIDTH);
+		assert(position.scene_y >= 0 && position.scene_y < World::HEIGHT);
 	}
 
 	void Screen::draw_rectangle(const Color& color, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32, f32 tile_size_pixels) {
@@ -189,21 +234,25 @@ namespace Game {
 			{ 1,1,1,1,1,1, 1,1,1,1,1, 1,1,1,1,1,1 },
 		};
 
-		hm::memcpy((void*)state.TILES_00, TILES_00, sizeof(TILES_00));
-		hm::memcpy((void*)state.TILES_01, TILES_01, sizeof(TILES_01));
-		hm::memcpy((void*)state.TILES_10, TILES_10, sizeof(TILES_10));
-		hm::memcpy((void*)state.TILES_11, TILES_11, sizeof(TILES_11));
+		hm::memcpy(state.TILES_00, TILES_00, sizeof(TILES_00));
+		hm::memcpy(state.TILES_01, TILES_01, sizeof(TILES_01));
+		hm::memcpy(state.TILES_10, TILES_10, sizeof(TILES_10));
+		hm::memcpy(state.TILES_11, TILES_11, sizeof(TILES_11));
 
 		Scene SCENES[World::HEIGHT][World::WIDTH] = {
 			{ Scene{ state.TILES_00 }, Scene{ state.TILES_01 } },
 			{ Scene{ state.TILES_10 }, Scene{ state.TILES_11 } },
 		};
-		hm::memcpy((Scene*)state.SCENES, SCENES, sizeof(SCENES));
-
+		hm::memcpy(state.SCENES, SCENES, sizeof(SCENES));
 		state.world.scenes = (Scene*)state.SCENES;
-		state.world.tile_size_pixels = 60.0f;
-		state.player_pos.point_x = 100.0f;
-		state.player_pos.point_y = 100.0f;
+
+		state.pixels_per_unit = 60.0f / World::TILE_SIZE;
+
+		state.player_pos.tile_x = 1;
+		state.player_pos.tile_y = 1;
+		state.player_pos.point_x = 1.0f;
+		state.player_pos.point_y = 1.0f;
+		state.player_pos.normalize();
 		
 		assert((i64)sizeof(Game_State) <= memory.permanent_size);
 		assert(state.world.check_empty_tile(state.player_pos));

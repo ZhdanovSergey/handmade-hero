@@ -156,11 +156,11 @@ static FILETIME get_file_write_time(const char* file_name) {
 	return file_data.ftLastWriteTime;
 }
 
-static inline f32 get_seconds_elapsed(i64 start) {
+static f32 get_seconds_elapsed(i64 start) {
 	return (f32)(get_timestamp() - start) / (f32)PERFORMANCE_FREQUENCY;
 }
 
-static inline i64 get_timestamp() {
+static i64 get_timestamp() {
 	LARGE_INTEGER performance_counter_result;
 	QueryPerformanceCounter(&performance_counter_result);
 	return performance_counter_result.QuadPart;

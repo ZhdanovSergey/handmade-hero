@@ -87,13 +87,14 @@ namespace Game {
 	};
 
 	struct Position {
-		// TODO: сделать сеттеры с автоматической нормализацией после введения векторов
+		// TODO: сделать сеттеры с автоматической нормализацией после введения векторов + конструктор с нормализацией
 		i32 scene_x, scene_y;
-		f32 point_x, point_y; // в пикселях
+		i32 tile_x, tile_y;
+		f32 point_x, point_y;
 
-		i32 get_tile_x(f32 tile_size_pixels) const { return hm::floor(point_x / tile_size_pixels); }
-		i32 get_tile_y(f32 tile_size_pixels) const { return hm::floor(point_y / tile_size_pixels); }
-		void normalize(f32 tile_size_pixels);
+		// u32 world_x, world_y;
+		// f32 tile_x, tile_y;
+		void normalize();
 	};
 
 	struct Scene {
@@ -106,9 +107,8 @@ namespace Game {
 	struct World {
 		static constexpr i32 WIDTH = 2;
 		static constexpr i32 HEIGHT = 2;
-		static constexpr f32 TILE_SIZE_METERS = 1.4f;
+		static constexpr f32 TILE_SIZE = 1.4f;
 
-		f32 tile_size_pixels; // TODO: сделать i32?
 		const Scene* scenes;
 		
 		Scene get_scene(const Position& player_pos) const { return scenes[player_pos.scene_y * World::WIDTH + player_pos.scene_x]; };
@@ -116,7 +116,6 @@ namespace Game {
 	};
 
 	struct Game_State {
-		// TODO: const для TILES и SCENES? компилятор удаляет конструктор по умолчанию
 		i32 TILES_00[Scene::HEIGHT][Scene::WIDTH];
 		i32 TILES_01[Scene::HEIGHT][Scene::WIDTH];
 		i32 TILES_10[Scene::HEIGHT][Scene::WIDTH];
@@ -124,6 +123,7 @@ namespace Game {
 		Scene SCENES[World::HEIGHT][World::WIDTH];
 		World world;
 		Position player_pos;
+		f32 pixels_per_unit;
 	};
 
 	struct Memory {

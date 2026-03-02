@@ -33,25 +33,25 @@ static constexpr i64 operator ""_GB(u64 value) { return (i64)(value << 30); }
 namespace hm {
     template <typename T, i32 N>
     static constexpr i32 array_size(const T (&)[N]) { return N; }
-    static inline i32 min(i32 a, i32 b) { return a < b ? a : b; }
-    static inline i32 max(i32 a, i32 b) { return a > b ? a : b; }
-    static inline i32 ceil (f32 x) { return (i32)x + (x > (i32)x); }
-    static inline i32 floor(f32 x) { return (i32)x - (x < (i32)x); }
-    static inline i32 round(f32 x) { return (i32)(x + 0.5f * ((x > 0) - (x < 0))); }
+    static i32 min(i32 a, i32 b) { return a < b ? a : b; }
+    static i32 max(i32 a, i32 b) { return a > b ? a : b; }
+    static i32 ceil (f32 x) { return (i32)x + (x > (i32)x); }
+    static i32 floor(f32 x) { return (i32)x - (x < (i32)x); }
+    static i32 round(f32 x) { return (i32)(x + 0.5f * ((x > 0) - (x < 0))); }
 
-    static inline void memcpy(void* dest, const void* src, i64 size) {
+    static void memcpy(void* dest, const void* src, i64 size) {
         for (i64 i = 0; i < size; i++) {
             ((u8*)dest)[i] = ((u8*)src)[i];
         }
     }
 
-    static inline void memset(void* dest, u8 value, i64 size) {
+    static void memset(void* dest, u8 value, i64 size) {
         for (i64 i = 0; i < size; i++) {
             ((u8*)dest)[i] = value;
         }
     }
 
-    static inline i32 strlen(const char* src) {
+    static i32 strlen(const char* src) {
         i32 length = 0;
         while (*src++) { length++; }
         return length + 1; // учитываем 0
