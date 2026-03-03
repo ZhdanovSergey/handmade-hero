@@ -135,7 +135,8 @@ static void wait_until_end_of_frame(i64 flip_timestamp) {
 }
 
 static void get_build_file_path(const char* file_name, char* dest, i32 dest_size) {
-	char build_file_path[MAX_PATH]; // TODO: путь может быть более длинным
+	// TODO: путь может быть более длинным
+	char build_file_path[MAX_PATH];
 	GetModuleFileNameA(nullptr, build_file_path, sizeof(build_file_path));
 	char* one_past_last_slash = build_file_path;
 	for (char* scan = build_file_path; *scan; scan++) {
@@ -557,7 +558,7 @@ void Sound::dev_draw_sync(Screen& screen) {
 	if (!sound.buffer) return;
 
 	f32 horizontal_scaling = (f32)screen.game_screen.width / (f32)sound.get_buffer_size();
-	for (i32 i = 0; i < hm::array_size(sound.dev_markers); i++) {
+	for (i32 i = 0; i < sound.dev_markers.size(); i++) {
 		i32 top = 0;
 		i32 bottom = screen.game_screen.height * 1/4;
 		i32 historic_output_play_cursor_x = (i32)((f32)sound.dev_markers[i].output_play_cursor * horizontal_scaling);
@@ -567,7 +568,7 @@ void Sound::dev_draw_sync(Screen& screen) {
 	}
 
 	if (!sound.game_sound.samples_to_write || !SUCCEEDED(sound.buffer->GetCurrentPosition(&sound.dev_markers[sound.dev_markers_index].flip_play_cursor, nullptr))) {
-		sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_size(sound.dev_markers);
+		sound.dev_markers_index = (sound.dev_markers_index + 1) % sound.dev_markers.size();
 		return;
 	}
 
@@ -599,7 +600,7 @@ void Sound::dev_draw_sync(Screen& screen) {
 		screen.dev_draw_vertical((flip_play_cursor_x - safety_bytes_x / 2) % screen.game_screen.width, top, bottom, 0xffffff);
 		screen.dev_draw_vertical((flip_play_cursor_x + safety_bytes_x / 2) % screen.game_screen.width, top, bottom, 0xffffff);
 	}
-	sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_size(sound.dev_markers);
+	sound.dev_markers_index = (sound.dev_markers_index + 1) % sound.dev_markers.size();
 }
 
 namespace Platform {

@@ -47,17 +47,16 @@ namespace Game {
 		screen.draw_rectangle(Color{ 1.0f, 0.0f, 1.0f }, 0.0f, (f32)screen.width, 0.0f, (f32)screen.height, tile_size_pixels);
 		for (i32 tile_y = 0; tile_y < Scene::HEIGHT; tile_y++) {
 			for (i32 tile_x = 0; tile_x < Scene::WIDTH; tile_x++) {
+				Color color = current_scene.tiles[tile_y][tile_x] ? Color{ 1.0f, 1.0f, 1.0f } : Color{ 0.5f, 0.5f, 0.5f };
+				// в какой клетке находится игрок по мнению игры
+				if constexpr (DEV_MODE) if (tile_x == state.player_pos.tile_x && tile_y == state.player_pos.tile_y) {
+					color = Color{ 0.0f, 0.0f, 0.0f };
+				}
+
 				f32 min_x = tile_x * tile_size_pixels;
 				f32 min_y = tile_y * tile_size_pixels;
 				f32 max_x = min_x + tile_size_pixels;
 				f32 max_y = min_y + tile_size_pixels;
-				Color color = current_scene.tiles[tile_y][tile_x] ? Color{ 1.0f, 1.0f, 1.0f } : Color{ 0.5f, 0.5f, 0.5f };
-
-				// в какой клетке находится игрок по мнению игры
-				if constexpr (DEV_MODE) if (state.player_pos.tile_x == tile_x && state.player_pos.tile_y == tile_y) {
-					color = Color{ 0.0f, 0.0f, 0.0f };
-				}
-
 				screen.draw_rectangle(color, min_x, max_x, min_y, max_y, tile_size_pixels);
 			}
 		}

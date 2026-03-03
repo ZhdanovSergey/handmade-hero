@@ -116,7 +116,7 @@ struct Sound {
 	WAVEFORMATEX wave_format;
 	IDirectSoundBuffer* buffer;
 	DWORD output_location;
-	Dev_Sound_Time_Marker dev_markers[32]; // ожидаемый фреймрейт - 1
+	hm::Array<Dev_Sound_Time_Marker, 32> dev_markers; // ожидаемый фреймрейт - 1
 	i32 dev_markers_index;
 	DWORD get_buffer_size() 	const { return wave_format.nAvgBytesPerSec; }
 	DWORD get_bytes_per_frame() const { return (DWORD)((f32)wave_format.nAvgBytesPerSec * TARGET_SECONDS_PER_FRAME); }

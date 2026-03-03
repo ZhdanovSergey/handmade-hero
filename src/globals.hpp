@@ -23,8 +23,12 @@ using u64 = uint64_t;
     #define assert(expr)
 #endif
 
+#define CONST_METHOD_PAIR(signarure, ...) signarure __VA_ARGS__ \
+                                           const signarure const __VA_ARGS__
+
 static constexpr f64 PI64 = 3.14159265358979323846;
-static constexpr f32 DOUBLE_PI32 = 2.0f * (f32)PI64;
+static constexpr f32 PI32 = (f32)PI64;
+static constexpr f32 DOUBLE_PI32 = 2.0f * PI32;
 
 static constexpr i64 operator ""_KB(u64 value) { return (i64)(value << 10); }
 static constexpr i64 operator ""_MB(u64 value) { return (i64)(value << 20); }
@@ -32,7 +36,31 @@ static constexpr i64 operator ""_GB(u64 value) { return (i64)(value << 30); }
 
 namespace hm {
     template <typename T, i32 N>
-    static constexpr i32 array_size(const T (&)[N]) { return N; }
+    struct Array {
+        T data[N];
+
+        i32 size() const { return N; }
+        CONST_METHOD_PAIR(T* begin(), { return data; })
+        CONST_METHOD_PAIR(T* end(),   { return data + N; })
+        CONST_METHOD_PAIR(T& operator[](i32 index), {
+            assert(index >= 0 && index < N);
+            return data[index];
+        })
+    };
+
+    template <typename T>
+    struct Span {
+        T* ptr;
+        i32 size;
+
+        CONST_METHOD_PAIR(T* begin(), { return ptr; })
+        CONST_METHOD_PAIR(T* end(),   { return ptr + size; })
+        CONST_METHOD_PAIR(T& operator[](i32 index), {
+            assert(index >= 0 && index < size);
+            return ptr[index];
+        })
+    };
+
     static i32 min(i32 a, i32 b) { return a < b ? a : b; }
     static i32 max(i32 a, i32 b) { return a > b ? a : b; }
     static i32 ceil (f32 x) { return (i32)x + (x > (i32)x); }
