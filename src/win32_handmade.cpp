@@ -134,21 +134,13 @@ static void wait_until_end_of_frame(i64 flip_timestamp) {
 	}
 }
 
-static void get_build_file_path(const char* file_name, char* dest, i32 dest_size) {
-	// TODO: путь может быть более длинным
-	char build_file_path[MAX_PATH];
-	GetModuleFileNameA(nullptr, build_file_path, sizeof(build_file_path));
-	char* one_past_last_slash = build_file_path;
-	for (char* scan = build_file_path; *scan; scan++) {
-		if (*scan == '\\') one_past_last_slash = scan + 1;
-	}
-	i32 build_folder_path_size = (i32)(one_past_last_slash - build_file_path);
-	hm::strcat(
-		build_file_path, build_folder_path_size,
-		file_name, hm::strlen(file_name),
-		dest, dest_size
-	);
-
+static void get_build_file_path(hm::span<const char> file_name, hm::span<char> dest) {
+	// TODO: путь может быть длиннее MAX_PATH
+	char file_path_array[MAX_PATH];
+	hm::span<char> file_path = file_path_array;
+	GetModuleFileNameA(nullptr, file_path.ptr, (DWORD)file_path.size);
+	hm::span<char> folder_path = { file_path.ptr, file_path.find_last_index([](auto ch){ return ch == '\\'; }) + 1 };
+	hm::strcat(folder_path, file_name, dest);
 }
 
 static FILETIME get_file_write_time(const char* file_name) {
@@ -168,12 +160,12 @@ static i64 get_timestamp() {
 }
 
 Game_Code::Game_Code() {
+	hm::memzero(this);
 	auto& game_code = *this;
-	memset(&game_code, 0, sizeof(game_code));
 	game_code.update_and_render = [](auto...){};
 	game_code.get_sound_samples = [](auto...){};
-	get_build_file_path("game.dll", game_code.dll_path, sizeof(game_code.dll_path));
-	get_build_file_path("game_temp.dll", game_code.temp_dll_path, sizeof(game_code.temp_dll_path));
+	get_build_file_path("game.dll", game_code.dll_path);
+	get_build_file_path("game_temp.dll", game_code.temp_dll_path);
 	game_code.load();
 }
 
@@ -212,8 +204,8 @@ void Game_Code::dev_reload_if_recompiled() {
 }
 
 Input::Input() {
+	hm::memzero(this);
 	auto& input = *this;
-	memset(&input, 0, sizeof(input));
 	input.XInputGetState = [](auto...){ return 1ul; };
 	input.XInputSetState = [](auto...){ return 1ul; };
 	input.game_input.frame_dt = TARGET_SECONDS_PER_FRAME;
@@ -314,12 +306,12 @@ void Input::dev_process_mouse(HWND window) {
 }
 
 Dev_Replayer::Dev_Replayer(const Game::Memory& game_memory) {
-	auto& replayer = *this;
-	memset(&replayer, 0, sizeof(replayer));
+	hm::memzero(this);
 	if constexpr (!DEV_MODE) return;
 
-	get_build_file_path("replay_state.hms", replayer.state_path, sizeof(replayer.state_path));
-	get_build_file_path("replay_input.hmi", replayer.input_path, sizeof(replayer.input_path));
+	auto& replayer = *this;
+	get_build_file_path("replay_state.hms", replayer.state_path);
+	get_build_file_path("replay_input.hmi", replayer.input_path);
 	replayer.state_handle = CreateFileA(replayer.state_path, GENERIC_READ | GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_FLAG_NO_BUFFERING, nullptr);
 	replayer.input_handle = CreateFileA(replayer.input_path, GENERIC_READ | GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
 }
@@ -400,8 +392,8 @@ void Dev_Replayer::play(Game::Memory& game_memory, Game::Input& game_input) {
 }
 
 Screen::Screen() {
+	hm::memzero(this);
 	auto& screen = *this;
-	memset(&screen, 0, sizeof(screen));
 	screen.bitmap_info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
 	screen.bitmap_info.bmiHeader.biPlanes = 1;
 	screen.bitmap_info.bmiHeader.biBitCount = sizeof(*screen.game_screen.pixels) * 8;
@@ -453,8 +445,8 @@ void Screen::dev_draw_vertical(i32 x, i32 top, i32 bottom, u32 color) {
 }
 
 Sound::Sound(HWND window) {
+	hm::memzero(this);
 	auto& sound = *this;
-	memset(&sound, 0, sizeof(sound));
 	sound.wave_format.wFormatTag = WAVE_FORMAT_PCM;
 	sound.wave_format.nChannels = 2;
 	sound.wave_format.nSamplesPerSec = 48'000;
@@ -558,17 +550,18 @@ void Sound::dev_draw_sync(Screen& screen) {
 	if (!sound.buffer) return;
 
 	f32 horizontal_scaling = (f32)screen.game_screen.width / (f32)sound.get_buffer_size();
-	for (i32 i = 0; i < sound.dev_markers.size(); i++) {
+
+	for (auto& marker : sound.dev_markers) {
 		i32 top = 0;
 		i32 bottom = screen.game_screen.height * 1/4;
-		i32 historic_output_play_cursor_x = (i32)((f32)sound.dev_markers[i].output_play_cursor * horizontal_scaling);
-		i32 historic_output_write_cursor_x = (i32)((f32)sound.dev_markers[i].output_write_cursor * horizontal_scaling);
+		i32 historic_output_play_cursor_x = (i32)((f32)marker.output_play_cursor * horizontal_scaling);
+		i32 historic_output_write_cursor_x = (i32)((f32)marker.output_write_cursor * horizontal_scaling);
 		screen.dev_draw_vertical(historic_output_play_cursor_x, top, bottom, 0xffffff);
 		screen.dev_draw_vertical(historic_output_write_cursor_x, top, bottom, 0xff0000);
 	}
 
 	if (!sound.game_sound.samples_to_write || !SUCCEEDED(sound.buffer->GetCurrentPosition(&sound.dev_markers[sound.dev_markers_index].flip_play_cursor, nullptr))) {
-		sound.dev_markers_index = (sound.dev_markers_index + 1) % sound.dev_markers.size();
+		sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_size(sound.dev_markers);
 		return;
 	}
 
@@ -600,24 +593,25 @@ void Sound::dev_draw_sync(Screen& screen) {
 		screen.dev_draw_vertical((flip_play_cursor_x - safety_bytes_x / 2) % screen.game_screen.width, top, bottom, 0xffffff);
 		screen.dev_draw_vertical((flip_play_cursor_x + safety_bytes_x / 2) % screen.game_screen.width, top, bottom, 0xffffff);
 	}
-	sound.dev_markers_index = (sound.dev_markers_index + 1) % sound.dev_markers.size();
+	sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_size(sound.dev_markers);
 }
 
 namespace Platform {
-	Read_File_Result read_file_sync(const char* file_name) {
-		Read_File_Result result = {};
-		HANDLE heap_handle = GetProcessHeap();
-		result.memory = HeapAlloc(heap_handle, 0, (DWORD)result.memory_size);
+	hm::span<u8> read_file_sync(const char* file_name) {
+		hm::span<u8> result = {};
+		LARGE_INTEGER file_size = {};
 
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
-		LARGE_INTEGER file_size = {};
 		GetFileSizeEx(file_handle, &file_size);
-		result.memory_size = (i32)file_size.QuadPart;
-		assert(result.memory_size == file_size.QuadPart);
+		result.size = file_size.QuadPart;
+		assert((DWORD)result.size == (u64)result.size);
+
+		HANDLE heap_handle = GetProcessHeap();
+		result.ptr = (u8*)HeapAlloc(heap_handle, 0, (DWORD)result.size);
 
 		DWORD bytes_read;
-		if (!ReadFile(file_handle, result.memory, (DWORD)result.memory_size, &bytes_read, nullptr) || (bytes_read != (DWORD)result.memory_size)) {
-			HeapFree(heap_handle, 0, result.memory);
+		if (!ReadFile(file_handle, result.ptr, (DWORD)result.size, &bytes_read, nullptr) || (bytes_read != (DWORD)result.size)) {
+			HeapFree(heap_handle, 0, result.ptr);
 			result = {};
 		}
 
@@ -625,10 +619,11 @@ namespace Platform {
 		return result;
 	}
 
-	bool write_file_sync(const char* file_name, const void* memory, i32 memory_size) {
+	bool write_file_sync(const char* file_name, hm::span<const u8> file) {
+		assert((DWORD)file.size == (u64)file.size);
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
 		DWORD bytes_written;
-		bool is_success = WriteFile(file_handle, memory, (DWORD)memory_size, &bytes_written, nullptr) && (bytes_written == (DWORD)memory_size);
+		bool is_success = WriteFile(file_handle, file.ptr, (DWORD)file.size, &bytes_written, nullptr) && (bytes_written == (DWORD)file.size);
 		CloseHandle(file_handle);
 		return is_success;
 	}

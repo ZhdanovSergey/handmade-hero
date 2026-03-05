@@ -33,7 +33,7 @@ static const f32 TARGET_SECONDS_PER_FRAME = []{
 
 static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 static void wait_until_end_of_frame(i64 flip_timestamp);
-static void get_build_file_path(const char* file_name, char* dest, i32 dest_size);
+static void get_build_file_path(hm::span<const char> file_name, hm::span<char> dest);
 static FILETIME get_file_write_time(const char* file_name);
 static f32 get_seconds_elapsed(i64 start);
 static i64 get_timestamp();
@@ -116,7 +116,7 @@ struct Sound {
 	WAVEFORMATEX wave_format;
 	IDirectSoundBuffer* buffer;
 	DWORD output_location;
-	hm::Array<Dev_Sound_Time_Marker, 32> dev_markers; // ожидаемый фреймрейт - 1
+	Dev_Sound_Time_Marker dev_markers[32]; // ожидаемый фреймрейт - 1
 	i32 dev_markers_index;
 	DWORD get_buffer_size() 	const { return wave_format.nAvgBytesPerSec; }
 	DWORD get_bytes_per_frame() const { return (DWORD)((f32)wave_format.nAvgBytesPerSec * TARGET_SECONDS_PER_FRAME); }
