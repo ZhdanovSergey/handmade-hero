@@ -54,18 +54,23 @@ namespace hm {
         i64 size;
 
         span() : ptr{}, size{} {}
-        span(T* ptr, i64 size) : ptr{ptr}, size{size} {}
+        span(T* ptr, i64 size) : ptr{ptr}, size{size} {
+            assert(size % sizeof(T) == 0);
+        }
+
         template <i64 N>
-        span(T (&array)[N]) : ptr{array}, size{N} {}
+        span(T (&ptr)[N]) : ptr{ptr}, size{ N * sizeof(T) } {}
+
+        template <typename U, i64 N, i64 M>
+        span(U (&ptr)[N][M]) : ptr{reinterpret_cast<T*>(ptr)}, size{ N * M * sizeof(U)} {
+            static_assert(is_same<T,u8>::value || is_same<T,const u8>::value
+                       || is_same<T,U >::value || is_same<T,const U >::value);
+        }
+
         template <typename U>
-        span(const span<U>& other) : size{other.size} {
-            if constexpr (is_same<T,u8>::value || is_same<T,const u8>::value) {
-                // позволяет присвоить span<T> в span<u8>
-                ptr = reinterpret_cast<T*>(other.ptr);
-            } else {
-                // позволяет присвоить span<T> в span<const T>
-                ptr = other.ptr;
-            }
+        span(const span<U>& other) : ptr{reinterpret_cast<T*>(other.ptr)}, size{other.size} {
+            static_assert(is_same<T,u8>::value || is_same<T,const u8>::value
+                       || is_same<T,U >::value || is_same<T,const U >::value);
         }
 
         i64 count()   { return size / (i64)sizeof(T); }
@@ -105,13 +110,6 @@ namespace hm {
         assert(src.size <= dest.size);
         for (i64 i = 0; i < min(src.size, dest.size); i++) {
             dest[i] = src[i];
-        }
-    }
-
-    // TODO: заменить на версию со span
-    static void memcpy(void* dest, const void* src, i64 size) {
-        for (i64 i = 0; i < size; i++) {
-            ((u8*)dest)[i] = ((u8*)src)[i];
         }
     }
 
