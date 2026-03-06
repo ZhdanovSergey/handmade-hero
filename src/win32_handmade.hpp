@@ -33,7 +33,7 @@ static const f32 TARGET_SECONDS_PER_FRAME = []{
 
 static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 static void wait_until_end_of_frame(i64 flip_timestamp);
-static void get_build_file_path(hm::span<const char> file_name, hm::span<char> dest);
+static void get_build_file_path(span<const char> file_name, span<char> dest);
 static FILETIME get_file_write_time(const char* file_name);
 static f32 get_seconds_elapsed(i64 start);
 static i64 get_timestamp();

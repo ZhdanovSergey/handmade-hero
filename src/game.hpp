@@ -128,16 +128,14 @@ namespace Game {
 
 	struct Memory {
 		bool is_initialized;
-		i64 permanent_size;
-		i64 transient_size;
-		u8* permanent_storage;
-		u8* transient_storage;
+		span<u8> permanent_storage;
+		span<u8> transient_storage;
     	Platform::Read_File_Sync* read_file_sync;
     	Platform::Write_File_Sync* write_file_sync;
     	Platform::Free_File_Memory* free_file_memory;
 
 		Game_State& get_game_state();
-		i64 get_total_size() const { return permanent_size + transient_size; }
+		i64 get_total_size() const { return permanent_storage.size + transient_storage.size; }
 	};
 
 	extern "C" void update_and_render(const Input& input, Memory& memory, Screen& screen_buffer);

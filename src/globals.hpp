@@ -4,6 +4,12 @@
 #include <cstdint>
 #include <cstdio>
 
+#if SLOW_MODE
+    #define assert(expr) if (!(expr)) *(int*)nullptr = 0
+#else
+    #define assert(expr)
+#endif
+
 using f32 = float;
 using f64 = double;
 
@@ -17,12 +23,6 @@ using u16 = uint16_t;
 using u32 = uint32_t;
 using u64 = uint64_t;
 
-#if SLOW_MODE
-    #define assert(expr) if (!(expr)) *(int*)nullptr = 0
-#else
-    #define assert(expr)
-#endif
-
 static constexpr f64 PI64 = 3.14159265358979323846;
 static constexpr f32 PI32 = (f32)PI64;
 static constexpr f32 DOUBLE_PI32 = 2.0f * PI32;
@@ -32,6 +32,11 @@ static constexpr i64 operator ""_MB(u64 value) { return (i64)(value << 20); }
 static constexpr i64 operator ""_GB(u64 value) { return (i64)(value << 30); }
 
 namespace hm {
+    template <typename T, typename U>
+    struct is_same       { static constexpr bool value = false; };
+    template <typename T>
+    struct is_same<T, T> { static constexpr bool value = true; };
+
     template <typename T>
     using predicate = bool (*)(const T&);
     
@@ -50,15 +55,15 @@ namespace hm {
 
         span() : ptr{}, size{} {}
         span(T* ptr, i64 size) : ptr{ptr}, size{size} {}
-
         template <i64 N>
         span(T (&array)[N]) : ptr{array}, size{N} {}
-
-        template <typename U> // позволяет присвоить span<char> в span<const u8>
+        template <typename U>
         span(const span<U>& other) : size{other.size} {
-            if constexpr (sizeof(T) == 1) {
+            if constexpr (is_same<T,u8>::value || is_same<T,const u8>::value) {
+                // позволяет присвоить span<T> в span<u8>
                 ptr = reinterpret_cast<T*>(other.ptr);
             } else {
+                // позволяет присвоить span<T> в span<const T>
                 ptr = other.ptr;
             }
         }
@@ -121,11 +126,14 @@ namespace hm {
     }
 }
 
+template <typename T>
+using span = hm::span<T>;
+
 namespace Platform {
-    hm::span<u8> read_file_sync(const char* file_name);
+    span<u8> read_file_sync(const char* file_name);
     using Read_File_Sync = decltype(read_file_sync);
 
-    bool write_file_sync(const char* file_name, hm::span<const u8> file);
+    bool write_file_sync(const char* file_name, span<const u8> file);
     using Write_File_Sync = decltype(write_file_sync);
 
     void free_file_memory(void*& memory);

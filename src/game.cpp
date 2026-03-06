@@ -177,7 +177,7 @@ namespace Game {
 
 	Game_State& Memory::get_game_state() {
 		auto& memory = *this;
-		Game_State& state = *(Game_State*)memory.permanent_storage;
+		Game_State& state = *(Game_State*)memory.permanent_storage.ptr;
 		if (memory.is_initialized) return state;
 
 		i32 TILES_00[Scene::HEIGHT][Scene::WIDTH] = {
@@ -253,7 +253,7 @@ namespace Game {
 		state.player_pos.point_y = 1.0f;
 		state.player_pos.normalize();
 		
-		assert((i64)sizeof(Game_State) <= memory.permanent_size);
+		assert((i64)sizeof(Game_State) <= memory.permanent_storage.size);
 		assert(state.world.check_empty_tile(state.player_pos));
 		
 		memory.is_initialized = true;

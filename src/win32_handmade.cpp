@@ -24,17 +24,19 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	HWND window = CreateWindowExA(0, window_class.lpszClassName, "Handmade Hero", dwStyle,
 		CW_USEDEFAULT, CW_USEDEFAULT, adj_window_width, adj_window_height, nullptr, nullptr, hInstance, nullptr);
 	
-	void* game_memory_base_address = nullptr;
-	if constexpr (DEV_MODE && UINTPTR_MAX == UINT64_MAX) game_memory_base_address = (void*)1024_GB;
-	Game::Memory game_memory = {};
-	game_memory.permanent_size = 64_MB;
-	game_memory.transient_size = 1_GB;
-	// TODO: использовать MEM_LARGE_PAGES и AdjustTokenPrivileges в 64-битном билде
-	game_memory.permanent_storage = (u8*)VirtualAlloc(game_memory_base_address, (SIZE_T)game_memory.get_total_size(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-	game_memory.transient_storage = game_memory.permanent_storage + game_memory.permanent_size;
-	game_memory.read_file_sync = Platform::read_file_sync;
-	game_memory.write_file_sync = Platform::write_file_sync;
-	game_memory.free_file_memory = Platform::free_file_memory;
+	Game::Memory game_memory = {}; {
+		i64 permanent_size = 64_MB;
+		i64 transient_size = 1_GB;
+		void* base_address = nullptr;
+		if constexpr (DEV_MODE && UINTPTR_MAX == UINT64_MAX) base_address = (void*)1024_GB;
+		// TODO: использовать MEM_LARGE_PAGES и AdjustTokenPrivileges в 64-битном билде
+		u8* game_storage = (u8*)VirtualAlloc(base_address, (SIZE_T)(permanent_size + transient_size), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+		game_memory.permanent_storage = { game_storage, permanent_size };
+		game_memory.transient_storage = { game_storage + permanent_size, transient_size };
+		game_memory.read_file_sync = Platform::read_file_sync;
+		game_memory.write_file_sync = Platform::write_file_sync;
+		game_memory.free_file_memory = Platform::free_file_memory;
+	}
 
 	Input input = Input();
 	Sound sound = Sound(window);
@@ -134,12 +136,12 @@ static void wait_until_end_of_frame(i64 flip_timestamp) {
 	}
 }
 
-static void get_build_file_path(hm::span<const char> file_name, hm::span<char> dest) {
+static void get_build_file_path(span<const char> file_name, span<char> dest) {
 	// TODO: путь может быть длиннее MAX_PATH
 	char file_path_array[MAX_PATH];
-	hm::span<char> file_path = file_path_array;
+	span<char> file_path = file_path_array;
 	GetModuleFileNameA(nullptr, file_path.ptr, (DWORD)file_path.size);
-	hm::span<char> folder_path = { file_path.ptr, file_path.find_last_index([](auto ch){ return ch == '\\'; }) + 1 };
+	span<char> folder_path = { file_path.ptr, file_path.find_last_index([](auto ch){ return ch == '\\'; }) + 1 };
 	hm::strcat(folder_path, file_name, dest);
 }
 
@@ -358,7 +360,7 @@ void Dev_Replayer::start_record(const Game::Memory& game_memory) {
 	DWORD bytes_to_write = (DWORD)state_total_size;
 	assert(bytes_to_write == state_total_size);
 	DWORD bytes_written;
-	WriteFile(replayer.state_handle, game_memory.permanent_storage, bytes_to_write, &bytes_written, nullptr);
+	WriteFile(replayer.state_handle, game_memory.permanent_storage.ptr, bytes_to_write, &bytes_written, nullptr);
 }
 
 void Dev_Replayer::start_play(Game::Memory& game_memory) {
@@ -370,7 +372,7 @@ void Dev_Replayer::start_play(Game::Memory& game_memory) {
 	DWORD bytes_to_read = (DWORD)state_total_size;
 	assert(bytes_to_read == state_total_size);
 	DWORD bytes_read;
-	ReadFile(replayer.state_handle, game_memory.permanent_storage, bytes_to_read, &bytes_read, nullptr);
+	ReadFile(replayer.state_handle, game_memory.permanent_storage.ptr, bytes_to_read, &bytes_read, nullptr);
 }
 
 void Dev_Replayer::record(const Game::Input& game_input) {
@@ -597,8 +599,8 @@ void Sound::dev_draw_sync(Screen& screen) {
 }
 
 namespace Platform {
-	hm::span<u8> read_file_sync(const char* file_name) {
-		hm::span<u8> result = {};
+	span<u8> read_file_sync(const char* file_name) {
+		span<u8> result = {};
 		LARGE_INTEGER file_size = {};
 
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
@@ -619,7 +621,7 @@ namespace Platform {
 		return result;
 	}
 
-	bool write_file_sync(const char* file_name, hm::span<const u8> file) {
+	bool write_file_sync(const char* file_name, span<const u8> file) {
 		assert((DWORD)file.size == (u64)file.size);
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
 		DWORD bytes_written;
