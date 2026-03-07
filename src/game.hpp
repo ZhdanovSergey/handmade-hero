@@ -110,9 +110,9 @@ namespace Game {
 		i32 width, height;
 		u32* pixels;
 
-		f32 get_pixels_per_unit() { return (f32)height / (Scene::HEIGHT * World::TILE_SIZE); }
 		void draw_rectangle(const Color& color, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32);
-		void dev_draw_mouse_test(const Input& input);
+		private:
+		f32 get_pixels_per_unit() { return (f32)height / (Scene::HEIGHT * World::TILE_SIZE); }
 	};
 
 	struct Game_State {

@@ -21,8 +21,8 @@ namespace Game {
 			f32 player_dy = 0;
 			if (controller.move_left.is_pressed)  player_dx = - player_speed;
 			if (controller.move_right.is_pressed) player_dx =   player_speed;
-			if (controller.move_up.is_pressed)    player_dy = - player_speed;
-			if (controller.move_down.is_pressed)  player_dy =   player_speed;
+			if (controller.move_up.is_pressed)    player_dy =   player_speed;
+			if (controller.move_down.is_pressed)  player_dy = - player_speed;
 			new_player_pos.point_x += player_dx * input.frame_dt;
 			new_player_pos.point_y += player_dy * input.frame_dt;
 			new_player_pos.normalize();
@@ -43,10 +43,7 @@ namespace Game {
 		}
 		Scene current_scene = state.world.get_scene(state.player_pos);
 
-		// TODO: возможно код снаружи screen не должен ничего знать про пиксели
-		f32 pixels_per_unit = screen.get_pixels_per_unit();
-		f32 tile_size_pixels = World::TILE_SIZE * pixels_per_unit;
-		screen.draw_rectangle(Color{ 1.0f, 0.0f, 1.0f }, 0.0f, (f32)screen.width, 0.0f, (f32)screen.height);
+		screen.draw_rectangle(Color{ 1.0f, 0.0f, 1.0f }, 0.0f, Scene::WIDTH * World::TILE_SIZE, Scene::HEIGHT * World::TILE_SIZE, 0.0f);
 		for (i32 tile_y = 0; tile_y < Scene::HEIGHT; tile_y++) {
 			for (i32 tile_x = 0; tile_x < Scene::WIDTH; tile_x++) {
 				Color color = current_scene.tiles[tile_y][tile_x] ? Color{ 1.0f, 1.0f, 1.0f } : Color{ 0.5f, 0.5f, 0.5f };
@@ -54,18 +51,18 @@ namespace Game {
 					color = Color{ 0.0f, 0.0f, 0.0f };
 				}
 
-				f32 min_x = tile_x * tile_size_pixels;
-				f32 min_y = tile_y * tile_size_pixels;
-				f32 max_x = min_x + tile_size_pixels;
-				f32 max_y = min_y + tile_size_pixels;
+				f32 min_x = tile_x * World::TILE_SIZE;
+				f32 max_x = min_x + World::TILE_SIZE;
+				f32 min_y = (Scene::HEIGHT - tile_y) * World::TILE_SIZE;
+				f32 max_y = min_y - World::TILE_SIZE;
 				screen.draw_rectangle(color, min_x, max_x, min_y, max_y);
 			}
 		}
 
-		f32 player_min_x = (state.player_pos.tile_x * World::TILE_SIZE + state.player_pos.point_x - player_width / 2) * pixels_per_unit;
-		f32 player_min_y = (state.player_pos.tile_y * World::TILE_SIZE + state.player_pos.point_y - player_height   ) * pixels_per_unit;
-		f32 player_max_x = player_min_x + player_width  * pixels_per_unit;
-		f32 player_max_y = player_min_y + player_height * pixels_per_unit;
+		f32 player_min_x = state.player_pos.tile_x * World::TILE_SIZE + state.player_pos.point_x - player_width / 2;
+		f32 player_max_x = player_min_x + player_width;
+		f32 player_min_y = (Scene::HEIGHT - state.player_pos.tile_y) * World::TILE_SIZE - state.player_pos.point_y;
+		f32 player_max_y = player_min_y - player_height;
 		screen.draw_rectangle(Color{ 1.0f, 0.0f, 0.0f }, player_min_x, player_max_x, player_min_y, player_max_y);
 	};
 
@@ -144,14 +141,17 @@ namespace Game {
 
 	void Screen::draw_rectangle(const Color& color, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32) {
 		auto& screen = *this;
-		f32 tile_size_pixels = World::TILE_SIZE * screen.get_pixels_per_unit();
-		i32 render_offset_x = (i32)(- tile_size_pixels / 2);
-		i32 render_offset_y = 0;
+		// screen.pixels инвертирован по вертикали относительно координат игры
+		hm::swap(min_y_f32, max_y_f32);
 
-		i32 min_x = hm::round(min_x_f32) + render_offset_x;
-		i32 max_x = hm::round(max_x_f32) + render_offset_x;
-		i32 min_y = hm::round(min_y_f32) + render_offset_y;
-		i32 max_y = hm::round(max_y_f32) + render_offset_y;
+		f32 pixels_per_unit = screen.get_pixels_per_unit();
+		f32 offset_x = - World::TILE_SIZE / 2;
+		f32 offset_y = 0;
+
+		i32 min_x = hm::round((min_x_f32 + offset_x) * pixels_per_unit);
+		i32 max_x = hm::round((max_x_f32 + offset_x) * pixels_per_unit);
+		i32 min_y = hm::round((min_y_f32 + offset_y) * pixels_per_unit);
+		i32 max_y = hm::round((max_y_f32 + offset_y) * pixels_per_unit);
 
 		min_x = hm::max(min_x, 0);
 		max_x = hm::min(max_x, screen.width);
@@ -167,14 +167,6 @@ namespace Game {
 			}
 			row += screen.width;
 		}
-	};
-
-	void Screen::dev_draw_mouse_test(const Input& input) {
-		if constexpr (!DEV_MODE) return;
-		auto& screen = *this;
-		screen.draw_rectangle(Color{ 1.0f, 1.0f, 1.0f }, (f32)input.dev_mouse.x, (f32)input.dev_mouse.x + 10.0f, (f32)input.dev_mouse.y, (f32)input.dev_mouse.y + 10.0f);
-		if (input.dev_mouse.left_button.is_pressed) screen.draw_rectangle(Color{ 1.0f, 1.0f, 1.0f }, 10.0f, 20.0f, 10.0f, 20.0f);
-		if (input.dev_mouse.right_button.is_pressed) screen.draw_rectangle(Color{ 1.0f, 1.0f, 1.0f }, 30.0f, 40.0f, 10.0f, 20.0f);
 	};
 
 	Game_State& Memory::get_game_state() {

@@ -91,6 +91,8 @@ namespace hm {
     static i32 ceil (f32 x)      { return (i32)x + (x > (i32)x); }
     static i32 floor(f32 x)      { return (i32)x - (x < (i32)x); }
     static i32 round(f32 x)      { return (i32)(x + 0.5f * ((x > 0) - (x < 0))); }
+    template <typename T>
+    static void swap(T& a, T& b) { T temp = a; a = b; b = temp; }
 
     template <typename T>
     static void memzero(T* dest) {
