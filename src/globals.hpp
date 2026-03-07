@@ -54,24 +54,18 @@ namespace hm {
         i64 size;
 
         span() : ptr{}, size{} {}
-        span(T* ptr, i64 size) : ptr{ptr}, size{size} {
-            assert(size % sizeof(T) == 0);
-        }
-
-        template <i64 N>
-        span(T (&ptr)[N]) : ptr{ptr}, size{ N * sizeof(T) } {}
-
-        template <typename U, i64 N, i64 M>
-        span(U (&ptr)[N][M]) : ptr{reinterpret_cast<T*>(ptr)}, size{ N * M * sizeof(U)} {
-            static_assert(is_same<T,u8>::value || is_same<T,const u8>::value
-                       || is_same<T,U >::value || is_same<T,const U >::value);
-        }
-
         template <typename U>
-        span(const span<U>& other) : ptr{reinterpret_cast<T*>(other.ptr)}, size{other.size} {
+        span(U* ptr, i64 size) : ptr{reinterpret_cast<T*>(ptr)}, size{size} {
+            assert(size % sizeof(T) == 0);
             static_assert(is_same<T,u8>::value || is_same<T,const u8>::value
                        || is_same<T,U >::value || is_same<T,const U >::value);
         }
+        template <typename U>
+        span(span<U> other) : span{other.ptr, other.size} {}
+        template <typename U, i64 N>
+        span(U (&arr)[N])    : span{reinterpret_cast<U*>(arr), sizeof(arr)} {}
+        template <typename U, i64 N, i64 M>
+        span(U (&arr)[N][M]) : span{reinterpret_cast<U*>(arr), sizeof(arr)} {}
 
         i64 count()   { return size / (i64)sizeof(T); }
         T* begin()    { return ptr; }
@@ -80,7 +74,6 @@ namespace hm {
             assert(index >= 0 && index < count());
             return ptr[index];
         }
-
         i64 find_last_index(predicate<T> predicate) {
             for (i64 index = count() - 1; index >= 0; index--) {
                 // TODO: если использовать this[index], то не сходится константность
