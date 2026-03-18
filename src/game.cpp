@@ -45,25 +45,26 @@ namespace Game {
 		Chunk& current_chunk = state.world.get_chunk(state.player_pos);
 		Chunk_Position player_chunk_pos = state.player_pos.get_chunk_position();
 
+		// Screen::HEIGHT_TILES / 2 округляем вверх, скорее всего из-за инвертирования оси y
 		screen.draw_rectangle(Color{ 1.0f, 0.0f, 1.0f }, 0.0f, Screen::WIDTH_TILES * World::TILE_SIZE, Screen::HEIGHT_TILES * World::TILE_SIZE, 0.0f);
-		for (i32 y = 0; y < Screen::HEIGHT_TILES; y++) {
-			for (i32 x = 0; x < Screen::WIDTH_TILES; x++) {
-				Color color = current_chunk.tiles[y][x] ? Color{ 1.0f, 1.0f, 1.0f } : Color{ 0.5f, 0.5f, 0.5f };
+		for (    i32 y = player_chunk_pos.chunk_y - Screen::HEIGHT_TILES / 2; y <= player_chunk_pos.chunk_y + Screen::HEIGHT_TILES / 2; y++) {
+			for (i32 x = player_chunk_pos.chunk_x - Screen::WIDTH_TILES  / 2; x <= player_chunk_pos.chunk_x + Screen::WIDTH_TILES  / 2; x++) {
+				Color color = y >= 0 && x >= 0 && current_chunk.tiles[y][x] ? Color{ 1.0f, 1.0f, 1.0f } : Color{ 0.5f, 0.5f, 0.5f };
 				if (x == player_chunk_pos.chunk_x && y == player_chunk_pos.chunk_y) {
 					color = Color{ 0.0f, 0.0f, 0.0f };
 				}
 
-				f32 min_x = x * World::TILE_SIZE;
+				f32 min_x =   (x - player_chunk_pos.chunk_x +  Screen::WIDTH_TILES  / 2)      * World::TILE_SIZE;
+				f32 min_y = - (y - player_chunk_pos.chunk_y - (Screen::HEIGHT_TILES / 2 + 1)) * World::TILE_SIZE;
 				f32 max_x = min_x + World::TILE_SIZE;
-				f32 min_y = (Screen::HEIGHT_TILES - y) * World::TILE_SIZE;
 				f32 max_y = min_y - World::TILE_SIZE;
 				screen.draw_rectangle(color, min_x, max_x, min_y, max_y);
 			}
 		}
 
-		f32 player_min_x = player_chunk_pos.chunk_x * World::TILE_SIZE + player_chunk_pos.tile_x - player_width / 2;
+		f32 player_min_x =  Screen::WIDTH_TILES  / 2      * World::TILE_SIZE + player_chunk_pos.tile_x - player_width / 2;
+		f32 player_min_y = (Screen::HEIGHT_TILES / 2 + 1) * World::TILE_SIZE - player_chunk_pos.tile_y;
 		f32 player_max_x = player_min_x + player_width;
-		f32 player_min_y = (Screen::HEIGHT_TILES - player_chunk_pos.chunk_y) * World::TILE_SIZE - player_chunk_pos.tile_y;
 		f32 player_max_y = player_min_y - player_height;
 		screen.draw_rectangle(Color{ 1.0f, 0.0f, 0.0f }, player_min_x, player_max_x, player_min_y, player_max_y);
 	};
