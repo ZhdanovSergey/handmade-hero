@@ -137,10 +137,12 @@ static void wait_until_end_of_frame(i64 flip_timestamp) {
 }
 
 static void get_build_file_path(span<const char> file_name, span<char> dest) {
-	// TODO: путь может быть длиннее MAX_PATH
-	char file_path_array[MAX_PATH];
-	span<char> file_path = file_path_array;
+	// TODO: обработать пути длиннее MAX_PATH
+	char file_path_storage[MAX_PATH];
+	span<char> file_path = file_path_storage;
+	SetLastError(ERROR_SUCCESS);
 	GetModuleFileNameA(nullptr, file_path.ptr, (DWORD)file_path.size);
+	assert(GetLastError() != ERROR_INSUFFICIENT_BUFFER);
 	span<char> folder_path = { file_path.ptr, file_path.find_last_index([](auto ch){ return ch == '\\'; }) + 1 };
 	hm::strcat(folder_path, file_name, dest);
 }
@@ -215,7 +217,7 @@ Input::Input() {
 	if (xinput_dll) {
 		input.XInputGetState = (Xinput_Get_State*)GetProcAddress(xinput_dll, "XInputGetState");
 		input.XInputSetState = (Xinput_Set_State*)GetProcAddress(xinput_dll, "XInputSetState");
-	}	
+	}
 }
 
 void Input::process_gamepad() {

@@ -1,14 +1,17 @@
 #pragma once
 
-// TODO: подключить что-нибудь для вывода инфы в консоль вне платформенного слоя
-#include <cstdint>
-#include <cstdio>
-
-#if SLOW_MODE
-    #define assert(expr) if (!(expr)) *(int*)nullptr = 0
+// TODO: добавить инварианты, пред- и постусловия везде (не нужно экономить на assert)
+#if SLOW_MODE // включаем/выключаем assert
+    #undef NDEBUG
 #else
-    #define assert(expr)
+    #define NDEBUG
 #endif
+#include <cassert>
+
+#include <cstdint>
+
+// TODO: разобраться как выводить инфу в консоль вне платформенного слоя
+#include <cstdio>
 
 using f32 = float;
 using f64 = double;
@@ -86,11 +89,13 @@ namespace hm {
     span(T*, i64) -> span<T>;
 
     template <typename T>
-    static T   min(T a, T b)     { return a * (a <= b) + b * (b < a); }
-    static i32 max(i32 a, i32 b) { return a * (a >= b) + b * (b > a); }
+    static T   min(T a, T b)     { return a < b ? a : b; }
+    static i32 max(i32 a, i32 b) { return a > b ? a : b; }
+    static f32 sign(f32 x)       { return (f32)((x > 0) - (x < 0)); }
+    static i32 round(f32 x)      { return (i32)(x + 0.5f * sign(x)); }
     static i32 ceil (f32 x)      { return (i32)x + (x > (i32)x); }
     static i32 floor(f32 x)      { return (i32)x - (x < (i32)x); }
-    static i32 round(f32 x)      { return (i32)(x + 0.5f * ((x > 0) - (x < 0))); }
+    
     template <typename T>
     static void swap(T& a, T& b) { T temp = a; a = b; b = temp; }
 

@@ -77,22 +77,32 @@ namespace Game {
 		Sound_Sample* samples;
 	};
 
-	struct Position {
-		// TODO: сделать сеттеры с автоматической нормализацией после введения векторов + конструктор с нормализацией
-		i32 scene_x, scene_y;
-		i32 tile_x, tile_y;
+	struct Chunk_Position {
+		u32 world_x, world_y;
+		i32 chunk_x, chunk_y;
+		f32 tile_x, tile_y;
+	};
+
+	// TODO: сделать сеттеры с автоматической нормализацией после введения векторов + конструктор с нормализацией
+	struct World_Position {
+		// i32 scene_x, scene_y;
+
+		// старые названия
+		u32 tile_x, tile_y;
 		f32 point_x, point_y;
 
 		// u32 world_x, world_y;
 		// f32 tile_x, tile_y;
 		void normalize();
+		Chunk_Position get_chunk_position();
 	};
 
-	struct Scene {
-		static constexpr i32 WIDTH = 17;
-		static constexpr i32 HEIGHT = 9;
+	struct Chunk {
+		static constexpr i32 SHIFT = 8;
+		static constexpr i32 SIZE = 1 << SHIFT;
+		static constexpr u32 MASK = SIZE - 1;
 
-		const i32 (*tiles)[Scene::WIDTH];
+		i32 (*tiles)[Chunk::SIZE];
 	};
 
 	struct World {
@@ -100,29 +110,31 @@ namespace Game {
 		static constexpr i32 HEIGHT = 2;
 		static constexpr f32 TILE_SIZE = 1.4f;
 
-		const Scene* scenes;
+		Chunk* chunks;
 		
-		Scene get_scene(const Position& player_pos) const { return scenes[player_pos.scene_y * World::WIDTH + player_pos.scene_x]; };
-		bool check_empty_tile(const Position& position);
+		bool check_empty_tile(const World_Position& position);
+		Chunk& get_chunk(const World_Position& position) const {
+			// return chunks[player_pos.scene_y * World::WIDTH + player_pos.scene_x];
+			return *chunks;
+		};
 	};
 
 	struct Screen {
+		static constexpr i32 WIDTH_TILES = 17;
+		static constexpr i32 HEIGHT_TILES = 9;
 		i32 width, height;
 		u32* pixels;
-
 		void draw_rectangle(const Color& color, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32);
+
 		private:
-		f32 get_pixels_per_unit() { return (f32)height / (Scene::HEIGHT * World::TILE_SIZE); }
+		f32 get_pixels_per_unit() { return (f32)height / (HEIGHT_TILES * World::TILE_SIZE); }
 	};
 
 	struct Game_State {
-		i32 TILES_00[Scene::HEIGHT][Scene::WIDTH];
-		i32 TILES_01[Scene::HEIGHT][Scene::WIDTH];
-		i32 TILES_10[Scene::HEIGHT][Scene::WIDTH];
-		i32 TILES_11[Scene::HEIGHT][Scene::WIDTH];
-		Scene SCENES[World::HEIGHT][World::WIDTH];
+		i32 TILES[Chunk::SIZE][Chunk::SIZE];
+		Chunk CHUNKS[World::HEIGHT][World::WIDTH];
 		World world;
-		Position player_pos;
+		World_Position player_pos;
 		f32 pixels_per_unit;
 	};
 
