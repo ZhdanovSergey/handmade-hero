@@ -11,88 +11,42 @@ using Direct_Sound_Create = HRESULT WINAPI(LPGUID lpGuid, LPDIRECTSOUND* ppDS, L
 using Xinput_Get_State = DWORD(DWORD dwUserIndex, XINPUT_STATE *pState);
 using Xinput_Set_State = DWORD(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration);
 
+static i64 get_perf_frequency();
+static f32 get_target_seconds_per_frame();
 static const i32 INITIAL_WINDOW_WIDTH = 1280;
 static const i32 INITIAL_WINDOW_HEIGHT = 720;
+static const i64 PERF_FREQUENCY = get_perf_frequency();
 static const f32 SLEEP_GRANULARITY_SECONDS = (f32)(timeBeginPeriod(1) == TIMERR_NOERROR) / 1000.0f;
-static const i64 PERFORMANCE_FREQUENCY = []{
-	LARGE_INTEGER query_result;
-	QueryPerformanceFrequency(&query_result);
-	return query_result.QuadPart;
-}();
-static const f32 TARGET_SECONDS_PER_FRAME = []{
-	f32 target_frame_rate = 33.0f;
-    HDC device_context = GetDC(0);
-    f32 refresh_rate = (f32)GetDeviceCaps(device_context, VREFRESH);
-    ReleaseDC(0, device_context);
-	if (refresh_rate > 1.0f) {
-		f32 sync_frame_rate = refresh_rate / hm::ceil(refresh_rate / target_frame_rate);
-		if (sync_frame_rate >= 30.0f) target_frame_rate = sync_frame_rate;
-	}
-	return 1.0f / target_frame_rate;
-}();
-
-static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
-static void wait_until_end_of_frame(i64 flip_timestamp);
-static void get_build_file_path(span<const char> file_name, span<char> dest);
-static FILETIME get_file_write_time(const char* file_name);
-static f32 get_seconds_elapsed(i64 start);
-static i64 get_timestamp();
+static const f32 TARGET_SECONDS_PER_FRAME = get_target_seconds_per_frame();
 
 struct Game_Code {
-	Game_Code();
-	Game::Update_And_Render* update_and_render;
-	Game::Get_Sound_Samples* get_sound_samples;
-	void dev_reload_if_recompiled();
-
-	private:
 	HMODULE dll;
 	FILETIME write_time;
 	char dll_path[MAX_PATH];
 	char temp_dll_path[MAX_PATH];
-	void load();
+	Game::Update_And_Render* update_and_render;
+	Game::Get_Sound_Samples* get_sound_samples;
 };
 
 struct Input {
-	Input();
 	Game::Input game_input;
-	void process_gamepad();
-	void process_keyboard_button(WPARAM key_code, bool is_pressed);
-	void dev_process_mouse(HWND window);
-
-	private:
 	Xinput_Get_State* XInputGetState;
 	Xinput_Set_State* XInputSetState;
-	static f32 get_normalized_stick_value(SHORT value, SHORT deadzone);
-	static void process_gamepad_button(Game::Button& state, bool is_pressed);
 };
 
 enum Dev_Replayer_State { Idle, Recording, Playing, Count };
 
+// TODO: возможно стоит избавиться от префиксов dev_
 struct Dev_Replayer {
-	Dev_Replayer(const Game::Memory& game_memory);
-	void next_state(Game::Memory& game_memory, Game::Input& game_input);
-	void record_or_replace(Game::Memory& game_memory, Game::Input& game_input);
-
-	private:
 	char state_path[MAX_PATH];
 	char input_path[MAX_PATH];
 	HANDLE state_handle;
 	HANDLE input_handle;
 	Dev_Replayer_State replayer_state;
-	void start_record(const Game::Memory& game_memory);
-	void start_play(Game::Memory& game_memory);
-	void record(const Game::Input& game_input);
-	void play(Game::Memory& game_memory, Game::Input& game_input);
 };
 
 struct Screen {
-	Screen();
 	Game::Screen game_screen;
-	void resize(i32 width, i32 height);
-	void submit(HWND window, HDC device_context) const;
-	void dev_draw_vertical(i32 x, i32 top, i32 bottom, u32 color);
-
-	private:
 	BITMAPINFO bitmap_info;
 };
 
@@ -106,19 +60,47 @@ struct Dev_Sound_Time_Marker {
 };
 
 struct Sound {
-	Sound(HWND window);
 	Game::Sound game_sound;
-	void calc_samples_to_write(i64 flip_timestamp);
-	void submit();
-	void dev_draw_sync(Screen& screen);
-
-	private:
 	WAVEFORMATEX wave_format;
 	IDirectSoundBuffer* buffer;
 	DWORD output_location;
 	Dev_Sound_Time_Marker dev_markers[32]; // ожидаемый фреймрейт - 1
 	i32 dev_markers_index;
+
+	// TODO: обдумать использование полей структуры вместо геттеров
 	DWORD get_buffer_size() 	const { return wave_format.nAvgBytesPerSec; }
 	DWORD get_bytes_per_frame() const { return (DWORD)((f32)wave_format.nAvgBytesPerSec * TARGET_SECONDS_PER_FRAME); }
 	DWORD get_safety_bytes() 	const { return get_bytes_per_frame() / 3; }
 };
+
+static void calc_sound_samples_to_write(Sound& sound, i64 flip_timestamp);
+static void dev_draw_vertical_line(Screen& screen, i32 x, i32 top, i32 bottom, u32 color);
+static void dev_process_mouse_input(Input& input, HWND window);
+static void dev_reload_game_code_if_recompiled(Game_Code& game_code);
+static void dev_draw_sound_sync(Sound& sound, Screen& screen);
+static void get_build_file_path(span<const char> file_name, span<char> dest);
+static FILETIME get_file_write_time(const char* file_name);
+static f32 get_normalized_stick_value(SHORT value);
+static f32 get_seconds_elapsed(i64 start);
+static i64 get_timestamp();
+static Game_Code init_game_code();
+static Input init_input();
+static Dev_Replayer init_replayer(const Game::Memory& game_memory);
+static Screen init_screen();
+static Sound init_sound(HWND window);
+static void load_game_code(Game_Code& game_code);
+static void process_gamepad_input(Input& input);
+static void process_gamepad_button(Game::Button& state, bool is_pressed);
+static void process_keyboard_button(Input& input, WPARAM key_code, bool is_pressed);
+static void submit_screen(const Screen& screen, HWND window, HDC device_context);
+static void submit_sound(Sound& sound);
+static void replayer_next_state(Dev_Replayer& replayer, Game::Memory& game_memory, Game::Input& game_input);
+static void replayer_play(Dev_Replayer& replayer, Game::Memory& game_memory, Game::Input& game_input);
+static void replayer_record(Dev_Replayer& replayer, const Game::Input& game_input);
+static void replayer_record_or_replace(Dev_Replayer& replayer, Game::Memory& game_memory, Game::Input& game_input);
+static void replayer_start_play(Dev_Replayer& replayer, Game::Memory& game_memory);
+static void replayer_start_record(Dev_Replayer& replayer, const Game::Memory& game_memory);
+static void reset_game_input_counters(Game::Input& game_input);
+static void resize_screen(Screen& screen, i32 width, i32 height);
+static void wait_until_end_of_frame(i64 flip_timestamp);
+static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);

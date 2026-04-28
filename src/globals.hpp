@@ -35,17 +35,9 @@ namespace hm {
     struct is_same       { static constexpr bool value = false; };
     template <typename T>
     struct is_same<T, T> { static constexpr bool value = true; };
-
-    template <typename T>
-    using predicate = bool (*)(const T&);
     
-    template <typename T, i32 N>
-    static constexpr i32 array_size(const T (&)[N]) { return N; }
-
-    static i32 trunc_i32(i64 value) {
-		assert((i32)value == value);
-        return (i32)value;
-    }
+    template <typename T>
+    using predicate = bool (*)(T);
     
     // TODO: добавить функционал для многомерных блоков, как в mdspan
     template <typename T>
@@ -74,15 +66,17 @@ namespace hm {
             assert(index >= 0 && index < count());
             return ptr[index];
         }
-        i64 find_last_index(predicate<T> predicate) {
-            for (i64 index = count() - 1; index >= 0; index--) {
-                if (predicate((*this)[index])) return index;
-            }
-            return -1;
-        }
     };
     template <typename T>
     span(T*, i64) -> span<T>;
+    
+    template <typename T>
+    static i64 find_last_index(span<T> span, predicate<T> predicate) {
+        for (i64 index = span.count() - 1; index >= 0; index--) {
+            if (predicate(span[index])) return index;
+        }
+        return -1;
+    };
 
     template <typename T>
     static T   min(T a, T b)     { return a < b ? a : b; }
@@ -91,6 +85,9 @@ namespace hm {
     static i32 round(f32 x)      { return (i32)(x + 0.5f * sign(x)); }
     static i32 ceil (f32 x)      { return (i32)x + (x > (i32)x); }
     static i32 floor(f32 x)      { return (i32)x - (x < (i32)x); }
+
+    template <typename T, i32 N>
+    static constexpr i32 array_size(const T (&)[N]) { return N; }
     
     template <typename T>
     static void swap(T& a, T& b) { T temp = a; a = b; b = temp; }
@@ -100,6 +97,11 @@ namespace hm {
         for (i64 i = 0; i < sizeof(T); i++) {
             ((u8*)dest)[i] = 0;
         }
+    }
+
+    static i32 trunc_i32(i64 value) {
+		assert((i32)value == value);
+        return (i32)value;
     }
 
     static void memcpy(span<const u8> src, span<u8> dest) {

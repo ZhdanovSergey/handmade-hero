@@ -1,16 +1,8 @@
 #include "game.hpp"
 
 namespace Game {
-	extern "C" void get_sound_samples(Memory& memory, Sound& sound) {
-		Sound_Sample* sample = sound.samples;
-		for (i32 i = 0; i < sound.samples_to_write; i++) {
-			*sample = {};
-			sample++;
-		}
-	}
-
 	extern "C" void update_and_render(const Input& input, Memory& memory, Screen& screen) {
-		Game_State& state = memory.get_game_state();
+		Game_State& state = get_initialized_game_state(memory);
 		f32 player_height = 1.4f;
 		f32 player_width  = 1.0f;
 
@@ -27,30 +19,30 @@ namespace Game {
 			
 			new_player_pos.tile_x += player_dx * input.frame_dt;
 			new_player_pos.tile_y += player_dy * input.frame_dt;
-			new_player_pos.normalize();
+			normalize_position(new_player_pos);
 		}
 
 		World_Position new_player_pos_left  = new_player_pos;
 		new_player_pos_left.tile_x  -= player_width / 2;
-		new_player_pos_left.normalize();
+		normalize_position(new_player_pos_left);
 
 		World_Position new_player_pos_right = new_player_pos;
 		new_player_pos_right.tile_x += player_width / 2;
-		new_player_pos_right.normalize();
+		normalize_position(new_player_pos_right);
 
-		if (state.world.check_empty_tile(new_player_pos_left)
-		 && state.world.check_empty_tile(new_player_pos)
-		 && state.world.check_empty_tile(new_player_pos_right)) {
+		if (check_empty_tile(state.world, new_player_pos_left)
+		 && check_empty_tile(state.world, new_player_pos)
+		 && check_empty_tile(state.world, new_player_pos_right)) {
 			state.player_pos = new_player_pos;
 		}
 
 		Chunk& current_chunk = state.world.get_chunk(state.player_pos);
-		Chunk_Position player_chunk_pos = state.player_pos.get_chunk_position();
+		Chunk_Position player_chunk_pos = get_chunk_position(state.player_pos);
 		
 		i32 half_screen_width_tiles  = Screen::WIDTH_TILES  / 2;
 		i32 half_screen_height_tiles = Screen::HEIGHT_TILES / 2;
 
-		screen.draw_rectangle(Color{ 1.0f, 0.0f, 1.0f }, 0.0f, Screen::WIDTH_TILES * World::TILE_SIZE, Screen::HEIGHT_TILES * World::TILE_SIZE, 0.0f);
+		draw_rectangle(screen, Color{ 1.0f, 0.0f, 1.0f }, 0.0f, Screen::WIDTH_TILES * World::TILE_SIZE, Screen::HEIGHT_TILES * World::TILE_SIZE, 0.0f);
 		for (    i32 y = player_chunk_pos.chunk_y - half_screen_height_tiles - 1; y <= player_chunk_pos.chunk_y + half_screen_height_tiles + 1; y++) {
 			for (i32 x = player_chunk_pos.chunk_x - half_screen_width_tiles  - 1; x <= player_chunk_pos.chunk_x + half_screen_width_tiles  + 1;  x++) {
 
@@ -61,7 +53,7 @@ namespace Game {
 				f32 min_y = - (y - player_chunk_pos.chunk_y - half_screen_height_tiles) * World::TILE_SIZE + player_chunk_pos.tile_y;
 				f32 max_x = min_x + World::TILE_SIZE;
 				f32 max_y = min_y - World::TILE_SIZE;
-				screen.draw_rectangle(color, min_x, max_x, min_y, max_y);
+				draw_rectangle(screen, color, min_x, max_x, min_y, max_y);
 			}
 		}
 
@@ -69,18 +61,23 @@ namespace Game {
 		f32 player_min_y = half_screen_height_tiles * World::TILE_SIZE;
 		f32 player_max_x = player_min_x + player_width;
 		f32 player_max_y = player_min_y - player_height;
-		screen.draw_rectangle(Color{ 1.0f, 0.0f, 0.0f }, player_min_x, player_max_x, player_min_y, player_max_y);
+		draw_rectangle(screen, Color{ 1.0f, 0.0f, 0.0f }, player_min_x, player_max_x, player_min_y, player_max_y);
 	};
 
-	bool World::check_empty_tile(const World_Position& position) {
-		auto& world = *this;
+	extern "C" void get_sound_samples(Memory& memory, Sound& sound) {
+		Sound_Sample* sample = sound.samples;
+		for (i32 i = 0; i < sound.samples_to_write; i++) {
+			*sample = {};
+			sample++;
+		}
+	}
+
+	static bool check_empty_tile(const World& world, const World_Position& position) {
 		return world.get_chunk(position).tiles[position.world_y][position.world_x] == 0;
 	}
 
 	// TODO: учесть возможность смещения больше чем на 1 клетку
-	void World_Position::normalize() {
-		auto& position = *this;
-
+	static void normalize_position(World_Position& position) {
 		if (position.tile_x < 0) {
 			position.world_x  -= 1;
 			position.tile_x += World::TILE_SIZE;
@@ -103,8 +100,7 @@ namespace Game {
 		assert(position.tile_y >= 0 && position.tile_y < World::TILE_SIZE);
 	}
 
-	Chunk_Position World_Position::get_chunk_position() {
-		auto& world_pos = *this;
+	static Chunk_Position get_chunk_position(const World_Position& world_pos) {
 		Chunk_Position result = {};
 		result.world_x = world_pos.world_x >> Chunk::SHIFT;
 		result.world_y = world_pos.world_y >> Chunk::SHIFT;
@@ -115,8 +111,7 @@ namespace Game {
 		return result;
 	}
 
-	void Screen::draw_rectangle(const Color& color, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32) {
-		auto& screen = *this;
+	static void draw_rectangle(Screen& screen, const Color& color, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32) {
 		// screen.pixels инвертирован по вертикали относительно координат игры
 		hm::swap(min_y_f32, max_y_f32);
 
@@ -145,8 +140,7 @@ namespace Game {
 		}
 	};
 
-	Game_State& Memory::get_game_state() {
-		auto& memory = *this;
+	static Game_State& get_initialized_game_state(Memory& memory) {
 		Game_State& state = *(Game_State*)memory.permanent_storage.ptr;
 		if (memory.is_initialized) return state;
 
@@ -190,10 +184,10 @@ namespace Game {
 		state.player_pos.world_y = 1;
 		state.player_pos.tile_x = 1.0f;
 		state.player_pos.tile_y = 1.0f;
-		state.player_pos.normalize();
+		normalize_position(state.player_pos);
 		
 		assert((i64)sizeof(Game_State) <= memory.permanent_storage.size);
-		assert(state.world.check_empty_tile(state.player_pos));
+		assert(check_empty_tile(state.world, state.player_pos));
 		
 		memory.is_initialized = true;
 		return state;

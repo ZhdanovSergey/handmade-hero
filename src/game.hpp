@@ -9,15 +9,12 @@ namespace Game {
 	};
 
 	struct Controller {
-		bool is_connected;
-		bool is_analog;
-
+		bool is_connected, is_analog;
 		f32 start_x, start_y;
 		f32 end_x, end_y;
 		f32 average_x, average_y;
 		f32 min_x, min_y;
 		f32 max_x, max_y;
-
 		Button start, back;
 		Button left_shoulder, right_shoulder;
 		Button move_up, move_down, move_left, move_right;
@@ -34,28 +31,6 @@ namespace Game {
 		Controller controllers[2];
 		Dev_Mouse dev_mouse;
 		f32 frame_dt;
-
-		void reset_counters() {
-			dev_mouse.left_button.transitions_count = 0;
-			dev_mouse.right_button.transitions_count = 0;
-
-			for (auto& controller : controllers) {
-				controller.start.transitions_count = 0;
-				controller.back.transitions_count = 0;
-				controller.left_shoulder.transitions_count = 0;
-				controller.right_shoulder.transitions_count = 0;
-
-				controller.move_up.transitions_count = 0;
-				controller.move_down.transitions_count = 0;
-				controller.move_left.transitions_count = 0;
-				controller.move_right.transitions_count = 0;
-
-				controller.action_up.transitions_count = 0;
-				controller.action_down.transitions_count = 0;
-				controller.action_left.transitions_count = 0;
-				controller.action_right.transitions_count = 0;
-			}
-		}
 	};
 
 	struct Color {
@@ -87,11 +62,10 @@ namespace Game {
 	struct World_Position {
 		u32 world_x, world_y;
 		f32 tile_x, tile_y;
-		void normalize();
-		Chunk_Position get_chunk_position();
 	};
 
 	struct Chunk {
+		// TODO: переместить все игровые константы в основной блок памяти
 		static constexpr i32 SHIFT = 8;
 		static constexpr i32 SIZE = 1 << SHIFT;
 		static constexpr u32 MASK = SIZE - 1;
@@ -106,7 +80,6 @@ namespace Game {
 
 		Chunk* chunks;
 		
-		bool check_empty_tile(const World_Position& position);
 		Chunk& get_chunk(const World_Position& position) const {
 			// return chunks[player_pos.scene_y * World::WIDTH + player_pos.scene_x];
 			return *chunks;
@@ -116,11 +89,9 @@ namespace Game {
 	struct Screen {
 		static constexpr i32 WIDTH_TILES = 17;
 		static constexpr i32 HEIGHT_TILES = 9;
+		
 		i32 width, height;
 		u32* pixels;
-		void draw_rectangle(const Color& color, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32);
-
-		private:
 		f32 get_pixels_per_unit() { return (f32)height / (HEIGHT_TILES * World::TILE_SIZE); }
 	};
 
@@ -140,7 +111,6 @@ namespace Game {
     	Platform::Write_File_Sync* write_file_sync;
     	Platform::Free_File_Memory* free_file_memory;
 
-		Game_State& get_game_state();
 		i64 get_total_size() const { return permanent_storage.size + transient_storage.size; }
 	};
 
@@ -149,4 +119,10 @@ namespace Game {
 	// get_sound_samples должен быть быстрым, не больше 1ms
 	extern "C" void get_sound_samples(Memory& memory, Sound& sound_buffer);
 	using Get_Sound_Samples = decltype(get_sound_samples);
+
+	static bool check_empty_tile(const World& world, const World_Position& position);
+	static void draw_rectangle(Screen& screen, const Color& color, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32);
+	static Chunk_Position get_chunk_position(const World_Position& world_pos);
+	static Game_State& get_initialized_game_state(Memory& memory);
+	static void normalize_position(World_Position& position);
 }
