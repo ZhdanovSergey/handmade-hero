@@ -11,8 +11,8 @@ using Direct_Sound_Create = HRESULT WINAPI(LPGUID lpGuid, LPDIRECTSOUND* ppDS, L
 using Xinput_Get_State = DWORD(DWORD dwUserIndex, XINPUT_STATE *pState);
 using Xinput_Set_State = DWORD(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration);
 
-static const i32 INITIAL_WINDOW_WIDTH = 960;
-static const i32 INITIAL_WINDOW_HEIGHT = 540;
+static const i32 INITIAL_WINDOW_WIDTH = 1280;
+static const i32 INITIAL_WINDOW_HEIGHT = 720;
 static const f32 SLEEP_GRANULARITY_SECONDS = (f32)(timeBeginPeriod(1) == TIMERR_NOERROR) / 1000.0f;
 static const i64 PERFORMANCE_FREQUENCY = []{
 	LARGE_INTEGER query_result;

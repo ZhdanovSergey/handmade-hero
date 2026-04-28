@@ -1,17 +1,13 @@
 #pragma once
 
-// TODO: добавить инварианты, пред- и постусловия везде (не нужно экономить на assert)
-#if SLOW_MODE // включаем/выключаем assert
-    #undef NDEBUG
-#else
-    #define NDEBUG
-#endif
-#include <cassert>
-
 #include <cstdint>
-
-// TODO: разобраться как выводить инфу в консоль вне платформенного слоя
 #include <cstdio>
+
+#if SLOW_MODE
+    #define assert(expr) if (!(expr)) *(int*)nullptr = 0
+#else
+    #define assert(expr)
+#endif
 
 using f32 = float;
 using f64 = double;
@@ -46,11 +42,12 @@ namespace hm {
     template <typename T, i32 N>
     static constexpr i32 array_size(const T (&)[N]) { return N; }
 
-    static i32 safe_trunc_i32(i64 value) {
+    static i32 trunc_i32(i64 value) {
 		assert((i32)value == value);
         return (i32)value;
     }
     
+    // TODO: добавить функционал для многомерных блоков, как в mdspan
     template <typename T>
     struct span {
         T* ptr;
@@ -79,8 +76,7 @@ namespace hm {
         }
         i64 find_last_index(predicate<T> predicate) {
             for (i64 index = count() - 1; index >= 0; index--) {
-                // TODO: если использовать this[index], то не сходится константность
-                if (predicate(ptr[index])) return index;
+                if (predicate((*this)[index])) return index;
             }
             return -1;
         }

@@ -11,7 +11,6 @@ namespace Game {
 
 	extern "C" void update_and_render(const Input& input, Memory& memory, Screen& screen) {
 		Game_State& state = memory.get_game_state();
-		f32 player_speed  = 5.0f;
 		f32 player_height = 1.4f;
 		f32 player_width  = 1.0f;
 
@@ -19,21 +18,24 @@ namespace Game {
 		for (auto& controller : input.controllers) {
 			f32 player_dx = 0;
 			f32 player_dy = 0;
+			f32 player_speed = controller.action_down.is_pressed ? 20.0f : 5.0f;
+
 			if (controller.move_left.is_pressed)  player_dx = - player_speed;
 			if (controller.move_right.is_pressed) player_dx =   player_speed;
 			if (controller.move_up.is_pressed)    player_dy =   player_speed;
 			if (controller.move_down.is_pressed)  player_dy = - player_speed;
-			new_player_pos.point_x += player_dx * input.frame_dt;
-			new_player_pos.point_y += player_dy * input.frame_dt;
+			
+			new_player_pos.tile_x += player_dx * input.frame_dt;
+			new_player_pos.tile_y += player_dy * input.frame_dt;
 			new_player_pos.normalize();
 		}
 
 		World_Position new_player_pos_left  = new_player_pos;
-		new_player_pos_left.point_x  -= player_width / 2;
+		new_player_pos_left.tile_x  -= player_width / 2;
 		new_player_pos_left.normalize();
 
 		World_Position new_player_pos_right = new_player_pos;
-		new_player_pos_right.point_x += player_width / 2;
+		new_player_pos_right.tile_x += player_width / 2;
 		new_player_pos_right.normalize();
 
 		if (state.world.check_empty_tile(new_player_pos_left)
@@ -44,26 +46,27 @@ namespace Game {
 
 		Chunk& current_chunk = state.world.get_chunk(state.player_pos);
 		Chunk_Position player_chunk_pos = state.player_pos.get_chunk_position();
+		
+		i32 half_screen_width_tiles  = Screen::WIDTH_TILES  / 2;
+		i32 half_screen_height_tiles = Screen::HEIGHT_TILES / 2;
 
-		// Screen::HEIGHT_TILES / 2 округляем вверх, скорее всего из-за инвертирования оси y
 		screen.draw_rectangle(Color{ 1.0f, 0.0f, 1.0f }, 0.0f, Screen::WIDTH_TILES * World::TILE_SIZE, Screen::HEIGHT_TILES * World::TILE_SIZE, 0.0f);
-		for (    i32 y = player_chunk_pos.chunk_y - Screen::HEIGHT_TILES / 2; y <= player_chunk_pos.chunk_y + Screen::HEIGHT_TILES / 2; y++) {
-			for (i32 x = player_chunk_pos.chunk_x - Screen::WIDTH_TILES  / 2; x <= player_chunk_pos.chunk_x + Screen::WIDTH_TILES  / 2; x++) {
-				Color color = y >= 0 && x >= 0 && current_chunk.tiles[y][x] ? Color{ 1.0f, 1.0f, 1.0f } : Color{ 0.5f, 0.5f, 0.5f };
-				if (x == player_chunk_pos.chunk_x && y == player_chunk_pos.chunk_y) {
-					color = Color{ 0.0f, 0.0f, 0.0f };
-				}
+		for (    i32 y = player_chunk_pos.chunk_y - half_screen_height_tiles - 1; y <= player_chunk_pos.chunk_y + half_screen_height_tiles + 1; y++) {
+			for (i32 x = player_chunk_pos.chunk_x - half_screen_width_tiles  - 1; x <= player_chunk_pos.chunk_x + half_screen_width_tiles  + 1;  x++) {
 
-				f32 min_x =   (x - player_chunk_pos.chunk_x +  Screen::WIDTH_TILES  / 2)      * World::TILE_SIZE;
-				f32 min_y = - (y - player_chunk_pos.chunk_y - (Screen::HEIGHT_TILES / 2 + 1)) * World::TILE_SIZE;
+				Color color = y >= 0 && x >= 0 && current_chunk.tiles[y][x] ? Color{ 1.0f, 1.0f, 1.0f } : Color{ 0.5f, 0.5f, 0.5f };
+				if (x == player_chunk_pos.chunk_x && y == player_chunk_pos.chunk_y) color = Color{ 0.0f, 0.0f, 0.0f };
+
+				f32 min_x =   (x - player_chunk_pos.chunk_x + half_screen_width_tiles)  * World::TILE_SIZE - player_chunk_pos.tile_x;
+				f32 min_y = - (y - player_chunk_pos.chunk_y - half_screen_height_tiles) * World::TILE_SIZE + player_chunk_pos.tile_y;
 				f32 max_x = min_x + World::TILE_SIZE;
 				f32 max_y = min_y - World::TILE_SIZE;
 				screen.draw_rectangle(color, min_x, max_x, min_y, max_y);
 			}
 		}
 
-		f32 player_min_x =  Screen::WIDTH_TILES  / 2      * World::TILE_SIZE + player_chunk_pos.tile_x - player_width / 2;
-		f32 player_min_y = (Screen::HEIGHT_TILES / 2 + 1) * World::TILE_SIZE - player_chunk_pos.tile_y;
+		f32 player_min_x = half_screen_width_tiles  * World::TILE_SIZE - player_width / 2;
+		f32 player_min_y = half_screen_height_tiles * World::TILE_SIZE;
 		f32 player_max_x = player_min_x + player_width;
 		f32 player_max_y = player_min_y - player_height;
 		screen.draw_rectangle(Color{ 1.0f, 0.0f, 0.0f }, player_min_x, player_max_x, player_min_y, player_max_y);
@@ -71,44 +74,44 @@ namespace Game {
 
 	bool World::check_empty_tile(const World_Position& position) {
 		auto& world = *this;
-		return world.get_chunk(position).tiles[position.tile_y][position.tile_x] == 0;
+		return world.get_chunk(position).tiles[position.world_y][position.world_x] == 0;
 	}
 
 	// TODO: учесть возможность смещения больше чем на 1 клетку
 	void World_Position::normalize() {
 		auto& position = *this;
 
-		if (position.point_x < 0) {
-			position.tile_x  -= 1;
-			position.point_x += World::TILE_SIZE;
-		} else if (position.point_x >= World::TILE_SIZE) {
-			position.tile_x  += 1;
-			position.point_x -= World::TILE_SIZE;
+		if (position.tile_x < 0) {
+			position.world_x  -= 1;
+			position.tile_x += World::TILE_SIZE;
+		} else if (position.tile_x >= World::TILE_SIZE) {
+			position.world_x  += 1;
+			position.tile_x -= World::TILE_SIZE;
 		}
 
-		if (position.point_y < 0) {
-			position.tile_y  -= 1;
-			position.point_y += World::TILE_SIZE;
-		} else if (position.point_y >= World::TILE_SIZE) {
-			position.tile_y  += 1;
-			position.point_y -= World::TILE_SIZE;
+		if (position.tile_y < 0) {
+			position.world_y  -= 1;
+			position.tile_y += World::TILE_SIZE;
+		} else if (position.tile_y >= World::TILE_SIZE) {
+			position.world_y  += 1;
+			position.tile_y -= World::TILE_SIZE;
 		}
 
 		// TODO: при получении дробной части через деление можно получить ненормализованное значение из-за округления
 		// можно на время сделать <= World::TILE_SIZE
-		assert(position.point_x >= 0 && position.point_x < World::TILE_SIZE);
-		assert(position.point_y >= 0 && position.point_y < World::TILE_SIZE);
+		assert(position.tile_x >= 0 && position.tile_x < World::TILE_SIZE);
+		assert(position.tile_y >= 0 && position.tile_y < World::TILE_SIZE);
 	}
 
 	Chunk_Position World_Position::get_chunk_position() {
 		auto& world_pos = *this;
 		Chunk_Position result = {};
-		result.world_x = world_pos.tile_x >> Chunk::SHIFT;
-		result.world_y = world_pos.tile_y >> Chunk::SHIFT;
-		result.chunk_x = (i32)(world_pos.tile_x & Chunk::MASK);
-		result.chunk_y = (i32)(world_pos.tile_y & Chunk::MASK);
-		result.tile_x = world_pos.point_x;
-		result.tile_y = world_pos.point_y;
+		result.world_x = world_pos.world_x >> Chunk::SHIFT;
+		result.world_y = world_pos.world_y >> Chunk::SHIFT;
+		result.chunk_x = (i32)(world_pos.world_x & Chunk::MASK);
+		result.chunk_y = (i32)(world_pos.world_y & Chunk::MASK);
+		result.tile_x = world_pos.tile_x;
+		result.tile_y = world_pos.tile_y;
 		return result;
 	}
 
@@ -183,10 +186,10 @@ namespace Game {
 		hm::memcpy(CHUNKS, state.CHUNKS);
 		state.world.chunks = (Chunk*)state.CHUNKS;
 
-		state.player_pos.tile_x = 1;
-		state.player_pos.tile_y = 1;
-		state.player_pos.point_x = 1.0f;
-		state.player_pos.point_y = 1.0f;
+		state.player_pos.world_x = 1;
+		state.player_pos.world_y = 1;
+		state.player_pos.tile_x = 1.0f;
+		state.player_pos.tile_y = 1.0f;
 		state.player_pos.normalize();
 		
 		assert((i64)sizeof(Game_State) <= memory.permanent_storage.size);

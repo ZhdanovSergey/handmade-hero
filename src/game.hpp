@@ -85,14 +85,8 @@ namespace Game {
 
 	// TODO: сделать сеттеры с автоматической нормализацией после введения векторов + конструктор с нормализацией
 	struct World_Position {
-		// i32 scene_x, scene_y;
-
-		// старые названия
-		u32 tile_x, tile_y;
-		f32 point_x, point_y;
-
-		// u32 world_x, world_y;
-		// f32 tile_x, tile_y;
+		u32 world_x, world_y;
+		f32 tile_x, tile_y;
 		void normalize();
 		Chunk_Position get_chunk_position();
 	};
