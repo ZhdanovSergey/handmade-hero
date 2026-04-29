@@ -21,7 +21,7 @@ namespace Game {
 		Button action_up, action_down, action_left, action_right;
 	};
 
-	struct Dev_Mouse {
+	struct Mouse {
 		i32 x, y;
 		Button left_button;
 		Button right_button;
@@ -29,7 +29,7 @@ namespace Game {
 
 	struct Input {
 		Controller controllers[2];
-		Dev_Mouse dev_mouse;
+		Mouse mouse;
 		f32 frame_dt;
 	};
 

@@ -6,51 +6,22 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	static_assert(DEV_MODE || !SLOW_MODE);
     SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
 
-	WNDCLASSA window_class = {};
-	window_class.style = CS_HREDRAW | CS_VREDRAW;
-	window_class.lpfnWndProc = WindowProc;
-	window_class.hInstance = hInstance;
-	window_class.lpszClassName = "Handmade_Hero";
-	RegisterClassA(&window_class);
-
-	RECT window_rect = {};
-	window_rect.right = INITIAL_WINDOW_WIDTH;
-	window_rect.bottom = INITIAL_WINDOW_HEIGHT;
-	DWORD dwStyle = WS_TILEDWINDOW | WS_VISIBLE;
-	AdjustWindowRectEx(&window_rect, dwStyle, FALSE, 0);
-	
-	int adj_window_width = window_rect.right - window_rect.left;
-	int adj_window_height = window_rect.bottom - window_rect.top;
-	HWND window = CreateWindowExA(0, window_class.lpszClassName, "Handmade Hero", dwStyle,
-		CW_USEDEFAULT, CW_USEDEFAULT, adj_window_width, adj_window_height, nullptr, nullptr, hInstance, nullptr);
-	
-	Game::Memory game_memory = {}; {
-		i64 permanent_size = 64_MB;
-		i64 transient_size = 1_GB;
-		void* base_address = nullptr;
-		if constexpr (DEV_MODE && UINTPTR_MAX == UINT64_MAX) base_address = (void*)1024_GB;
-		// TODO: использовать MEM_LARGE_PAGES и AdjustTokenPrivileges в 64-битном билде
-		u8* game_storage = (u8*)VirtualAlloc(base_address, (SIZE_T)(permanent_size + transient_size), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-		game_memory.permanent_storage = { game_storage, permanent_size };
-		game_memory.transient_storage = { game_storage + permanent_size, transient_size };
-		game_memory.read_file_sync = Platform::read_file_sync;
-		game_memory.write_file_sync = Platform::write_file_sync;
-		game_memory.free_file_memory = Platform::free_file_memory;
-	}
-
+	HWND window = create_window(hInstance);
 	Input input = init_input();
 	Sound sound = init_sound(window);
 	Game_Code game_code = init_game_code();
-	Dev_Replayer dev_replayer = init_replayer(game_memory);
+	Game::Memory game_memory = init_game_memory();
+	Replayer replayer = {};
+	if constexpr (DEV_MODE) replayer = init_replayer(game_memory);
 
-	bool dev_is_pause = false;
+	bool is_pause = false;
 	i64 flip_timestamp = get_timestamp();
 	// u64 flip_cycle_counter = __rdtsc();
 
 	while (true) {
-		reset_game_input_counters(input.game_input);
+		reset_input_counters(input);
 		process_gamepad_input(input);
-		dev_process_mouse_input(input, window);
+		if constexpr (DEV_MODE) process_mouse_input(input, window);
 
 		MSG message;
 		while (PeekMessageA(&message, nullptr, 0, 0, PM_REMOVE)) {
@@ -63,8 +34,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 					process_keyboard_button(input, message.wParam, is_key_pressed);
 					if constexpr (DEV_MODE) {
 						if (!is_key_pressed) continue;
-						if (message.wParam == 'P') dev_is_pause = !dev_is_pause;
-						if (message.wParam == 'R') replayer_next_state(dev_replayer, game_memory, input.game_input);
+						if (message.wParam == 'P') is_pause = !is_pause;
+						if (message.wParam == 'R') replayer_next_state(replayer, game_memory, input.game_input);
 					}
 				} break;
 				case WM_QUIT: {
@@ -78,13 +49,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		}
 
 		if constexpr (DEV_MODE) {
-			dev_reload_game_code_if_recompiled(game_code);
-			if (dev_is_pause) {
+			reload_game_code_if_recompiled(game_code);
+			if (is_pause) {
 				wait_until_end_of_frame(flip_timestamp);
 				flip_timestamp = get_timestamp();
 				continue;
 			};
-			replayer_record_or_replace(dev_replayer, game_memory, input.game_input);
+			replayer_record_or_replace(replayer, game_memory, input.game_input);
 		}
 
 		game_code.update_and_render(input.game_input, game_memory, global_screen.game_screen);
@@ -98,7 +69,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		// OutputDebugStringA(output_buffer);
 		flip_timestamp = get_timestamp();
 
-		// dev_draw_sound_sync(sound, global_screen);
+		// if constexpr (DEV_MODE) draw_sound_sync(sound, global_screen);
 		HDC device_context = GetDC(window);
 		submit_screen(global_screen, window, device_context);
 		ReleaseDC(window, device_context);
@@ -186,12 +157,28 @@ static i64 get_timestamp() {
 
 static Game_Code init_game_code() {
 	Game_Code game_code = {};
-	game_code.update_and_render =    [](auto...){};
-	game_code.get_sound_samples =    [](auto...){};
+	game_code.update_and_render = [](auto...){};
+	game_code.get_sound_samples = [](auto...){};
 	get_build_file_path("game.dll", game_code.dll_path);
 	get_build_file_path("game_temp.dll", game_code.temp_dll_path);
 	load_game_code(game_code);
 	return game_code;
+}
+
+static Game::Memory init_game_memory() {
+	Game::Memory game_memory = {};
+	i64 permanent_size = 64_MB;
+	i64 transient_size = 1_GB;
+	void* base_address = nullptr;
+	if constexpr (DEV_MODE && UINTPTR_MAX == UINT64_MAX) base_address = (void*)1024_GB;
+	// TODO: использовать MEM_LARGE_PAGES и AdjustTokenPrivileges в 64-битном билде
+	u8* game_storage = (u8*)VirtualAlloc(base_address, (SIZE_T)(permanent_size + transient_size), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	game_memory.permanent_storage = { game_storage, permanent_size };
+	game_memory.transient_storage = { game_storage + permanent_size, transient_size };
+	game_memory.read_file_sync = Platform::read_file_sync;
+	game_memory.write_file_sync = Platform::write_file_sync;
+	game_memory.free_file_memory = Platform::free_file_memory;
+	return game_memory;
 }
 
 static void load_game_code(Game_Code& game_code) {
@@ -209,19 +196,18 @@ static void load_game_code(Game_Code& game_code) {
 	if (loaded_dll) {
 		game_code.dll = loaded_dll;
 		game_code.write_time = get_file_write_time(game_code.dll_path);
-		game_code.update_and_render =    (Game::Update_And_Render*)    GetProcAddress(loaded_dll, "update_and_render");
-		game_code.get_sound_samples =    (Game::Get_Sound_Samples*)    GetProcAddress(loaded_dll, "get_sound_samples");
+		game_code.update_and_render = (Game::Update_And_Render*)GetProcAddress(loaded_dll, "update_and_render");
+		game_code.get_sound_samples = (Game::Get_Sound_Samples*)GetProcAddress(loaded_dll, "get_sound_samples");
 	}
 }
 
-static void dev_reload_game_code_if_recompiled(Game_Code& game_code) {
-	if constexpr (!DEV_MODE) return;
+static void reload_game_code_if_recompiled(Game_Code& game_code) {
 	FILETIME dll_write_time = get_file_write_time(game_code.dll_path);
 	if (CompareFileTime(&dll_write_time, &game_code.write_time)) {
 		FreeLibrary(game_code.dll);
 		game_code.dll = nullptr;
-		game_code.update_and_render =    [](auto...){};
-		game_code.get_sound_samples =    [](auto...){};
+		game_code.update_and_render = [](auto...){};
+		game_code.get_sound_samples = [](auto...){};
 		load_game_code(game_code);
 	}
 }
@@ -256,20 +242,20 @@ static void process_gamepad_input(Input& input) {
 	controller.average_y = controller.min_y = controller.max_y = controller.end_y;
 	controller.is_analog = controller.average_x || controller.average_y;
 
-	process_gamepad_button(controller.start,			state.Gamepad.wButtons & XINPUT_GAMEPAD_START);
-	process_gamepad_button(controller.back,				state.Gamepad.wButtons & XINPUT_GAMEPAD_BACK);
-	process_gamepad_button(controller.left_shoulder, 	state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER);
-	process_gamepad_button(controller.right_shoulder,	state.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER);
+	process_gamepad_button(controller.start,		  state.Gamepad.wButtons & XINPUT_GAMEPAD_START);
+	process_gamepad_button(controller.back,			  state.Gamepad.wButtons & XINPUT_GAMEPAD_BACK);
+	process_gamepad_button(controller.left_shoulder,  state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER);
+	process_gamepad_button(controller.right_shoulder, state.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER);
 
-	process_gamepad_button(controller.move_up, 			state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_UP);
-	process_gamepad_button(controller.move_down, 		state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_DOWN);
-	process_gamepad_button(controller.move_left, 		state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_LEFT);
-	process_gamepad_button(controller.move_right, 		state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT);
+	process_gamepad_button(controller.move_up, 		  state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_UP);
+	process_gamepad_button(controller.move_down, 	  state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_DOWN);
+	process_gamepad_button(controller.move_left, 	  state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_LEFT);
+	process_gamepad_button(controller.move_right, 	  state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT);
 
-	process_gamepad_button(controller.action_up, 		state.Gamepad.wButtons & XINPUT_GAMEPAD_Y);
-	process_gamepad_button(controller.action_down, 		state.Gamepad.wButtons & XINPUT_GAMEPAD_A);
-	process_gamepad_button(controller.action_left, 		state.Gamepad.wButtons & XINPUT_GAMEPAD_X);
-	process_gamepad_button(controller.action_right, 	state.Gamepad.wButtons & XINPUT_GAMEPAD_B);
+	process_gamepad_button(controller.action_up, 	  state.Gamepad.wButtons & XINPUT_GAMEPAD_Y);
+	process_gamepad_button(controller.action_down, 	  state.Gamepad.wButtons & XINPUT_GAMEPAD_A);
+	process_gamepad_button(controller.action_left, 	  state.Gamepad.wButtons & XINPUT_GAMEPAD_X);
+	process_gamepad_button(controller.action_right,   state.Gamepad.wButtons & XINPUT_GAMEPAD_B);
 }
 
 static f32 get_normalized_stick_value(SHORT value) {
@@ -286,27 +272,26 @@ static void process_keyboard_button(Input& input, WPARAM key_code, bool is_press
 	controller.is_connected = true;
 	Game::Button* button_state;
 	switch (key_code) {
-		case VK_RETURN: button_state = &controller.start;			break;
-		case VK_ESCAPE: button_state = &controller.back;			break;
-		case VK_UP: 	button_state = &controller.move_up;			break;
-		case VK_DOWN: 	button_state = &controller.move_down;		break;
-		case VK_LEFT: 	button_state = &controller.move_left;		break;
-		case VK_RIGHT: 	button_state = &controller.move_right;		break;
-		case 'W': 		button_state = &controller.action_up;		break;
-		case 'S': 		button_state = &controller.action_down;		break;
-		case 'A': 		button_state = &controller.action_left;		break;
-		case 'D': 		button_state = &controller.action_right;	break;
-		case 'Q': 		button_state = &controller.left_shoulder;	break;
-		case 'E': 		button_state = &controller.right_shoulder;	break;
+		case VK_RETURN: button_state = &controller.start;		   break;
+		case VK_ESCAPE: button_state = &controller.back;		   break;
+		case VK_UP: 	button_state = &controller.move_up;	       break;
+		case VK_DOWN: 	button_state = &controller.move_down;	   break;
+		case VK_LEFT: 	button_state = &controller.move_left;	   break;
+		case VK_RIGHT: 	button_state = &controller.move_right;	   break;
+		case 'W': 		button_state = &controller.action_up;	   break;
+		case 'S': 		button_state = &controller.action_down;	   break;
+		case 'A': 		button_state = &controller.action_left;	   break;
+		case 'D': 		button_state = &controller.action_right;   break;
+		case 'Q': 		button_state = &controller.left_shoulder;  break;
+		case 'E': 		button_state = &controller.right_shoulder; break;
 		default: return;
 	}
 	button_state->is_pressed = is_pressed;
 	button_state->transitions_count++;
 }
 
-static void dev_process_mouse_input(Input& input, HWND window) {
-	if constexpr (!DEV_MODE) return;
-	Game::Dev_Mouse& mouse = input.game_input.dev_mouse;
+static void process_mouse_input(Input& input, HWND window) {
+	Game::Mouse& mouse = input.game_input.mouse;
 
 	POINT point;
 	GetCursorPos(&point);
@@ -325,9 +310,8 @@ static void dev_process_mouse_input(Input& input, HWND window) {
 	}
 }
 
-static Dev_Replayer init_replayer(const Game::Memory& game_memory) {
-	if constexpr (!DEV_MODE) return;
-	Dev_Replayer replayer = {};
+static Replayer init_replayer(const Game::Memory& game_memory) {
+	Replayer replayer = {};
 	get_build_file_path("replay_state.hms", replayer.state_path);
 	get_build_file_path("replay_input.hmi", replayer.input_path);
 	replayer.state_handle = CreateFileA(replayer.state_path, GENERIC_READ | GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_FLAG_NO_BUFFERING, nullptr);
@@ -335,39 +319,37 @@ static Dev_Replayer init_replayer(const Game::Memory& game_memory) {
 	return replayer;
 }
 
-static void replayer_next_state(Dev_Replayer& replayer, Game::Memory& game_memory, Game::Input& game_input) {
-	if constexpr (!DEV_MODE) return;
-	replayer.replayer_state = (Dev_Replayer_State)((replayer.replayer_state + 1) % Dev_Replayer_State::Count);
+static void replayer_next_state(Replayer& replayer, Game::Memory& game_memory, Game::Input& game_input) {
+	replayer.state = (Replayer_State)((replayer.state + 1) % Replayer_State::Count);
 
-	switch (replayer.replayer_state) {
-		case Dev_Replayer_State::Recording: {
+	switch (replayer.state) {
+		case Replayer_State::Recording: {
 			replayer_start_record(replayer, game_memory);
 		} break;
-		case Dev_Replayer_State::Playing: {
+		case Replayer_State::Playing: {
 			replayer_start_play(replayer, game_memory);
 		} break;
-		case Dev_Replayer_State::Idle: {
+		case Replayer_State::Idle: {
 			game_input = {}; // принудительно отжимаем нажатые кнопки
 		} break;
-		case Dev_Replayer_State::Count: break;
+		case Replayer_State::Count: break;
 	}
 }
 
-static void replayer_record_or_replace(Dev_Replayer& replayer, Game::Memory& game_memory, Game::Input& game_input) {
-	if constexpr (!DEV_MODE) return;
-	switch (replayer.replayer_state) {
-		case Dev_Replayer_State::Recording: {
+static void replayer_record_or_replace(Replayer& replayer, Game::Memory& game_memory, Game::Input& game_input) {
+	switch (replayer.state) {
+		case Replayer_State::Recording: {
 			replayer_record(replayer, game_input);
 		} break;
-		case Dev_Replayer_State::Playing: {
+		case Replayer_State::Playing: {
 			replayer_play(replayer, game_memory, game_input);
 		} break;
-		case Dev_Replayer_State::Idle: case Dev_Replayer_State::Count: break;
+		case Replayer_State::Idle:
+		case Replayer_State::Count: break;
 	}
 }
 
-static void replayer_start_record(Dev_Replayer& replayer, const Game::Memory& game_memory) {
-	if constexpr (!DEV_MODE) return;
+static void replayer_start_record(Replayer& replayer, const Game::Memory& game_memory) {
 	SetFilePointer(replayer.state_handle, 0, 0, FILE_BEGIN);
 	SetFilePointer(replayer.input_handle, 0, 0, FILE_BEGIN);
 	i64 state_total_size = game_memory.get_total_size();
@@ -377,8 +359,7 @@ static void replayer_start_record(Dev_Replayer& replayer, const Game::Memory& ga
 	WriteFile(replayer.state_handle, game_memory.permanent_storage.ptr, bytes_to_write, &bytes_written, nullptr);
 }
 
-static void replayer_start_play(Dev_Replayer& replayer, Game::Memory& game_memory) {
-	if constexpr (!DEV_MODE) return;
+static void replayer_start_play(Replayer& replayer, Game::Memory& game_memory) {
 	SetFilePointer(replayer.state_handle, 0, 0, FILE_BEGIN);
 	SetFilePointer(replayer.input_handle, 0, 0, FILE_BEGIN);
 	i64 state_total_size = game_memory.get_total_size();
@@ -388,14 +369,12 @@ static void replayer_start_play(Dev_Replayer& replayer, Game::Memory& game_memor
 	ReadFile(replayer.state_handle, game_memory.permanent_storage.ptr, bytes_to_read, &bytes_read, nullptr);
 }
 
-static void replayer_record(Dev_Replayer& replayer, const Game::Input& game_input) {
-	if constexpr (!DEV_MODE) return;
+static void replayer_record(Replayer& replayer, const Game::Input& game_input) {
 	DWORD bytes_written;
 	WriteFile(replayer.input_handle, &game_input, sizeof(game_input), &bytes_written, nullptr);
 }
 
-static void replayer_play(Dev_Replayer& replayer, Game::Memory& game_memory, Game::Input& game_input) {
-	if constexpr (!DEV_MODE) return;
+static void replayer_play(Replayer& replayer, Game::Memory& game_memory, Game::Input& game_input) {
 	DWORD bytes_read;
 	ReadFile(replayer.input_handle, &game_input, sizeof(game_input), &bytes_read, nullptr);
 	if (!bytes_read) {
@@ -414,11 +393,11 @@ static Screen init_screen() {
 	return screen;
 }
 
-static void reset_game_input_counters(Game::Input& game_input) {
-	game_input.dev_mouse.left_button.transitions_count = 0;
-	game_input.dev_mouse.right_button.transitions_count = 0;
+static void reset_input_counters(Input& input) {
+	input.game_input.mouse.left_button.transitions_count = 0;
+	input.game_input.mouse.right_button.transitions_count = 0;
 
-	for (auto& controller : game_input.controllers) {
+	for (auto& controller : input.game_input.controllers) {
 		controller.start.transitions_count = 0;
 		controller.back.transitions_count = 0;
 		controller.left_shoulder.transitions_count = 0;
@@ -467,8 +446,7 @@ static void submit_screen(const Screen& screen, HWND window, HDC device_context)
 	);
 }
 
-static void dev_draw_vertical_line(Screen& screen, i32 x, i32 top, i32 bottom, u32 color) {
-	if constexpr (!DEV_MODE) return;
+static void draw_vertical_line(Screen& screen, i32 x, i32 top, i32 bottom, u32 color) {
 	u32* pixel = screen.game_screen.pixels + top * screen.game_screen.width + x;
 	for (i32 y = top; y < bottom; y++) {
 		*pixel = color;
@@ -560,6 +538,26 @@ static void calc_sound_samples_to_write(Sound& sound, i64 flip_timestamp) {
 	}
 }
 
+static HWND create_window(HINSTANCE hInstance) {
+	WNDCLASSA window_class = {};
+	window_class.style = CS_HREDRAW | CS_VREDRAW;
+	window_class.lpfnWndProc = WindowProc;
+	window_class.hInstance = hInstance;
+	window_class.lpszClassName = "Handmade_Hero";
+	RegisterClassA(&window_class);
+
+	RECT window_rect = {};
+	window_rect.right = INITIAL_WINDOW_WIDTH;
+	window_rect.bottom = INITIAL_WINDOW_HEIGHT;
+	DWORD dwStyle = WS_TILEDWINDOW | WS_VISIBLE;
+	AdjustWindowRectEx(&window_rect, dwStyle, FALSE, 0);
+	int adj_window_width = window_rect.right - window_rect.left;
+	int adj_window_height = window_rect.bottom - window_rect.top;
+
+	return CreateWindowExA(0, window_class.lpszClassName, "Handmade Hero", dwStyle,
+		CW_USEDEFAULT, CW_USEDEFAULT, adj_window_width, adj_window_height, nullptr, nullptr, hInstance, nullptr);
+}
+
 static void submit_sound(Sound& sound) {
 	void *region1, *region2; DWORD region1_size, region2_size;
 	if (!sound.buffer || !SUCCEEDED(sound.buffer->Lock(sound.output_location,
@@ -574,19 +572,17 @@ static void submit_sound(Sound& sound) {
 	sound.buffer->Unlock(region1, region1_size, region2, region2_size);
 }
 
-static void dev_draw_sound_sync(Sound& sound, Screen& screen) {
-	if constexpr (!DEV_MODE) return;
+static void draw_sound_sync(Sound& sound, Screen& screen) {
 	if (!sound.buffer) return;
 
 	f32 horizontal_scaling = (f32)screen.game_screen.width / (f32)sound.get_buffer_size();
-
 	for (auto& marker : sound.dev_markers) {
 		i32 top = 0;
 		i32 bottom = screen.game_screen.height * 1/4;
 		i32 historic_output_play_cursor_x = (i32)((f32)marker.output_play_cursor * horizontal_scaling);
 		i32 historic_output_write_cursor_x = (i32)((f32)marker.output_write_cursor * horizontal_scaling);
-		dev_draw_vertical_line(screen, historic_output_play_cursor_x, top, bottom, 0xffffff);
-		dev_draw_vertical_line(screen, historic_output_write_cursor_x, top, bottom, 0xff0000);
+		draw_vertical_line(screen, historic_output_play_cursor_x, top, bottom, 0xffffff);
+		draw_vertical_line(screen, historic_output_write_cursor_x, top, bottom, 0xff0000);
 	}
 
 	if (!sound.game_sound.samples_to_write || !SUCCEEDED(sound.buffer->GetCurrentPosition(&sound.dev_markers[sound.dev_markers_index].flip_play_cursor, nullptr))) {
@@ -594,33 +590,33 @@ static void dev_draw_sound_sync(Sound& sound, Screen& screen) {
 		return;
 	}
 
-	Dev_Sound_Time_Marker current_marker = sound.dev_markers[sound.dev_markers_index];
+	Sound_Time_Marker current_marker = sound.dev_markers[sound.dev_markers_index];
 	i32 expected_flip_play_cursor_x = (i32)((f32)current_marker.expected_flip_play_cursor * horizontal_scaling);
-	dev_draw_vertical_line(screen, expected_flip_play_cursor_x, 0, screen.game_screen.height, 0xffff00);
+	draw_vertical_line(screen, expected_flip_play_cursor_x, 0, screen.game_screen.height, 0xffff00);
 
 	{
 		i32 top 	= screen.game_screen.height * 1/4;
 		i32 bottom  = screen.game_screen.height * 2/4;
 		i32 output_play_cursor_x = (i32)((f32)current_marker.output_play_cursor * horizontal_scaling);
 		i32 output_write_cursor_x = (i32)((f32)current_marker.output_write_cursor * horizontal_scaling);
-		dev_draw_vertical_line(screen, output_play_cursor_x, top, bottom, 0xffffff);
-		dev_draw_vertical_line(screen, output_write_cursor_x, top, bottom, 0xff0000);
+		draw_vertical_line(screen, output_play_cursor_x, top, bottom, 0xffffff);
+		draw_vertical_line(screen, output_write_cursor_x, top, bottom, 0xff0000);
 	}
 	{
 		i32 top 	= screen.game_screen.height * 2/4;
 		i32 bottom  = screen.game_screen.height * 3/4;
 		i32 output_location_x = (i32)((f32)current_marker.output_location * horizontal_scaling);
 		i32 output_byte_count_x = (i32)((f32)current_marker.output_byte_count * horizontal_scaling);
-		dev_draw_vertical_line(screen, output_location_x, top, bottom, 0xffffff);
-		dev_draw_vertical_line(screen, (output_location_x + output_byte_count_x) % screen.game_screen.width, top, bottom, 0xff0000);
+		draw_vertical_line(screen, output_location_x, top, bottom, 0xffffff);
+		draw_vertical_line(screen, (output_location_x + output_byte_count_x) % screen.game_screen.width, top, bottom, 0xff0000);
 	}
 	{
 		i32 top 	= screen.game_screen.height * 3/4;
 		i32 bottom  = screen.game_screen.height;
 		i32 flip_play_cursor_x = (i32)((f32)current_marker.flip_play_cursor * horizontal_scaling);
 		i32 safety_bytes_x = (i32)((f32)sound.get_safety_bytes() * horizontal_scaling);
-		dev_draw_vertical_line(screen, (flip_play_cursor_x - safety_bytes_x / 2) % screen.game_screen.width, top, bottom, 0xffffff);
-		dev_draw_vertical_line(screen, (flip_play_cursor_x + safety_bytes_x / 2) % screen.game_screen.width, top, bottom, 0xffffff);
+		draw_vertical_line(screen, (flip_play_cursor_x - safety_bytes_x / 2) % screen.game_screen.width, top, bottom, 0xffffff);
+		draw_vertical_line(screen, (flip_play_cursor_x + safety_bytes_x / 2) % screen.game_screen.width, top, bottom, 0xffffff);
 	}
 	sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_size(sound.dev_markers);
 }
