@@ -3,6 +3,14 @@
 #include "globals.hpp"
 
 namespace Game {
+	static const i32 WORLD_SIZE_CHUNKS = 2;
+	static const i32 CHUNK_POSITION_SHIFT = 8;
+	static const i32 CHUNK_SIZE_TILES = 1 << CHUNK_POSITION_SHIFT;
+	static const u32 CHUNK_POSITION_MASK = CHUNK_SIZE_TILES - 1;
+	static const f32 TILE_SIZE = 1.4f;
+	static const i32 SCREEN_WIDTH_TILES = 17;
+	static const i32 SCREEN_HEIGHT_TILES = 9;
+
 	struct Button {
 		bool is_pressed;
 		i32 transitions_count;
@@ -65,39 +73,27 @@ namespace Game {
 	};
 
 	struct Chunk {
-		// TODO: переместить все игровые константы в основной блок памяти
-		static constexpr i32 SHIFT = 8;
-		static constexpr i32 SIZE = 1 << SHIFT;
-		static constexpr u32 MASK = SIZE - 1;
-
-		i32 (*tiles)[Chunk::SIZE];
+		i32 (*tiles)[CHUNK_SIZE_TILES];
 	};
 
 	struct World {
-		static constexpr i32 WIDTH = 2;
-		static constexpr i32 HEIGHT = 2;
-		static constexpr f32 TILE_SIZE = 1.4f;
-
 		Chunk* chunks;
 		
 		Chunk& get_chunk(const World_Position& position) const {
-			// return chunks[player_pos.scene_y * World::WIDTH + player_pos.scene_x];
+			// return chunks[player_pos.scene_y * WORLD_SIZE_CHUNKS + player_pos.scene_x];
 			return *chunks;
 		};
 	};
 
-	struct Screen {
-		static constexpr i32 WIDTH_TILES = 17;
-		static constexpr i32 HEIGHT_TILES = 9;
-		
+	struct Screen {		
 		i32 width, height;
 		u32* pixels;
-		f32 get_pixels_per_unit() { return (f32)height / (HEIGHT_TILES * World::TILE_SIZE); }
+		f32 get_pixels_per_unit() { return (f32)height / (SCREEN_HEIGHT_TILES * TILE_SIZE); }
 	};
 
 	struct Game_State {
-		i32 TILES[Chunk::SIZE][Chunk::SIZE];
-		Chunk CHUNKS[World::HEIGHT][World::WIDTH];
+		i32 TILES[CHUNK_SIZE_TILES][CHUNK_SIZE_TILES];
+		Chunk CHUNKS[WORLD_SIZE_CHUNKS][WORLD_SIZE_CHUNKS];
 		World world;
 		World_Position player_pos;
 		f32 pixels_per_unit;
@@ -122,7 +118,7 @@ namespace Game {
 
 	static bool check_empty_tile(const World& world, const World_Position& position);
 	static void draw_rectangle(Screen& screen, const Color& color, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32);
+	static void init_memory(Memory& memory);
 	static Chunk_Position get_chunk_position(const World_Position& world_pos);
-	static Game_State& get_initialized_game_state(Memory& memory);
 	static void normalize_position(World_Position& position);
 }

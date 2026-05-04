@@ -1,18 +1,17 @@
 #include "win32_handmade.hpp"
 
-static Screen global_screen = init_screen(); // глобальный из-за WindowProc
+static Screen global_screen = create_screen(); // глобальный из-за WindowProc
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
 	static_assert(DEV_MODE || !SLOW_MODE);
     SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
 
 	HWND window = create_window(hInstance);
-	Input input = init_input();
-	Sound sound = init_sound(window);
-	Game_Code game_code = init_game_code();
-	Game::Memory game_memory = init_game_memory();
-	Replayer replayer = {};
-	if constexpr (DEV_MODE) replayer = init_replayer(game_memory);
+	Input input = create_input();
+	Sound sound = create_sound(window);
+	Game_Code game_code = create_game_code();
+	Game::Memory game_memory = create_game_memory();
+	Replayer replayer = create_replayer(game_memory);
 
 	bool is_pause = false;
 	i64 flip_timestamp = get_timestamp();
@@ -20,8 +19,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
 	while (true) {
 		reset_input_counters(input);
-		process_gamepad_input(input);
-		if constexpr (DEV_MODE) process_mouse_input(input, window);
+		collect_gamepad_input(input);
+		if constexpr (DEV_MODE) collect_mouse_input(input, window);
 
 		MSG message;
 		while (PeekMessageA(&message, nullptr, 0, 0, PM_REMOVE)) {
@@ -31,7 +30,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 					bool is_key_pressed  = !(message.lParam & (1U << 31));
 					bool was_key_pressed =   message.lParam & (1U << 30);
 					if (is_key_pressed == was_key_pressed) continue;
-					process_keyboard_button(input, message.wParam, is_key_pressed);
+					collect_keyboard_button_input(input, message.wParam, is_key_pressed);
 					if constexpr (DEV_MODE) {
 						if (!is_key_pressed) continue;
 						if (message.wParam == 'P') is_pause = !is_pause;
@@ -155,7 +154,7 @@ static i64 get_timestamp() {
 	return performance_counter_result.QuadPart;
 }
 
-static Game_Code init_game_code() {
+static Game_Code create_game_code() {
 	Game_Code game_code = {};
 	game_code.update_and_render = [](auto...){};
 	game_code.get_sound_samples = [](auto...){};
@@ -165,12 +164,11 @@ static Game_Code init_game_code() {
 	return game_code;
 }
 
-static Game::Memory init_game_memory() {
+static Game::Memory create_game_memory() {
 	Game::Memory game_memory = {};
 	i64 permanent_size = 64_MB;
 	i64 transient_size = 1_GB;
-	void* base_address = nullptr;
-	if constexpr (DEV_MODE && UINTPTR_MAX == UINT64_MAX) base_address = (void*)1024_GB;
+	void* base_address = DEV_MODE && UINTPTR_MAX == UINT64_MAX ? (void*)1024_GB : nullptr;
 	// TODO: использовать MEM_LARGE_PAGES и AdjustTokenPrivileges в 64-битном билде
 	u8* game_storage = (u8*)VirtualAlloc(base_address, (SIZE_T)(permanent_size + transient_size), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 	game_memory.permanent_storage = { game_storage, permanent_size };
@@ -182,6 +180,7 @@ static Game::Memory init_game_memory() {
 }
 
 static void load_game_code(Game_Code& game_code) {
+	// будем загружать копию, чтобы компилятор мог писать в оригинальный файл
 	BOOL copy_result = CopyFileA(game_code.dll_path, game_code.temp_dll_path, FALSE);
 
 	if constexpr (DEV_MODE) {
@@ -191,7 +190,6 @@ static void load_game_code(Game_Code& game_code) {
 		}
 	}
 
-	// загружаем копию, чтобы компилятор мог писать в оригинальный файл
 	HMODULE loaded_dll = LoadLibraryA(game_code.temp_dll_path);
 	if (loaded_dll) {
 		game_code.dll = loaded_dll;
@@ -212,20 +210,21 @@ static void reload_game_code_if_recompiled(Game_Code& game_code) {
 	}
 }
 
-static Input init_input() {
+static Input create_input() {
 	Input input = {};
-	input.XInputGetState = [](auto...){ return 1ul; };
-	input.XInputSetState = [](auto...){ return 1ul; };
 	input.game_input.frame_dt = TARGET_SECONDS_PER_FRAME;
 	HMODULE xinput_dll = LoadLibraryA("xinput1_3.dll");
 	if (xinput_dll) {
 		input.XInputGetState = (Xinput_Get_State*)GetProcAddress(xinput_dll, "XInputGetState");
 		input.XInputSetState = (Xinput_Set_State*)GetProcAddress(xinput_dll, "XInputSetState");
+	} else {
+		input.XInputGetState = [](auto...){ return 1ul; };
+		input.XInputSetState = [](auto...){ return 1ul; };
 	}
 	return input;
 }
 
-static void process_gamepad_input(Input& input) {
+static void collect_gamepad_input(Input& input) {
 	Game::Controller& controller = input.game_input.controllers[1];
 	XINPUT_STATE state;
 	if (input.XInputGetState(0, &state)) {
@@ -236,38 +235,38 @@ static void process_gamepad_input(Input& input) {
 	controller.is_connected = true;
 	controller.start_x = controller.end_x;
 	controller.start_y = controller.end_y;
-	controller.end_x = get_normalized_stick_value(state.Gamepad.sThumbLX);
-	controller.end_y = get_normalized_stick_value(state.Gamepad.sThumbLY);
+	controller.end_x = get_normalized_gamepad_stick_value(state.Gamepad.sThumbLX);
+	controller.end_y = get_normalized_gamepad_stick_value(state.Gamepad.sThumbLY);
 	controller.average_x = controller.min_x = controller.max_x = controller.end_x;
 	controller.average_y = controller.min_y = controller.max_y = controller.end_y;
 	controller.is_analog = controller.average_x || controller.average_y;
 
-	process_gamepad_button(controller.start,		  state.Gamepad.wButtons & XINPUT_GAMEPAD_START);
-	process_gamepad_button(controller.back,			  state.Gamepad.wButtons & XINPUT_GAMEPAD_BACK);
-	process_gamepad_button(controller.left_shoulder,  state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER);
-	process_gamepad_button(controller.right_shoulder, state.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER);
+	collect_gamepad_button_input(controller.start,		    state.Gamepad.wButtons & XINPUT_GAMEPAD_START);
+	collect_gamepad_button_input(controller.back,			state.Gamepad.wButtons & XINPUT_GAMEPAD_BACK);
+	collect_gamepad_button_input(controller.left_shoulder,  state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER);
+	collect_gamepad_button_input(controller.right_shoulder, state.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER);
 
-	process_gamepad_button(controller.move_up, 		  state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_UP);
-	process_gamepad_button(controller.move_down, 	  state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_DOWN);
-	process_gamepad_button(controller.move_left, 	  state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_LEFT);
-	process_gamepad_button(controller.move_right, 	  state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT);
+	collect_gamepad_button_input(controller.move_up, 	    state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_UP);
+	collect_gamepad_button_input(controller.move_down, 	    state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_DOWN);
+	collect_gamepad_button_input(controller.move_left, 	    state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_LEFT);
+	collect_gamepad_button_input(controller.move_right,     state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT);
 
-	process_gamepad_button(controller.action_up, 	  state.Gamepad.wButtons & XINPUT_GAMEPAD_Y);
-	process_gamepad_button(controller.action_down, 	  state.Gamepad.wButtons & XINPUT_GAMEPAD_A);
-	process_gamepad_button(controller.action_left, 	  state.Gamepad.wButtons & XINPUT_GAMEPAD_X);
-	process_gamepad_button(controller.action_right,   state.Gamepad.wButtons & XINPUT_GAMEPAD_B);
+	collect_gamepad_button_input(controller.action_up, 	    state.Gamepad.wButtons & XINPUT_GAMEPAD_Y);
+	collect_gamepad_button_input(controller.action_down,    state.Gamepad.wButtons & XINPUT_GAMEPAD_A);
+	collect_gamepad_button_input(controller.action_left,    state.Gamepad.wButtons & XINPUT_GAMEPAD_X);
+	collect_gamepad_button_input(controller.action_right,   state.Gamepad.wButtons & XINPUT_GAMEPAD_B);
 }
 
-static f32 get_normalized_stick_value(SHORT value) {
+static f32 get_normalized_gamepad_stick_value(SHORT value) {
 	return value / 32768.0f * (value < - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE || value > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
 }
 
-static void process_gamepad_button(Game::Button& state, bool is_pressed) {
+static void collect_gamepad_button_input(Game::Button& state, bool is_pressed) {
 	state.transitions_count += is_pressed != state.is_pressed;
 	state.is_pressed = is_pressed;
 }
 
-static void process_keyboard_button(Input& input, WPARAM key_code, bool is_pressed) {
+static void collect_keyboard_button_input(Input& input, WPARAM key_code, bool is_pressed) {
 	Game::Controller& controller = input.game_input.controllers[0];
 	controller.is_connected = true;
 	Game::Button* button_state;
@@ -290,7 +289,7 @@ static void process_keyboard_button(Input& input, WPARAM key_code, bool is_press
 	button_state->transitions_count++;
 }
 
-static void process_mouse_input(Input& input, HWND window) {
+static void collect_mouse_input(Input& input, HWND window) {
 	Game::Mouse& mouse = input.game_input.mouse;
 
 	POINT point;
@@ -310,7 +309,8 @@ static void process_mouse_input(Input& input, HWND window) {
 	}
 }
 
-static Replayer init_replayer(const Game::Memory& game_memory) {
+static Replayer create_replayer(const Game::Memory& game_memory) {
+	if constexpr (!DEV_MODE) return {};
 	Replayer replayer = {};
 	get_build_file_path("replay_state.hms", replayer.state_path);
 	get_build_file_path("replay_input.hmi", replayer.input_path);
@@ -321,7 +321,6 @@ static Replayer init_replayer(const Game::Memory& game_memory) {
 
 static void replayer_next_state(Replayer& replayer, Game::Memory& game_memory, Game::Input& game_input) {
 	replayer.state = (Replayer_State)((replayer.state + 1) % Replayer_State::Count);
-
 	switch (replayer.state) {
 		case Replayer_State::Recording: {
 			replayer_start_record(replayer, game_memory);
@@ -383,7 +382,7 @@ static void replayer_play(Replayer& replayer, Game::Memory& game_memory, Game::I
 	}
 }
 
-static Screen init_screen() {
+static Screen create_screen() {
 	Screen screen = {};
 	screen.bitmap_info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
 	screen.bitmap_info.bmiHeader.biPlanes = 1;
@@ -454,7 +453,7 @@ static void draw_vertical_line(Screen& screen, i32 x, i32 top, i32 bottom, u32 c
 	}
 }
 
-static Sound init_sound(HWND window) {
+static Sound create_sound(HWND window) {
 	Sound sound = {};
 	sound.wave_format.wFormatTag = WAVE_FORMAT_PCM;
 	sound.wave_format.nChannels = 2;
@@ -585,7 +584,8 @@ static void draw_sound_sync(Sound& sound, Screen& screen) {
 		draw_vertical_line(screen, historic_output_write_cursor_x, top, bottom, 0xff0000);
 	}
 
-	if (!sound.game_sound.samples_to_write || !SUCCEEDED(sound.buffer->GetCurrentPosition(&sound.dev_markers[sound.dev_markers_index].flip_play_cursor, nullptr))) {
+	if (!sound.game_sound.samples_to_write ||
+		!SUCCEEDED(sound.buffer->GetCurrentPosition(&sound.dev_markers[sound.dev_markers_index].flip_play_cursor, nullptr))) {
 		sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_size(sound.dev_markers);
 		return;
 	}
@@ -618,6 +618,7 @@ static void draw_sound_sync(Sound& sound, Screen& screen) {
 		draw_vertical_line(screen, (flip_play_cursor_x - safety_bytes_x / 2) % screen.game_screen.width, top, bottom, 0xffffff);
 		draw_vertical_line(screen, (flip_play_cursor_x + safety_bytes_x / 2) % screen.game_screen.width, top, bottom, 0xffffff);
 	}
+	
 	sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_size(sound.dev_markers);
 }
 
@@ -648,9 +649,9 @@ namespace Platform {
 		assert((DWORD)file.size == (u64)file.size);
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
 		DWORD bytes_written;
-		bool is_success = WriteFile(file_handle, file.ptr, (DWORD)file.size, &bytes_written, nullptr) && (bytes_written == (DWORD)file.size);
+		bool is_error = !WriteFile(file_handle, file.ptr, (DWORD)file.size, &bytes_written, nullptr) && (bytes_written == (DWORD)file.size);
 		CloseHandle(file_handle);
-		return is_success;
+		return is_error;
 	}
 	
 	void free_file_memory(void*& memory) {
