@@ -106,14 +106,14 @@ static void wait_until_end_of_frame(i64 flip_timestamp) {
 	}
 }
 
-static void get_build_file_path(span<const char> file_name, span<char> dest) {
+static void get_build_file_path(slice<const char> file_name, slice<char> dest) {
 	// TODO: обработать пути длиннее MAX_PATH
 	char file_path_storage[MAX_PATH];
-	span<char> file_path = file_path_storage;
+	slice<char> file_path = file_path_storage;
 	SetLastError(ERROR_SUCCESS);
 	GetModuleFileNameA(nullptr, file_path.ptr, (DWORD)file_path.size);
 	assert(GetLastError() != ERROR_INSUFFICIENT_BUFFER);
-	span<char> folder_path = {
+	slice<char> folder_path = {
 		file_path.ptr,
 		hm::find_last_index(file_path, +[](char ch) { return ch == '\\'; }) + 1
 	};
@@ -627,8 +627,8 @@ static void draw_sound_sync(Sound& sound, Screen& screen) {
 }
 
 namespace Platform {
-	span<u8> read_file_sync(const char* file_name) {
-		span<u8> result = {};
+	slice<u8> read_file_sync(const char* file_name) {
+		slice<u8> result = {};
 		LARGE_INTEGER file_size = {};
 
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
@@ -649,7 +649,7 @@ namespace Platform {
 		return result;
 	}
 
-	bool write_file_sync(const char* file_name, span<const u8> file) {
+	bool write_file_sync(const char* file_name, slice<const u8> file) {
 		assert((DWORD)file.size == (u64)file.size);
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
 		DWORD bytes_written;

@@ -80,7 +80,7 @@ static void collect_mouse_input(Input& input, HWND window);
 static HWND create_window(HINSTANCE hInstance);
 static void draw_vertical_line(Screen& screen, i32 x, i32 top, i32 bottom, u32 color);
 static void draw_sound_sync(Sound& sound, Screen& screen);
-static void get_build_file_path(span<const char> file_name, span<char> dest);
+static void get_build_file_path(slice<const char> file_name, slice<char> dest);
 static FILETIME get_file_write_time(const char* file_name);
 static i64 get_memory_total_size(const Game::Memory& game_memory);
 static f32 get_normalized_gamepad_stick_value(SHORT value);

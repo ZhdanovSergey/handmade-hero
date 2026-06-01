@@ -58,8 +58,8 @@ namespace Game {
 
 	struct Memory {
 		bool is_initialized;
-		span<u8> permanent_storage;
-		span<u8> transient_storage;
+		slice<u8> permanent_storage;
+		slice<u8> transient_storage;
     	Platform::Read_File_Sync* read_file_sync;
     	Platform::Write_File_Sync* write_file_sync;
     	Platform::Free_File_Memory* free_file_memory;
@@ -70,11 +70,11 @@ namespace Game {
 	};
 
 	struct Chunk {
-		span<i32> tiles;
+		slice<i32> tiles;
 	};
 
 	struct World {
-		span<Chunk> chunks;
+		slice<Chunk> chunks;
 	};
 
 	// TODO: сделать сеттеры с автоматической нормализацией после введения векторов + конструктор с нормализацией

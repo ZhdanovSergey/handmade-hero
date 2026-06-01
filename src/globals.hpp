@@ -51,23 +51,23 @@ namespace hm {
     
     // TODO: добавить функционал для многомерных блоков, как в mdspan
     template <typename T>
-    struct span {
+    struct slice {
         T* ptr;
         i64 size;
 
-        span() : ptr{}, size{} {}
+        slice() : ptr{}, size{} {}
         template <typename U>
-        span(U* ptr, i64 size) : ptr{reinterpret_cast<T*>(ptr)}, size{size} {
+        slice(U* ptr, i64 size) : ptr{reinterpret_cast<T*>(ptr)}, size{size} {
             assert(size % sizeof(T) == 0);
             static_assert(is_same<T,u8>::value || is_same<T,const u8>::value
                        || is_same<T,U >::value || is_same<T,const U >::value);
         }
         template <typename U>
-        span(span<U> other) : span{other.ptr, other.size} {}
+        slice(slice<U> other) : slice{other.ptr, other.size} {}
         template <typename U, i64 N>
-        span(U (&arr)[N])    : span{reinterpret_cast<U*>(arr), sizeof(arr)} {}
+        slice(U (&arr)[N])    : slice{reinterpret_cast<U*>(arr), sizeof(arr)} {}
         template <typename U, i64 N, i64 M>
-        span(U (&arr)[N][M]) : span{reinterpret_cast<U*>(arr), sizeof(arr)} {}
+        slice(U (&arr)[N][M]) : slice{reinterpret_cast<U*>(arr), sizeof(arr)} {}
 
         i64 count()   { return size / (i64)sizeof(T); }
         T* begin()    { return ptr; }
@@ -78,12 +78,12 @@ namespace hm {
         }
     };
     template <typename T>
-    span(T*, i64) -> span<T>;
+    slice(T*, i64) -> slice<T>;
     
     template <typename T>
-    static i64 find_last_index(span<T> span, predicate<T> predicate) {
-        for (i64 index = span.count() - 1; index >= 0; index--) {
-            if (predicate(span[index])) return index;
+    static i64 find_last_index(slice<T> slice, predicate<T> predicate) {
+        for (i64 index = slice.count() - 1; index >= 0; index--) {
+            if (predicate(slice[index])) return index;
         }
         return -1;
     };
@@ -114,32 +114,32 @@ namespace hm {
         return (i32)value;
     }
 
-    static void memcpy(span<const u8> src, span<u8> dest) {
+    static void memcpy(slice<const u8> src, slice<u8> dest) {
         assert(src.size <= dest.size);
         for (i64 i = 0; i < min(src.size, dest.size); i++) {
             dest[i] = src[i];
         }
     }
 
-    static void strcat(span<const char> src1, span<const char> src2, span<char> dest) {
+    static void strcat(slice<const char> src1, slice<const char> src2, slice<char> dest) {
         assert(src1.size + src2.size <= dest.size);
         src1.size = min(src1.size, dest.size);
         src2.size = min(src2.size, dest.size - src1.size);
-        memcpy(src1, span{ dest.ptr, src1.size });
-        memcpy(src2, span{ dest.ptr + src1.size, src2.size });
+        memcpy(src1, slice{ dest.ptr, src1.size });
+        memcpy(src2, slice{ dest.ptr + src1.size, src2.size });
         char* last_char = dest.ptr + src1.size + src2.size;
         *last_char = 0;
     }
 }
 
 template <typename T>
-using span = hm::span<T>;
+using slice = hm::slice<T>;
 
 namespace Platform {
-    span<u8> read_file_sync(const char* file_name);
+    slice<u8> read_file_sync(const char* file_name);
     using Read_File_Sync = decltype(read_file_sync);
 
-    bool write_file_sync(const char* file_name, span<const u8> file);
+    bool write_file_sync(const char* file_name, slice<const u8> file);
     using Write_File_Sync = decltype(write_file_sync);
 
     void free_file_memory(void*& memory);

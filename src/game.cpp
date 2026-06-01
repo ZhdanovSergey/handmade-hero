@@ -12,7 +12,7 @@ namespace Game {
 		for (auto& controller : input.controllers) {
 			f32 player_dx = 0;
 			f32 player_dy = 0;
-			f32 player_speed = controller.action_down.is_pressed ? 20.0f : 5.0f;
+			f32 player_speed = controller.action_down.is_pressed ? 10.0f : 5.0f;
 
 			if (controller.move_left.is_pressed)  player_dx = - player_speed;
 			if (controller.move_right.is_pressed) player_dx =   player_speed;
@@ -210,6 +210,7 @@ namespace Game {
 	}
 
 	static Chunk& get_world_chunk(World& world, const World_Position& position) {
+		// TODO: finish this
 		// return chunks[player_pos.scene_y * WORLD_SIZE_CHUNKS + player_pos.scene_x];
 		return *world.chunks.ptr;
 	};
