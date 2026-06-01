@@ -82,6 +82,7 @@ static void draw_vertical_line(Screen& screen, i32 x, i32 top, i32 bottom, u32 c
 static void draw_sound_sync(Sound& sound, Screen& screen);
 static void get_build_file_path(span<const char> file_name, span<char> dest);
 static FILETIME get_file_write_time(const char* file_name);
+static i64 get_memory_total_size(const Game::Memory& game_memory);
 static f32 get_normalized_gamepad_stick_value(SHORT value);
 static f32 get_seconds_elapsed(i64 start);
 static i64 get_timestamp();

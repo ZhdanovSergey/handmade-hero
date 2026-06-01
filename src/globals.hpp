@@ -4,10 +4,13 @@
 #include <cstdio>
 
 #if SLOW_MODE
-    #define assert(expr) if (!(expr)) *(int*)nullptr = 0
+    #define assert(expr) if (!(expr)) *(int*)nullptr = 0;
 #else
     #define assert(expr)
 #endif
+
+#define CONCAT_INTERNAL(a, b) a##b
+#define CONCAT(a, b) CONCAT_INTERNAL(a, b)
 
 using f32 = float;
 using f64 = double;
@@ -29,6 +32,13 @@ static constexpr f32 DOUBLE_PI32 = 2.0f * PI32;
 static constexpr i64 operator ""_KB(u64 value) { return (i64)(value << 10); }
 static constexpr i64 operator ""_MB(u64 value) { return (i64)(value << 20); }
 static constexpr i64 operator ""_GB(u64 value) { return (i64)(value << 30); }
+
+template <typename F>
+struct Deferrer {
+    F f;
+    ~Deferrer() { f(); }
+};
+#define defer(code) Deferrer CONCAT(_defer_, __LINE__){[&](){ code; }}
 
 namespace hm {
     template <typename T, typename U>

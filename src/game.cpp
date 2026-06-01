@@ -38,7 +38,7 @@ namespace Game {
 			game_state.player_pos = new_player_pos;
 		}
 
-		Chunk& current_chunk = game_state.world.get_chunk(game_state.player_pos);
+		Chunk& current_chunk = get_world_chunk(game_state.world, game_state.player_pos);
 		Chunk_Position player_chunk_pos = get_chunk_position(game_state.player_pos);
 		
 		i32 half_screen_width_tiles  = SCREEN_WIDTH_TILES  / 2;
@@ -48,8 +48,13 @@ namespace Game {
 		for (    i32 y = player_chunk_pos.chunk_y - half_screen_height_tiles - 1; y <= player_chunk_pos.chunk_y + half_screen_height_tiles + 1; y++) {
 			for (i32 x = player_chunk_pos.chunk_x - half_screen_width_tiles  - 1; x <= player_chunk_pos.chunk_x + half_screen_width_tiles  + 1;  x++) {
 
-				Color color = y >= 0 && x >= 0 && current_chunk.tiles[y][x] ? Color{ 1.0f, 1.0f, 1.0f } : Color{ 0.5f, 0.5f, 0.5f };
-				if (x == player_chunk_pos.chunk_x && y == player_chunk_pos.chunk_y) color = Color{ 0.0f, 0.0f, 0.0f };
+				Color color = y >= 0 && x >= 0 && current_chunk.tiles[y * CHUNK_SIZE_TILES + x]
+					? Color{ 1.0f, 1.0f, 1.0f }
+					: Color{ 0.5f, 0.5f, 0.5f };
+
+				if (x == player_chunk_pos.chunk_x && y == player_chunk_pos.chunk_y) {
+					color = Color{ 0.0f, 0.0f, 0.0f };
+				}
 
 				f32 min_x =   (x - player_chunk_pos.chunk_x + half_screen_width_tiles)  * TILE_SIZE - player_chunk_pos.tile_x;
 				f32 min_y = - (y - player_chunk_pos.chunk_y - half_screen_height_tiles) * TILE_SIZE + player_chunk_pos.tile_y;
@@ -74,8 +79,10 @@ namespace Game {
 		}
 	}
 
-	static bool check_empty_tile(const World& world, const World_Position& position) {
-		return world.get_chunk(position).tiles[position.world_y][position.world_x] == 0;
+	static bool check_empty_tile(World& world, const World_Position& world_position) {
+		Chunk& chunk = get_world_chunk(world, world_position);
+		Chunk_Position chunk_position = get_chunk_position(world_position);
+		return get_chunk_tile(chunk, chunk_position) == 0;
 	}
 
 	// TODO: учесть возможность смещения больше чем на 1 клетку
@@ -117,7 +124,7 @@ namespace Game {
 		// screen.pixels инвертирован по вертикали относительно координат игры
 		hm::swap(min_y_f32, max_y_f32);
 
-		f32 pixels_per_unit = screen.get_pixels_per_unit();
+		f32 pixels_per_unit = get_pixels_per_unit(screen);
 		f32 offset_x = - TILE_SIZE / 2;
 		f32 offset_y = 0;
 
@@ -131,7 +138,7 @@ namespace Game {
 		min_y = hm::max(min_y, 0);
 		max_y = hm::min(max_y, screen.height);
 
-		u32 hex_color = color.to_hex();
+		u32 hex_color = get_hex_color(color);
 		u32* row = screen.pixels + min_y * screen.width + min_x;
 		for (i32 y = min_y; y < max_y; y++) {
 			u32* pixel = row;
@@ -179,7 +186,7 @@ namespace Game {
 		};
 		
 		hm::memcpy(CHUNKS, game_state.CHUNKS);
-		game_state.world.chunks = (Chunk*)game_state.CHUNKS;
+		game_state.world.chunks = game_state.CHUNKS;
 
 		game_state.player_pos.world_x = 1;
 		game_state.player_pos.world_y = 1;
@@ -191,4 +198,23 @@ namespace Game {
 		assert(check_empty_tile(game_state.world, game_state.player_pos));
 		memory.is_initialized = true;
 	}
+
+	static u32 get_hex_color(const Color& color) {
+		return ((u32)hm::round(color.red   * 255.0f) << 16)
+			 | ((u32)hm::round(color.green * 255.0f) << 8)
+			 | ((u32)hm::round(color.blue  * 255.0f));
+	}
+
+	static f32 get_pixels_per_unit(const Screen& screen) {
+		return (f32)screen.height / (SCREEN_HEIGHT_TILES * TILE_SIZE);
+	}
+
+	static Chunk& get_world_chunk(World& world, const World_Position& position) {
+		// return chunks[player_pos.scene_y * WORLD_SIZE_CHUNKS + player_pos.scene_x];
+		return *world.chunks.ptr;
+	};
+
+	static i32& get_chunk_tile(Chunk& chunk, const Chunk_Position& position) {
+		return chunk.tiles[position.chunk_y * CHUNK_SIZE_TILES + position.chunk_x];
+	};
 }

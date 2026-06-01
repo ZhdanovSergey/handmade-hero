@@ -41,15 +41,6 @@ namespace Game {
 		f32 frame_dt;
 	};
 
-	struct Color {
-		f32 red, green, blue;
-		u32 to_hex() const {
-			return ((u32)hm::round(red   * 255.0f) << 16)
-				 | ((u32)hm::round(green * 255.0f) << 8)
-				 | ((u32)hm::round(blue  * 255.0f));
-		}
-	};
-
 	struct Sound_Sample {
 		i16 left, right;
 	};
@@ -60,10 +51,30 @@ namespace Game {
 		Sound_Sample* samples;
 	};
 
-	struct Chunk_Position {
-		u32 world_x, world_y;
-		i32 chunk_x, chunk_y;
-		f32 tile_x, tile_y;
+	struct Screen {
+		i32 width, height;
+		u32* pixels;
+	};
+
+	struct Memory {
+		bool is_initialized;
+		span<u8> permanent_storage;
+		span<u8> transient_storage;
+    	Platform::Read_File_Sync* read_file_sync;
+    	Platform::Write_File_Sync* write_file_sync;
+    	Platform::Free_File_Memory* free_file_memory;
+	};
+
+	struct Color {
+		f32 red, green, blue;
+	};
+
+	struct Chunk {
+		span<i32> tiles;
+	};
+
+	struct World {
+		span<Chunk> chunks;
 	};
 
 	// TODO: сделать сеттеры с автоматической нормализацией после введения векторов + конструктор с нормализацией
@@ -72,23 +83,10 @@ namespace Game {
 		f32 tile_x, tile_y;
 	};
 
-	struct Chunk {
-		i32 (*tiles)[CHUNK_SIZE_TILES];
-	};
-
-	struct World {
-		Chunk* chunks;
-		
-		Chunk& get_chunk(const World_Position& position) const {
-			// return chunks[player_pos.scene_y * WORLD_SIZE_CHUNKS + player_pos.scene_x];
-			return *chunks;
-		};
-	};
-
-	struct Screen {		
-		i32 width, height;
-		u32* pixels;
-		f32 get_pixels_per_unit() { return (f32)height / (SCREEN_HEIGHT_TILES * TILE_SIZE); }
+	struct Chunk_Position {
+		u32 world_x, world_y;
+		i32 chunk_x, chunk_y;
+		f32 tile_x, tile_y;
 	};
 
 	struct Game_State {
@@ -99,25 +97,19 @@ namespace Game {
 		f32 pixels_per_unit;
 	};
 
-	struct Memory {
-		bool is_initialized;
-		span<u8> permanent_storage;
-		span<u8> transient_storage;
-    	Platform::Read_File_Sync* read_file_sync;
-    	Platform::Write_File_Sync* write_file_sync;
-    	Platform::Free_File_Memory* free_file_memory;
-
-		i64 get_total_size() const { return permanent_storage.size + transient_storage.size; }
-	};
-
 	extern "C" void update_and_render(const Input& input, Memory& memory, Screen& screen_buffer);
 	using Update_And_Render = decltype(update_and_render);
 	// get_sound_samples должен быть быстрым, не больше 1ms
 	extern "C" void get_sound_samples(Memory& memory, Sound& sound_buffer);
 	using Get_Sound_Samples = decltype(get_sound_samples);
 
-	static bool check_empty_tile(const World& world, const World_Position& position);
+	// TODO: появляются первые признаки const-poisoning, подумать над выпиливанием const из параметров функций
+	static bool check_empty_tile(World& world, const World_Position& position);
 	static void draw_rectangle(Screen& screen, const Color& color, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32);
+	static i32& get_chunk_tile(Chunk& chunk, const Chunk_Position& position);
+	static u32 get_hex_color(const Color& color);
+	static f32 get_pixels_per_unit(const Screen& screen);
+	static Chunk& get_world_chunk(World& world, const World_Position& position);
 	static void init_memory(Memory& memory);
 	static Chunk_Position get_chunk_position(const World_Position& world_pos);
 	static void normalize_position(World_Position& position);

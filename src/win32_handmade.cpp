@@ -126,6 +126,10 @@ static FILETIME get_file_write_time(const char* file_name) {
 	return file_data.ftLastWriteTime;
 }
 
+static i64 get_memory_total_size(const Game::Memory& game_memory) {
+	return game_memory.permanent_storage.size + game_memory.transient_storage.size;
+};
+
 static f32 get_seconds_elapsed(i64 start) {
 	return (f32)(get_timestamp() - start) / (f32)PERF_FREQUENCY;
 }
@@ -351,9 +355,9 @@ static void replayer_record_or_replace(Replayer& replayer, Game::Memory& game_me
 static void replayer_start_record(Replayer& replayer, const Game::Memory& game_memory) {
 	SetFilePointer(replayer.state_handle, 0, 0, FILE_BEGIN);
 	SetFilePointer(replayer.input_handle, 0, 0, FILE_BEGIN);
-	i64 state_total_size = game_memory.get_total_size();
-	DWORD bytes_to_write = (DWORD)state_total_size;
-	assert(bytes_to_write == state_total_size);
+	i64 memory_total_size = get_memory_total_size(game_memory);
+	DWORD bytes_to_write = (DWORD)memory_total_size;
+	assert(bytes_to_write == memory_total_size);
 	DWORD bytes_written;
 	WriteFile(replayer.state_handle, game_memory.permanent_storage.ptr, bytes_to_write, &bytes_written, nullptr);
 }
@@ -361,9 +365,9 @@ static void replayer_start_record(Replayer& replayer, const Game::Memory& game_m
 static void replayer_start_play(Replayer& replayer, Game::Memory& game_memory) {
 	SetFilePointer(replayer.state_handle, 0, 0, FILE_BEGIN);
 	SetFilePointer(replayer.input_handle, 0, 0, FILE_BEGIN);
-	i64 state_total_size = game_memory.get_total_size();
-	DWORD bytes_to_read = (DWORD)state_total_size;
-	assert(bytes_to_read == state_total_size);
+	i64 memory_total_size = get_memory_total_size(game_memory);
+	DWORD bytes_to_read = (DWORD)memory_total_size;
+	assert(bytes_to_read == memory_total_size);
 	DWORD bytes_read;
 	ReadFile(replayer.state_handle, game_memory.permanent_storage.ptr, bytes_to_read, &bytes_read, nullptr);
 }
