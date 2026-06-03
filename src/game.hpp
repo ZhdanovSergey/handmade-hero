@@ -69,8 +69,10 @@ namespace Game {
 		f32 red, green, blue;
 	};
 
+	using Tile = i32;
+
 	struct Chunk {
-		slice<i32> tiles;
+		slice<Tile> tiles;
 	};
 
 	struct World {
@@ -84,14 +86,14 @@ namespace Game {
 	};
 
 	struct Chunk_Position {
-		u32 world_x, world_y;
+		u32 lookup_x, lookup_y;
 		i32 chunk_x, chunk_y;
 		f32 tile_x, tile_y;
 	};
 
 	struct Game_State {
-		i32 TILES[CHUNK_SIZE_TILES][CHUNK_SIZE_TILES];
-		Chunk CHUNKS[WORLD_SIZE_CHUNKS][WORLD_SIZE_CHUNKS];
+		Tile tiles[CHUNK_SIZE_TILES][CHUNK_SIZE_TILES];
+		Chunk chunks[WORLD_SIZE_CHUNKS][WORLD_SIZE_CHUNKS];
 		World world;
 		World_Position player_pos;
 		f32 pixels_per_unit;
@@ -106,10 +108,10 @@ namespace Game {
 	// TODO: появляются первые признаки const-poisoning, подумать над выпиливанием const из параметров функций
 	static bool check_empty_tile(World& world, const World_Position& position);
 	static void draw_rectangle(Screen& screen, const Color& color, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32);
-	static i32& get_chunk_tile(Chunk& chunk, const Chunk_Position& position);
 	static u32 get_hex_color(const Color& color);
 	static f32 get_pixels_per_unit(const Screen& screen);
-	static Chunk& get_world_chunk(World& world, const World_Position& position);
+	static Tile get_tile_value(Chunk& chunk, i32 chunk_x, i32 chunk_y);
+	static Chunk& get_chunk(World& world, const World_Position& position);
 	static void init_memory(Memory& memory);
 	static Chunk_Position get_chunk_position(const World_Position& world_pos);
 	static void normalize_position(World_Position& position);

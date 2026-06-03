@@ -38,17 +38,17 @@ namespace Game {
 			game_state.player_pos = new_player_pos;
 		}
 
-		Chunk& current_chunk = get_world_chunk(game_state.world, game_state.player_pos);
 		Chunk_Position player_chunk_pos = get_chunk_position(game_state.player_pos);
+		Chunk& current_chunk = get_chunk(game_state.world, game_state.player_pos);
 		
 		i32 half_screen_width_tiles  = SCREEN_WIDTH_TILES  / 2;
 		i32 half_screen_height_tiles = SCREEN_HEIGHT_TILES / 2;
 
 		draw_rectangle(screen, Color{ 1.0f, 0.0f, 1.0f }, 0.0f, SCREEN_WIDTH_TILES * TILE_SIZE, SCREEN_HEIGHT_TILES * TILE_SIZE, 0.0f);
 		for (    i32 y = player_chunk_pos.chunk_y - half_screen_height_tiles - 1; y <= player_chunk_pos.chunk_y + half_screen_height_tiles + 1; y++) {
-			for (i32 x = player_chunk_pos.chunk_x - half_screen_width_tiles  - 1; x <= player_chunk_pos.chunk_x + half_screen_width_tiles  + 1;  x++) {
+			for (i32 x = player_chunk_pos.chunk_x - half_screen_width_tiles  - 1; x <= player_chunk_pos.chunk_x + half_screen_width_tiles  + 1; x++) {
 
-				Color color = y >= 0 && x >= 0 && current_chunk.tiles[y * CHUNK_SIZE_TILES + x]
+				Color color = y >= 0 && x >= 0 && get_tile_value(current_chunk, x, y)
 					? Color{ 1.0f, 1.0f, 1.0f }
 					: Color{ 0.5f, 0.5f, 0.5f };
 
@@ -74,32 +74,25 @@ namespace Game {
 	extern "C" void get_sound_samples(Memory& memory, Sound& sound) {
 		Sound_Sample* sample = sound.samples;
 		for (i32 i = 0; i < sound.samples_to_write; i++) {
-			*sample = {};
-			sample++;
+			*sample++ = {};
 		}
-	}
-
-	static bool check_empty_tile(World& world, const World_Position& world_position) {
-		Chunk& chunk = get_world_chunk(world, world_position);
-		Chunk_Position chunk_position = get_chunk_position(world_position);
-		return get_chunk_tile(chunk, chunk_position) == 0;
 	}
 
 	// TODO: учесть возможность смещения больше чем на 1 клетку
 	static void normalize_position(World_Position& position) {
 		if (position.tile_x < 0) {
-			position.world_x  -= 1;
+			position.world_x -= 1;
 			position.tile_x += TILE_SIZE;
 		} else if (position.tile_x >= TILE_SIZE) {
-			position.world_x  += 1;
+			position.world_x += 1;
 			position.tile_x -= TILE_SIZE;
 		}
 
 		if (position.tile_y < 0) {
-			position.world_y  -= 1;
+			position.world_y -= 1;
 			position.tile_y += TILE_SIZE;
 		} else if (position.tile_y >= TILE_SIZE) {
-			position.world_y  += 1;
+			position.world_y += 1;
 			position.tile_y -= TILE_SIZE;
 		}
 
@@ -111,8 +104,8 @@ namespace Game {
 
 	static Chunk_Position get_chunk_position(const World_Position& world_pos) {
 		Chunk_Position result = {};
-		result.world_x = world_pos.world_x >> CHUNK_POSITION_SHIFT;
-		result.world_y = world_pos.world_y >> CHUNK_POSITION_SHIFT;
+		result.lookup_x = world_pos.world_x >> CHUNK_POSITION_SHIFT;
+		result.lookup_y = world_pos.world_y >> CHUNK_POSITION_SHIFT;
 		result.chunk_x = (i32)(world_pos.world_x & CHUNK_POSITION_MASK);
 		result.chunk_y = (i32)(world_pos.world_y & CHUNK_POSITION_MASK);
 		result.tile_x = world_pos.tile_x;
@@ -152,7 +145,7 @@ namespace Game {
 	static void init_memory(Memory& memory) {
 		Game_State& game_state = *(Game_State*)memory.permanent_storage.ptr;
 
-		i32 TILES[CHUNK_SIZE_TILES][CHUNK_SIZE_TILES] = {
+		Tile temp_tiles[CHUNK_SIZE_TILES][CHUNK_SIZE_TILES] = {
 			{ 1,1,1,1,1,1, 1,1,1,1,1, 1,1,1,1,1,1, 1,1,1,1,1,1, 1,1,1,1,1, 1,1,1,1,1,1 },
 			{ 1,0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0,1, 1,0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0,1 },
 			{ 1,0,0,0,0,0, 1,0,0,0,0, 1,0,0,0,0,1, 1,0,0,0,0,1, 0,0,0,0,1, 0,0,0,0,0,1 },
@@ -178,15 +171,15 @@ namespace Game {
 			{ 1,1,1,1,1,1, 1,1,1,1,1, 1,1,1,1,1,1, 1,1,1,1,1,1, 1,1,1,1,1, 1,1,1,1,1,1 },
 		};
 
-		hm::memcpy(TILES, game_state.TILES);
+		hm::memcpy(temp_tiles, game_state.tiles);
 
-		Chunk CHUNKS[WORLD_SIZE_CHUNKS][WORLD_SIZE_CHUNKS] = {
-			{ Chunk{ game_state.TILES }, Chunk{ game_state.TILES } },
-			{ Chunk{ game_state.TILES }, Chunk{ game_state.TILES } },
+		Chunk temp_chunks[WORLD_SIZE_CHUNKS][WORLD_SIZE_CHUNKS] = {
+			{ Chunk{ game_state.tiles }, Chunk{ game_state.tiles } },
+			{ Chunk{ game_state.tiles }, Chunk{ game_state.tiles } },
 		};
 		
-		hm::memcpy(CHUNKS, game_state.CHUNKS);
-		game_state.world.chunks = game_state.CHUNKS;
+		hm::memcpy(temp_chunks, game_state.chunks);
+		game_state.world.chunks = game_state.chunks;
 
 		game_state.player_pos.world_x = 1;
 		game_state.player_pos.world_y = 1;
@@ -209,13 +202,21 @@ namespace Game {
 		return (f32)screen.height / (SCREEN_HEIGHT_TILES * TILE_SIZE);
 	}
 
-	static Chunk& get_world_chunk(World& world, const World_Position& position) {
+	// TODO: возможно должен принимать Chunk и Chunk_Position
+	static bool check_empty_tile(World& world, const World_Position& world_pos) {
+		Chunk_Position chunk_pos = get_chunk_position(world_pos);
+		Chunk& chunk = get_chunk(world, world_pos);
+		return get_tile_value(chunk, chunk_pos.chunk_x, chunk_pos.chunk_y) == 0;
+	}
+
+	// TODO: возможно должен принимать Chunk_Position
+	static Chunk& get_chunk(World& world, const World_Position& position) {
 		// TODO: finish this
 		// return chunks[player_pos.scene_y * WORLD_SIZE_CHUNKS + player_pos.scene_x];
 		return *world.chunks.ptr;
 	};
 
-	static i32& get_chunk_tile(Chunk& chunk, const Chunk_Position& position) {
-		return chunk.tiles[position.chunk_y * CHUNK_SIZE_TILES + position.chunk_x];
+	static Tile get_tile_value(Chunk& chunk, i32 chunk_x, i32 chunk_y) {
+		return chunk.tiles[chunk_y * CHUNK_SIZE_TILES + chunk_x];
 	};
 }

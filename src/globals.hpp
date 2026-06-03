@@ -25,9 +25,9 @@ using u16 = uint16_t;
 using u32 = uint32_t;
 using u64 = uint64_t;
 
-static constexpr f64 PI64 = 3.14159265358979323846;
-static constexpr f32 PI32 = (f32)PI64;
-static constexpr f32 DOUBLE_PI32 = 2.0f * PI32;
+static const f64 PI64 = 3.14159265358979323846;
+static const f32 PI32 = (f32)PI64;
+static const f32 DOUBLE_PI32 = 2.0f * PI32;
 
 static constexpr i64 operator ""_KB(u64 value) { return (i64)(value << 10); }
 static constexpr i64 operator ""_MB(u64 value) { return (i64)(value << 20); }
@@ -122,7 +122,7 @@ namespace hm {
     }
 
     static void strcat(slice<const char> src1, slice<const char> src2, slice<char> dest) {
-        assert(src1.size + src2.size <= dest.size);
+        assert(src1.size + src2.size - 1 <= dest.size);
         src1.size = min(src1.size, dest.size);
         src2.size = min(src2.size, dest.size - src1.size);
         memcpy(src1, slice{ dest.ptr, src1.size });
