@@ -45,8 +45,8 @@ namespace Game {
 		i32 half_screen_height_tiles = SCREEN_HEIGHT_TILES / 2;
 
 		draw_rectangle(screen, Color{ 1.0f, 0.0f, 1.0f }, 0.0f, SCREEN_WIDTH_TILES * TILE_SIZE, SCREEN_HEIGHT_TILES * TILE_SIZE, 0.0f);
-		for (    i32 y = player_chunk_pos.chunk_y - half_screen_height_tiles - 1; y <= player_chunk_pos.chunk_y + half_screen_height_tiles + 1; y++) {
-			for (i32 x = player_chunk_pos.chunk_x - half_screen_width_tiles  - 1; x <= player_chunk_pos.chunk_x + half_screen_width_tiles  + 1; x++) {
+		for (    i32 y = player_chunk_pos.chunk_y - half_screen_height_tiles - 1; y <= player_chunk_pos.chunk_y + half_screen_height_tiles + 1; ++y) {
+			for (i32 x = player_chunk_pos.chunk_x - half_screen_width_tiles  - 1; x <= player_chunk_pos.chunk_x + half_screen_width_tiles  + 1; ++x) {
 
 				Color color = y >= 0 && x >= 0 && get_tile_value(current_chunk, x, y)
 					? Color{ 1.0f, 1.0f, 1.0f }
@@ -72,10 +72,10 @@ namespace Game {
 	};
 
 	extern "C" void get_sound_samples(Memory& memory, Sound& sound) {
-		Sound_Sample* sample = sound.samples;
-		for (i32 i = 0; i < sound.samples_to_write; i++) {
-			*sample++ = {};
+		for (auto& sample : sound.samples) {
+			sample = {};
 		}
+
 	}
 
 	// TODO: учесть возможность смещения больше чем на 1 клетку
@@ -133,9 +133,9 @@ namespace Game {
 
 		u32 hex_color = get_hex_color(color);
 		u32* row = screen.pixels + min_y * screen.width + min_x;
-		for (i32 y = min_y; y < max_y; y++) {
+		for (i32 y = min_y; y < max_y; ++y) {
 			u32* pixel = row;
-			for (i32 x = min_x; x < max_x; x++) {
+			for (i32 x = min_x; x < max_x; ++x) {
 				*pixel++ = hex_color;
 			}
 			row += screen.width;

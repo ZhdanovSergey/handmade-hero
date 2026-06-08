@@ -46,9 +46,8 @@ namespace Game {
 	};
 
 	struct Sound {
+		slice<Sound_Sample> samples;
 		i32 samples_per_second;
-		i32 samples_to_write;
-		Sound_Sample* samples;
 	};
 
 	struct Screen {
@@ -81,6 +80,8 @@ namespace Game {
 
 	// TODO: сделать сеттеры с автоматической нормализацией после введения векторов + конструктор с нормализацией
 	struct World_Position {
+		// в world_x/y нижние биты это координаты ячейки внутри чанка,
+		// верхние биты это координаты чанка в мире
 		u32 world_x, world_y;
 		f32 tile_x, tile_y;
 	};

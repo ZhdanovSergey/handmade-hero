@@ -104,7 +104,7 @@ namespace hm {
 
     template <typename T>
     static void memzero(T* dest) {
-        for (i64 i = 0; i < sizeof(T); i++) {
+        for (i64 i = 0; i < sizeof(T); ++i) {
             ((u8*)dest)[i] = 0;
         }
     }
@@ -116,7 +116,7 @@ namespace hm {
 
     static void memcpy(slice<const u8> src, slice<u8> dest) {
         assert(src.size <= dest.size);
-        for (i64 i = 0; i < min(src.size, dest.size); i++) {
+        for (i64 i = 0; i < min(src.size, dest.size); ++i) {
             dest[i] = src[i];
         }
     }

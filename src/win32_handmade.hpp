@@ -63,13 +63,11 @@ struct Sound {
 	WAVEFORMATEX wave_format;
 	IDirectSoundBuffer* buffer;
 	DWORD output_location;
+	DWORD buffer_size;
+	DWORD bytes_per_frame;
+	DWORD safety_bytes;
 	Sound_Time_Marker dev_markers[32]; // ожидаемый фреймрейт - 1
 	i32 dev_markers_index;
-
-	// TODO: обдумать использование полей структуры вместо геттеров
-	DWORD get_buffer_size() 	const { return wave_format.nAvgBytesPerSec; }
-	DWORD get_bytes_per_frame() const { return (DWORD)((f32)wave_format.nAvgBytesPerSec * TARGET_SECONDS_PER_FRAME); }
-	DWORD get_safety_bytes() 	const { return get_bytes_per_frame() / 3; }
 };
 
 static void calc_sound_samples_to_write(Sound& sound, i64 flip_timestamp);

@@ -290,7 +290,7 @@ static void collect_keyboard_button_input(Input& input, WPARAM key_code, bool is
 		default: return;
 	}
 	button_state->is_pressed = is_pressed;
-	button_state->transitions_count++;
+	button_state->transitions_count += 1;
 }
 
 static void collect_mouse_input(Input& input, HWND window) {
@@ -304,12 +304,12 @@ static void collect_mouse_input(Input& input, HWND window) {
 
 	if (mouse.left_button.is_pressed != bool(GetKeyState(VK_LBUTTON) & (1 << 15))) {
 		mouse.left_button.is_pressed = !mouse.left_button.is_pressed;
-		mouse.left_button.transitions_count++;
+		mouse.left_button.transitions_count += 1;
 	}
 
 	if (mouse.right_button.is_pressed != bool(GetKeyState(VK_RBUTTON) & (1 << 15))) {
 		mouse.right_button.is_pressed = !mouse.right_button.is_pressed;
-		mouse.right_button.transitions_count++;
+		mouse.right_button.transitions_count += 1;
 	}
 }
 
@@ -451,7 +451,7 @@ static void submit_screen(const Screen& screen, HWND window, HDC device_context)
 
 static void draw_vertical_line(Screen& screen, i32 x, i32 top, i32 bottom, u32 color) {
 	u32* pixel = screen.game_screen.pixels + top * screen.game_screen.width + x;
-	for (i32 y = top; y < bottom; y++) {
+	for (i32 y = top; y < bottom; ++y) {
 		*pixel = color;
 		pixel += screen.game_screen.width;
 	}
@@ -465,8 +465,13 @@ static Sound create_sound(HWND window) {
 	sound.wave_format.nBlockAlign = sizeof(Game::Sound_Sample);
 	sound.wave_format.nAvgBytesPerSec = sound.wave_format.nBlockAlign * sound.wave_format.nSamplesPerSec;
 	sound.wave_format.wBitsPerSample = sound.wave_format.nBlockAlign / sound.wave_format.nChannels * 8u;
+
+	sound.buffer_size = sound.wave_format.nAvgBytesPerSec;
+	sound.bytes_per_frame = (DWORD)((f32)sound.wave_format.nAvgBytesPerSec * TARGET_SECONDS_PER_FRAME);
+	sound.safety_bytes = sound.bytes_per_frame / 3;
+
 	sound.game_sound.samples_per_second = (i32)sound.wave_format.nSamplesPerSec;
-	sound.game_sound.samples = (Game::Sound_Sample*)VirtualAlloc(nullptr, sound.get_buffer_size(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	sound.game_sound.samples.ptr = (Game::Sound_Sample*)VirtualAlloc(nullptr, sound.buffer_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
 	HMODULE direct_sound_dll = LoadLibraryA("dsound.dll");
 	if (!direct_sound_dll) return sound;
@@ -486,15 +491,16 @@ static Sound create_sound(HWND window) {
 
 	DSBUFFERDESC sound_buffer_desc = {};
 	sound_buffer_desc.dwSize = sizeof(sound_buffer_desc);
-	sound_buffer_desc.dwBufferBytes = sound.get_buffer_size();
+	sound_buffer_desc.dwBufferBytes = sound.buffer_size;
 	sound_buffer_desc.lpwfxFormat = &sound.wave_format;
 	if (!SUCCEEDED(direct_sound->CreateSoundBuffer(&sound_buffer_desc, &sound.buffer, nullptr))) return sound;
 
 	void *region1, *region2; DWORD region1_size, region2_size;
-	if(!SUCCEEDED(sound.buffer->Lock(0, sound.get_buffer_size(), &region1, &region1_size, &region2, &region2_size, 0))) return sound;
+	if(!SUCCEEDED(sound.buffer->Lock(0, sound.buffer_size, &region1, &region1_size, &region2, &region2_size, 0))) return sound;
 	memset(region1, 0, region1_size);
 	memset(region2, 0, region2_size);
 	sound.buffer->Unlock(region1, region1_size, region2, region2_size);
+	
 	sound.buffer->Play(0, 0, DSBPLAY_LOOPING);
 	return sound;
 }
@@ -509,27 +515,27 @@ static void calc_sound_samples_to_write(Sound& sound, i64 flip_timestamp) {
 
 	DWORD play_cursor = 0, write_cursor = 0;
 	if (!sound.buffer || !SUCCEEDED(sound.buffer->GetCurrentPosition(&play_cursor, &write_cursor))) {
-		sound.game_sound.samples_to_write = 0;
+		sound.game_sound.samples.size = 0;
 		sound.dev_markers[sound.dev_markers_index] = {};
 		return;
 	}
 
 	f32 from_flip_to_audio_seconds = get_seconds_elapsed(flip_timestamp);
-	DWORD expected_bytes_until_flip = sound.get_bytes_per_frame() - (DWORD)((f32)sound.wave_format.nAvgBytesPerSec * from_flip_to_audio_seconds);
+	DWORD expected_bytes_until_flip = sound.bytes_per_frame - (DWORD)((f32)sound.wave_format.nAvgBytesPerSec * from_flip_to_audio_seconds);
 	DWORD expected_flip_play_cursor_unwrapped = play_cursor + expected_bytes_until_flip;
 	DWORD write_cursor_unwrapped = play_cursor < write_cursor
 		? write_cursor
-		: write_cursor + sound.get_buffer_size();
+		: write_cursor + sound.buffer_size;
 
-	bool is_low_latency_sound = (write_cursor_unwrapped + sound.get_safety_bytes()) < expected_flip_play_cursor_unwrapped;
+	bool is_low_latency_sound = (write_cursor_unwrapped + sound.safety_bytes) < expected_flip_play_cursor_unwrapped;
 	DWORD target_cursor_unwrapped = is_low_latency_sound
-		? expected_flip_play_cursor_unwrapped + sound.get_bytes_per_frame()
-		: write_cursor_unwrapped + sound.get_bytes_per_frame() + sound.get_safety_bytes();
+		? expected_flip_play_cursor_unwrapped + sound.bytes_per_frame
+		: write_cursor_unwrapped + sound.bytes_per_frame + sound.safety_bytes;
 
-	DWORD target_cursor = target_cursor_unwrapped % sound.get_buffer_size();
-	DWORD output_byte_count = sound.output_location < target_cursor ? 0 : sound.get_buffer_size();
+	DWORD target_cursor = target_cursor_unwrapped % sound.buffer_size;
+	DWORD output_byte_count = sound.output_location < target_cursor ? 0 : sound.buffer_size;
 	output_byte_count += target_cursor - sound.output_location;
-	sound.game_sound.samples_to_write = (i32)(output_byte_count / sound.wave_format.nBlockAlign);
+	sound.game_sound.samples.size = (i64)(output_byte_count / sound.wave_format.nBlockAlign);
 
 	if constexpr (DEV_MODE) {
 		sound.dev_markers[sound.dev_markers_index] = {};
@@ -537,7 +543,7 @@ static void calc_sound_samples_to_write(Sound& sound, i64 flip_timestamp) {
 		sound.dev_markers[sound.dev_markers_index].output_write_cursor = write_cursor;
 		sound.dev_markers[sound.dev_markers_index].output_location = sound.output_location;
 		sound.dev_markers[sound.dev_markers_index].output_byte_count = output_byte_count;
-		sound.dev_markers[sound.dev_markers_index].expected_flip_play_cursor = expected_flip_play_cursor_unwrapped % sound.get_buffer_size();
+		sound.dev_markers[sound.dev_markers_index].expected_flip_play_cursor = expected_flip_play_cursor_unwrapped % sound.buffer_size;
 	}
 }
 
@@ -564,21 +570,21 @@ static HWND create_window(HINSTANCE hInstance) {
 static void submit_sound(Sound& sound) {
 	void *region1, *region2; DWORD region1_size, region2_size;
 	if (!sound.buffer || !SUCCEEDED(sound.buffer->Lock(sound.output_location,
-		(DWORD)(sound.game_sound.samples_to_write * sound.wave_format.nBlockAlign),
+		(DWORD)(sound.game_sound.samples.size * sound.wave_format.nBlockAlign),
 		&region1, &region1_size, &region2, &region2_size, 0))) {
 		return;
 	}
 
-	sound.output_location = (sound.output_location + region1_size + region2_size) % sound.get_buffer_size();
-	memcpy(region1, sound.game_sound.samples, region1_size);
-	memcpy(region2, (u8*)sound.game_sound.samples + region1_size, region2_size);
+	sound.output_location = (sound.output_location + region1_size + region2_size) % sound.buffer_size;
+	memcpy(region1, sound.game_sound.samples.ptr, region1_size);
+	memcpy(region2, (u8*)sound.game_sound.samples.ptr + region1_size, region2_size);
 	sound.buffer->Unlock(region1, region1_size, region2, region2_size);
 }
 
 static void draw_sound_sync(Sound& sound, Screen& screen) {
 	if (!sound.buffer) return;
 
-	f32 horizontal_scaling = (f32)screen.game_screen.width / (f32)sound.get_buffer_size();
+	f32 horizontal_scaling = (f32)screen.game_screen.width / (f32)sound.buffer_size;
 	for (auto& marker : sound.dev_markers) {
 		i32 top = 0;
 		i32 bottom = screen.game_screen.height * 1/4;
@@ -588,7 +594,7 @@ static void draw_sound_sync(Sound& sound, Screen& screen) {
 		draw_vertical_line(screen, historic_output_write_cursor_x, top, bottom, 0xff0000);
 	}
 
-	if (!sound.game_sound.samples_to_write ||
+	if (!sound.game_sound.samples.size ||
 		!SUCCEEDED(sound.buffer->GetCurrentPosition(&sound.dev_markers[sound.dev_markers_index].flip_play_cursor, nullptr))) {
 		sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_size(sound.dev_markers);
 		return;
@@ -618,7 +624,7 @@ static void draw_sound_sync(Sound& sound, Screen& screen) {
 		i32 top 	= screen.game_screen.height * 3/4;
 		i32 bottom  = screen.game_screen.height;
 		i32 flip_play_cursor_x = (i32)((f32)current_marker.flip_play_cursor * horizontal_scaling);
-		i32 safety_bytes_x = (i32)((f32)sound.get_safety_bytes() * horizontal_scaling);
+		i32 safety_bytes_x = (i32)((f32)sound.safety_bytes * horizontal_scaling);
 		draw_vertical_line(screen, (flip_play_cursor_x - safety_bytes_x / 2) % screen.game_screen.width, top, bottom, 0xffffff);
 		draw_vertical_line(screen, (flip_play_cursor_x + safety_bytes_x / 2) % screen.game_screen.width, top, bottom, 0xffffff);
 	}
