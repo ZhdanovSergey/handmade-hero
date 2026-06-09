@@ -68,7 +68,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		// OutputDebugStringA(output_buffer);
 		flip_timestamp = get_timestamp();
 
-		// if constexpr (DEV_MODE) draw_sound_sync(sound, global_screen);
+		// if constexpr (DEV_MODE) draw_sound_sync(global_screen, sound);
 		HDC device_context = GetDC(window);
 		submit_screen(global_screen, window, device_context);
 		ReleaseDC(window, device_context);
@@ -111,10 +111,10 @@ static void get_build_file_path(slice<const char> file_name, slice<char> dest) {
 	char file_path_storage[MAX_PATH];
 	slice<char> file_path = file_path_storage;
 	SetLastError(ERROR_SUCCESS);
-	GetModuleFileNameA(nullptr, file_path.ptr, (DWORD)file_path.size);
+	GetModuleFileNameA(nullptr, file_path.base, (DWORD)file_path.size);
 	assert(GetLastError() != ERROR_INSUFFICIENT_BUFFER);
 	slice<char> folder_path = {
-		file_path.ptr,
+		file_path.base,
 		hm::find_last_index(file_path, +[](char ch) { return ch == '\\'; }) + 1
 	};
 	hm::strcat(folder_path, file_name, dest);
@@ -125,10 +125,6 @@ static FILETIME get_file_write_time(const char* file_name) {
 	if (!GetFileAttributesExA(file_name, GetFileExInfoStandard, &file_data)) return {};
 	return file_data.ftLastWriteTime;
 }
-
-static i64 get_memory_total_size(const Game::Memory& game_memory) {
-	return game_memory.permanent_storage.size + game_memory.transient_storage.size;
-};
 
 static f32 get_seconds_elapsed(i64 start) {
 	return (f32)(get_timestamp() - start) / (f32)PERF_FREQUENCY;
@@ -175,8 +171,8 @@ static Game::Memory create_game_memory() {
 	void* base_address = DEV_MODE && UINTPTR_MAX == UINT64_MAX ? (void*)1024_GB : nullptr;
 	// TODO: использовать MEM_LARGE_PAGES и AdjustTokenPrivileges в 64-битном билде
 	u8* game_storage = (u8*)VirtualAlloc(base_address, (SIZE_T)(permanent_size + transient_size), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-	game_memory.permanent_storage = { game_storage, permanent_size };
-	game_memory.transient_storage = { game_storage + permanent_size, transient_size };
+	game_memory.permanent = { game_storage, permanent_size };
+	game_memory.transient = { game_storage + permanent_size, transient_size };
 	game_memory.read_file_sync = Platform::read_file_sync;
 	game_memory.write_file_sync = Platform::write_file_sync;
 	game_memory.free_file_memory = Platform::free_file_memory;
@@ -355,21 +351,21 @@ static void replayer_record_or_replace(Replayer& replayer, Game::Memory& game_me
 static void replayer_start_record(Replayer& replayer, const Game::Memory& game_memory) {
 	SetFilePointer(replayer.state_handle, 0, 0, FILE_BEGIN);
 	SetFilePointer(replayer.input_handle, 0, 0, FILE_BEGIN);
-	i64 memory_total_size = get_memory_total_size(game_memory);
+	i64 memory_total_size = game_memory.permanent.size + game_memory.transient.size;
 	DWORD bytes_to_write = (DWORD)memory_total_size;
 	assert(bytes_to_write == memory_total_size);
 	DWORD bytes_written;
-	WriteFile(replayer.state_handle, game_memory.permanent_storage.ptr, bytes_to_write, &bytes_written, nullptr);
+	WriteFile(replayer.state_handle, game_memory.permanent.base, bytes_to_write, &bytes_written, nullptr);
 }
 
 static void replayer_start_play(Replayer& replayer, Game::Memory& game_memory) {
 	SetFilePointer(replayer.state_handle, 0, 0, FILE_BEGIN);
 	SetFilePointer(replayer.input_handle, 0, 0, FILE_BEGIN);
-	i64 memory_total_size = get_memory_total_size(game_memory);
+	i64 memory_total_size = game_memory.permanent.size + game_memory.transient.size;
 	DWORD bytes_to_read = (DWORD)memory_total_size;
 	assert(bytes_to_read == memory_total_size);
 	DWORD bytes_read;
-	ReadFile(replayer.state_handle, game_memory.permanent_storage.ptr, bytes_to_read, &bytes_read, nullptr);
+	ReadFile(replayer.state_handle, game_memory.permanent.base, bytes_to_read, &bytes_read, nullptr);
 }
 
 static void replayer_record(Replayer& replayer, const Game::Input& game_input) {
@@ -471,7 +467,7 @@ static Sound create_sound(HWND window) {
 	sound.safety_bytes = sound.bytes_per_frame / 3;
 
 	sound.game_sound.samples_per_second = (i32)sound.wave_format.nSamplesPerSec;
-	sound.game_sound.samples.ptr = (Game::Sound_Sample*)VirtualAlloc(nullptr, sound.buffer_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	sound.game_sound.samples.base = (Game::Sound_Sample*)VirtualAlloc(nullptr, sound.buffer_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
 	HMODULE direct_sound_dll = LoadLibraryA("dsound.dll");
 	if (!direct_sound_dll) return sound;
@@ -576,12 +572,12 @@ static void submit_sound(Sound& sound) {
 	}
 
 	sound.output_location = (sound.output_location + region1_size + region2_size) % sound.buffer_size;
-	memcpy(region1, sound.game_sound.samples.ptr, region1_size);
-	memcpy(region2, (u8*)sound.game_sound.samples.ptr + region1_size, region2_size);
+	memcpy(region1, sound.game_sound.samples.base, region1_size);
+	memcpy(region2, (u8*)sound.game_sound.samples.base + region1_size, region2_size);
 	sound.buffer->Unlock(region1, region1_size, region2, region2_size);
 }
 
-static void draw_sound_sync(Sound& sound, Screen& screen) {
+static void draw_sound_sync(Screen& screen, Sound& sound) {
 	if (!sound.buffer) return;
 
 	f32 horizontal_scaling = (f32)screen.game_screen.width / (f32)sound.buffer_size;
@@ -643,11 +639,11 @@ namespace Platform {
 		assert((DWORD)result.size == (u64)result.size);
 
 		HANDLE heap_handle = GetProcessHeap();
-		result.ptr = (u8*)HeapAlloc(heap_handle, 0, (DWORD)result.size);
+		result.base = (u8*)HeapAlloc(heap_handle, 0, (DWORD)result.size);
 
 		DWORD bytes_read;
-		if (!ReadFile(file_handle, result.ptr, (DWORD)result.size, &bytes_read, nullptr) || (bytes_read != (DWORD)result.size)) {
-			HeapFree(heap_handle, 0, result.ptr);
+		if (!ReadFile(file_handle, result.base, (DWORD)result.size, &bytes_read, nullptr) || (bytes_read != (DWORD)result.size)) {
+			HeapFree(heap_handle, 0, result.base);
 			result = {};
 		}
 
@@ -659,7 +655,7 @@ namespace Platform {
 		assert((DWORD)file.size == (u64)file.size);
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
 		DWORD bytes_written;
-		bool is_error = !WriteFile(file_handle, file.ptr, (DWORD)file.size, &bytes_written, nullptr) && (bytes_written == (DWORD)file.size);
+		bool is_error = !WriteFile(file_handle, file.base, (DWORD)file.size, &bytes_written, nullptr) && (bytes_written == (DWORD)file.size);
 		CloseHandle(file_handle);
 		return is_error;
 	}

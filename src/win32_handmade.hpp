@@ -70,37 +70,44 @@ struct Sound {
 	i32 dev_markers_index;
 };
 
-static void calc_sound_samples_to_write(Sound& sound, i64 flip_timestamp);
-static void collect_gamepad_input(Input& input);
-static void collect_gamepad_button_input(Game::Button& state, bool is_pressed);
+static Game::Memory create_game_memory();
+
+static Game_Code create_game_code();
+static void load_game_code(Game_Code& game_code);
+static void reload_game_code_if_recompiled(Game_Code& game_code);
+
+static Input create_input();
 static void collect_keyboard_button_input(Input& input, WPARAM key_code, bool is_pressed);
 static void collect_mouse_input(Input& input, HWND window);
-static HWND create_window(HINSTANCE hInstance);
-static void draw_vertical_line(Screen& screen, i32 x, i32 top, i32 bottom, u32 color);
-static void draw_sound_sync(Sound& sound, Screen& screen);
-static void get_build_file_path(slice<const char> file_name, slice<char> dest);
-static FILETIME get_file_write_time(const char* file_name);
-static i64 get_memory_total_size(const Game::Memory& game_memory);
+static void collect_gamepad_input(Input& input);
+static void collect_gamepad_button_input(Game::Button& state, bool is_pressed);
 static f32 get_normalized_gamepad_stick_value(SHORT value);
-static f32 get_seconds_elapsed(i64 start);
-static i64 get_timestamp();
-static Game_Code create_game_code();
-static Game::Memory create_game_memory();
-static Input create_input();
+static void reset_input_counters(Input& input);
+
 static Replayer create_replayer(const Game::Memory& game_memory);
-static Screen create_screen();
-static Sound create_sound(HWND window);
-static void load_game_code(Game_Code& game_code);
-static void submit_screen(const Screen& screen, HWND window, HDC device_context);
-static void submit_sound(Sound& sound);
-static void reload_game_code_if_recompiled(Game_Code& game_code);
 static void replayer_next_state(Replayer& replayer, Game::Memory& game_memory, Game::Input& game_input);
 static void replayer_play(Replayer& replayer, Game::Memory& game_memory, Game::Input& game_input);
 static void replayer_record(Replayer& replayer, const Game::Input& game_input);
 static void replayer_record_or_replace(Replayer& replayer, Game::Memory& game_memory, Game::Input& game_input);
 static void replayer_start_play(Replayer& replayer, Game::Memory& game_memory);
 static void replayer_start_record(Replayer& replayer, const Game::Memory& game_memory);
-static void reset_input_counters(Input& input);
+
+static Screen create_screen();
 static void resize_screen(Screen& screen, i32 width, i32 height);
-static void wait_until_end_of_frame(i64 flip_timestamp);
+static void submit_screen(const Screen& screen, HWND window, HDC device_context);
+static void draw_sound_sync(Screen& screen, Sound& sound);
+static void draw_vertical_line(Screen& screen, i32 x, i32 top, i32 bottom, u32 color);
+
+static Sound create_sound(HWND window);
+static void calc_sound_samples_to_write(Sound& sound, i64 flip_timestamp);
+static void submit_sound(Sound& sound);
+
+static HWND create_window(HINSTANCE hInstance);
 static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
+
+static void wait_until_end_of_frame(i64 flip_timestamp);
+static f32 get_seconds_elapsed(i64 start);
+static i64 get_timestamp();
+
+static void get_build_file_path(slice<const char> file_name, slice<char> dest);
+static FILETIME get_file_write_time(const char* file_name);

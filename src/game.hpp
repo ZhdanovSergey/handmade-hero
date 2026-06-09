@@ -1,13 +1,9 @@
 #pragma once
 
 #include "globals.hpp"
+#include "tiles.hpp"
 
 namespace Game {
-	static const i32 WORLD_SIZE_CHUNKS = 2;
-	static const i32 CHUNK_POSITION_SHIFT = 8;
-	static const i32 CHUNK_SIZE_TILES = 1 << CHUNK_POSITION_SHIFT;
-	static const u32 CHUNK_POSITION_MASK = CHUNK_SIZE_TILES - 1;
-	static const f32 TILE_SIZE = 1.4f;
 	static const i32 SCREEN_WIDTH_TILES = 17;
 	static const i32 SCREEN_HEIGHT_TILES = 9;
 
@@ -57,8 +53,8 @@ namespace Game {
 
 	struct Memory {
 		bool is_initialized;
-		slice<u8> permanent_storage;
-		slice<u8> transient_storage;
+		slice<u8> permanent;
+		slice<u8> transient;
     	Platform::Read_File_Sync* read_file_sync;
     	Platform::Write_File_Sync* write_file_sync;
     	Platform::Free_File_Memory* free_file_memory;
@@ -68,35 +64,14 @@ namespace Game {
 		f32 red, green, blue;
 	};
 
-	using Tile = i32;
-
-	struct Chunk {
-		slice<Tile> tiles;
-	};
-
 	struct World {
-		slice<Chunk> chunks;
-	};
-
-	// TODO: сделать сеттеры с автоматической нормализацией после введения векторов + конструктор с нормализацией
-	struct World_Position {
-		// в world_x/y нижние биты это координаты ячейки внутри чанка,
-		// верхние биты это координаты чанка в мире
-		u32 world_x, world_y;
-		f32 tile_x, tile_y;
-	};
-
-	struct Chunk_Position {
-		u32 lookup_x, lookup_y;
-		i32 chunk_x, chunk_y;
-		f32 tile_x, tile_y;
+		Tiles::Map tile_map;
 	};
 
 	struct Game_State {
-		Tile tiles[CHUNK_SIZE_TILES][CHUNK_SIZE_TILES];
-		Chunk chunks[WORLD_SIZE_CHUNKS][WORLD_SIZE_CHUNKS];
 		World world;
-		World_Position player_pos;
+		Arena<u8> world_arena;
+		Tiles::Map_Position player_pos;
 		f32 pixels_per_unit;
 	};
 
@@ -106,14 +81,10 @@ namespace Game {
 	extern "C" void get_sound_samples(Memory& memory, Sound& sound_buffer);
 	using Get_Sound_Samples = decltype(get_sound_samples);
 
-	// TODO: появляются первые признаки const-poisoning, подумать над выпиливанием const из параметров функций
-	static bool check_empty_tile(World& world, const World_Position& position);
+	// TODO: появляются первые признаки const-poisoning, возможно стоит отказаться от const
 	static void draw_rectangle(Screen& screen, const Color& color, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32);
-	static u32 get_hex_color(const Color& color);
 	static f32 get_pixels_per_unit(const Screen& screen);
-	static Tile get_tile_value(Chunk& chunk, i32 chunk_x, i32 chunk_y);
-	static Chunk& get_chunk(World& world, const World_Position& position);
+	
 	static void init_memory(Memory& memory);
-	static Chunk_Position get_chunk_position(const World_Position& world_pos);
-	static void normalize_position(World_Position& position);
+	static u32 get_hex_color(const Color& color);
 }

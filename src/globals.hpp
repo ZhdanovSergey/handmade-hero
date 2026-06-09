@@ -40,46 +40,73 @@ struct Deferrer {
 };
 #define defer(code) Deferrer CONCAT(_defer_, __LINE__){[&](){ code; }}
 
+template <typename T, typename U>
+struct is_same       { static constexpr bool value = false; };
+template <typename T>
+struct is_same<T, T> { static constexpr bool value = true; };
+
+template <typename T>
+using predicate = bool (*)(T);
+
+// TODO: добавить slice для многомерных блоков
+template <typename T>
+struct slice {
+    T* base;
+    i64 size;
+
+    slice() : base{}, size{} {}
+    template <typename U>
+    slice(U* base, i64 size) : base{reinterpret_cast<T*>(base)}, size{size} {
+        assert(size % sizeof(T) == 0);
+        static_assert(is_same<T,u8>::value || is_same<T,const u8>::value
+                    || is_same<T,U >::value || is_same<T,const U >::value);
+    }
+    template <typename U>
+    slice(slice<U> other) : slice{other.base, other.size} {}
+    template <typename U, i64 N>
+    slice(U (&arr)[N])    : slice{reinterpret_cast<U*>(arr), sizeof(arr)} {}
+    template <typename U, i64 N, i64 M>
+    slice(U (&arr)[N][M]) : slice{reinterpret_cast<U*>(arr), sizeof(arr)} {}
+
+    i64 count()   { return size / (i64)sizeof(T); }
+    T* begin()    { return base; }
+    T* end()      { return base + count(); }
+    T& operator[](i64 index) {
+        assert(index >= 0 && index < count());
+        return base[index];
+    }
+};
+template <typename T>
+slice(T*, i64) -> slice<T>;
+
+template <typename T>
+struct Arena {
+    T* base;
+    i64 size;
+    i64 used;
+};
+
+template <typename T>
+static T& arena_push(Arena<T>& arena) {
+    T* new_item = (T*)((u8*)arena.base + arena.used);    
+    arena.used += sizeof(T);
+    assert(arena.used <= arena.size);
+    return *new_item;
+}
+
+template <typename T>
+static slice<T> arena_push(Arena<T>& arena, i64 count) {
+    slice<T> new_slice = {};
+    new_slice.base = (T*)((u8*)arena.base + arena.used);
+    new_slice.size = (i64)sizeof(T) * count;
+    
+    arena.used += new_slice.size;
+    assert(arena.used <= arena.size);
+    return new_slice;
+}
+
+// TODO: вынести hm и Platform в отдельные файлы
 namespace hm {
-    template <typename T, typename U>
-    struct is_same       { static constexpr bool value = false; };
-    template <typename T>
-    struct is_same<T, T> { static constexpr bool value = true; };
-    
-    template <typename T>
-    using predicate = bool (*)(T);
-    
-    // TODO: добавить функционал для многомерных блоков, как в mdspan
-    template <typename T>
-    struct slice {
-        T* ptr;
-        i64 size;
-
-        slice() : ptr{}, size{} {}
-        template <typename U>
-        slice(U* ptr, i64 size) : ptr{reinterpret_cast<T*>(ptr)}, size{size} {
-            assert(size % sizeof(T) == 0);
-            static_assert(is_same<T,u8>::value || is_same<T,const u8>::value
-                       || is_same<T,U >::value || is_same<T,const U >::value);
-        }
-        template <typename U>
-        slice(slice<U> other) : slice{other.ptr, other.size} {}
-        template <typename U, i64 N>
-        slice(U (&arr)[N])    : slice{reinterpret_cast<U*>(arr), sizeof(arr)} {}
-        template <typename U, i64 N, i64 M>
-        slice(U (&arr)[N][M]) : slice{reinterpret_cast<U*>(arr), sizeof(arr)} {}
-
-        i64 count()   { return size / (i64)sizeof(T); }
-        T* begin()    { return ptr; }
-        T* end()      { return ptr + count(); }
-        T& operator[](i64 index) {
-            assert(index >= 0 && index < count());
-            return ptr[index];
-        }
-    };
-    template <typename T>
-    slice(T*, i64) -> slice<T>;
-    
     template <typename T>
     static i64 find_last_index(slice<T> slice, predicate<T> predicate) {
         for (i64 index = slice.count() - 1; index >= 0; index--) {
@@ -125,15 +152,12 @@ namespace hm {
         assert(src1.size + src2.size - 1 <= dest.size);
         src1.size = min(src1.size, dest.size);
         src2.size = min(src2.size, dest.size - src1.size);
-        memcpy(src1, slice{ dest.ptr, src1.size });
-        memcpy(src2, slice{ dest.ptr + src1.size, src2.size });
-        char* last_char = dest.ptr + src1.size + src2.size;
+        memcpy(src1, slice{ dest.base, src1.size });
+        memcpy(src2, slice{ dest.base + src1.size, src2.size });
+        char* last_char = dest.base + src1.size + src2.size;
         *last_char = 0;
     }
 }
-
-template <typename T>
-using slice = hm::slice<T>;
 
 namespace Platform {
     slice<u8> read_file_sync(const char* file_name);
