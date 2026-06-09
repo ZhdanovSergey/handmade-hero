@@ -15,10 +15,10 @@ namespace Tiles {
 	static const u32 CHUNK_POSITION_MASK = CHUNK_SIZE_TILES - 1;
 	static const f32 TILE_SIZE = 1.4f;
 
-	using tile = u32;
+	using Tile = u32;
 
 	struct Chunk {
-		slice<tile> tiles;
+		slice<Tile> tiles;
 	};
 
     struct Map {
@@ -41,10 +41,11 @@ namespace Tiles {
 	};
 
 	// TODO: заменить структуры координат на числа x/y в функциях где возможно
+	// TODO: появляются первые признаки const-poisoning, поискать решение без отказа от const
 	static bool check_empty_tile(Map& map, const Map_Position& map_pos);
-	static tile get_tile(Map& map, u32 abs_x, u32 abs_y);
+	static Tile get_tile(Map& map, u32 abs_x, u32 abs_y);
+	static void set_tile(Map& map, u32 abs_x, u32 abs_y, Tile value);
 	static Chunk* get_chunk(Map& map, const Chunk_Position& map_pos);
 	static Chunk_Position get_chunk_position(u32 tile_abs_x, u32 tile_abs_y);
 	static void normalize_position(Map_Position& position);
-	static void set_tile(Map& map, u32 abs_x, u32 abs_y, tile value);
 }

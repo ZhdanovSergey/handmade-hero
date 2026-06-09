@@ -5,15 +5,11 @@ namespace Game {
 	extern "C" void update_and_render(const Input& input, Memory& memory, Screen& screen) {
 		if (!memory.is_initialized) init_memory(memory);
 
-		Game_State& game_state = *(Game_State*)memory.permanent.base;
-		// TODO: использовать префикс gs для переменных-алиасов?
-		Tiles::Map_Position& player_pos = game_state.player_pos;
-		Tiles::Map& tile_map = game_state.world.tile_map;
+		auto& game_state = *(Game_State*)memory.permanent.base;
+		auto& player_pos = game_state.player_pos;
+		auto& tile_map = game_state.world.tile_map;
 
-		f32 player_height = 1.4f;
-		f32 player_width  = 1.0f;
-
-		Tiles::Map_Position new_player_pos = player_pos;
+		auto new_player_pos = player_pos;
 		for (auto& controller : input.controllers) {
 			f32 player_dx = 0;
 			f32 player_dy = 0;
@@ -29,11 +25,14 @@ namespace Game {
 			Tiles::normalize_position(new_player_pos);
 		}
 
-		Tiles::Map_Position new_player_pos_left  = new_player_pos;
-		new_player_pos_left.tile_x  -= player_width / 2;
+		f32 player_width  = 1.0f;
+		f32 player_height = 1.4f;
+
+		auto new_player_pos_left = new_player_pos;
+		new_player_pos_left.tile_x -= player_width / 2;
 		Tiles::normalize_position(new_player_pos_left);
 
-		Tiles::Map_Position new_player_pos_right = new_player_pos;
+		auto new_player_pos_right = new_player_pos;
 		new_player_pos_right.tile_x += player_width / 2;
 		Tiles::normalize_position(new_player_pos_right);
 
@@ -44,8 +43,8 @@ namespace Game {
 		}
 
 		// TODO: player_chunk_pos это остатки старой реализации, пока оставил чтобы закоммитить проект в относительно рабочем состоянии.
-		// Сейчас при передвижении по карте видно как появляются/исчезают стенки, видимо сейчас мы рисуем стенки только для текущего чанка
-		Tiles::Chunk_Position player_chunk_pos = Tiles::get_chunk_position(player_pos.world_x, player_pos.world_y);
+		// Сейчас при движении по вертикали видно как появляются/исчезают стенки, видимо сейчас мы рисуем стенки только для текущего чанка
+		auto player_chunk_pos = Tiles::get_chunk_position(player_pos.world_x, player_pos.world_y);
 		
 		i32 half_screen_width_tiles  = SCREEN_WIDTH_TILES  / 2;
 		i32 half_screen_height_tiles = SCREEN_HEIGHT_TILES / 2;
@@ -85,8 +84,7 @@ namespace Game {
 	}
 
 	static void draw_rectangle(Screen& screen, const Color& color, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32) {
-		// screen.pixels инвертирован по вертикали относительно координат игры
-		hm::swap(min_y_f32, max_y_f32);
+		hm::swap(min_y_f32, max_y_f32); // screen.pixels инвертирован по вертикали относительно координат игры
 
 		f32 pixels_per_unit = get_pixels_per_unit(screen);
 		f32 offset_x = - Tiles::TILE_SIZE / 2;
@@ -114,25 +112,23 @@ namespace Game {
 	};
 
 	static void init_memory(Memory& memory) {
-		Game_State& game_state = *(Game_State*)memory.permanent.base;
-		// TODO: использовать префикс gs для переменных-алиасов?
-		Tiles::Map_Position& player_pos = game_state.player_pos;
-		Tiles::Map& tile_map = game_state.world.tile_map;
+		auto& game_state = *(Game_State*)memory.permanent.base;
+		auto& player_pos = game_state.player_pos;
+		auto& tile_map = game_state.world.tile_map;
+		auto& chunks = game_state.world.tile_map.chunks;
+		auto& world_arena = game_state.world_arena;
 
-		// TODO: Кейси использует одну арену для структур разных размеров, пока что сделаю так же, поэтому используем u8
-		Arena<u8>& world_arena = game_state.world_arena;
 		world_arena.base = memory.permanent.base + sizeof(Game_State);
 		world_arena.size = memory.permanent.size - (i64)sizeof(Game_State);
 
-		slice<Tiles::Chunk>& chunks = tile_map.chunks;
 		chunks.size = sizeof(Tiles::Chunk) * Tiles::WORLD_SIZE_CHUNKS * Tiles::WORLD_SIZE_CHUNKS;
 		chunks.base = (Tiles::Chunk*)arena_push<u8>(world_arena, chunks.size).base;
 
 		for (    i32 chunk_y = 0; chunk_y < Tiles::WORLD_SIZE_CHUNKS; ++chunk_y) {
 			for (i32 chunk_x = 0; chunk_x < Tiles::WORLD_SIZE_CHUNKS; ++chunk_x) {
-				Tiles::Chunk& chunk = chunks[chunk_y * Tiles::WORLD_SIZE_CHUNKS + chunk_x];
-				chunk.tiles.size = sizeof(Tiles::tile) * Tiles::CHUNK_SIZE_TILES * Tiles::CHUNK_SIZE_TILES;
-				chunk.tiles.base = (Tiles::tile*)arena_push<u8>(world_arena, chunk.tiles.size).base;
+				auto& chunk = chunks[chunk_y * Tiles::WORLD_SIZE_CHUNKS + chunk_x];
+				chunk.tiles.size = sizeof(Tiles::Tile) * Tiles::CHUNK_SIZE_TILES * Tiles::CHUNK_SIZE_TILES;
+				chunk.tiles.base = (Tiles::Tile*)arena_push<u8>(world_arena, chunk.tiles.size).base;
 			}
 		}
 		

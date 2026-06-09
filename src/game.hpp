@@ -70,7 +70,7 @@ namespace Game {
 
 	struct Game_State {
 		World world;
-		Arena<u8> world_arena;
+		Arena<u8> world_arena; // Кейси использует одну арену для структур разных размеров, пока сделаю так же, поэтому тип u8
 		Tiles::Map_Position player_pos;
 		f32 pixels_per_unit;
 	};
@@ -81,7 +81,6 @@ namespace Game {
 	extern "C" void get_sound_samples(Memory& memory, Sound& sound_buffer);
 	using Get_Sound_Samples = decltype(get_sound_samples);
 
-	// TODO: появляются первые признаки const-poisoning, возможно стоит отказаться от const
 	static void draw_rectangle(Screen& screen, const Color& color, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32);
 	static f32 get_pixels_per_unit(const Screen& screen);
 	

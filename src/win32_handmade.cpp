@@ -2,6 +2,8 @@
 
 static Screen global_screen = create_screen(); // глобальный из-за WindowProc
 
+// TODO: посмотреть где можно использовать auto
+// TODO: проверить код обработки ошибок на читабельность
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
 	static_assert(DEV_MODE || !SLOW_MODE);
     SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
@@ -169,7 +171,7 @@ static Game::Memory create_game_memory() {
 	i64 permanent_size = 64_MB;
 	i64 transient_size = 1_GB;
 	void* base_address = DEV_MODE && UINTPTR_MAX == UINT64_MAX ? (void*)1024_GB : nullptr;
-	// TODO: использовать MEM_LARGE_PAGES и AdjustTokenPrivileges в 64-битном билде
+	// TODO: проверить эффект использования MEM_LARGE_PAGES и AdjustTokenPrivileges в 64-битном билде
 	u8* game_storage = (u8*)VirtualAlloc(base_address, (SIZE_T)(permanent_size + transient_size), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 	game_memory.permanent = { game_storage, permanent_size };
 	game_memory.transient = { game_storage + permanent_size, transient_size };

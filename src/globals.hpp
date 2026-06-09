@@ -105,7 +105,7 @@ static slice<T> arena_push(Arena<T>& arena, i64 count) {
     return new_slice;
 }
 
-// TODO: вынести hm и Platform в отдельные файлы
+// TODO: вынести hm и Platform в отдельные файлы?
 namespace hm {
     template <typename T>
     static i64 find_last_index(slice<T> slice, predicate<T> predicate) {
