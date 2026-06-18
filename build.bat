@@ -1,10 +1,10 @@
 @echo off
 if %VSCMD_ARG_TGT_ARCH%==x86 (set subsystem=-subsystem:windows,5.1)
 
-@REM TODO: устанавливать флаги компиляции в зависимости от dev/slow режима
+@REM TODO: устанавливать флаги компиляции в зависимости от dev/slow режима (в т.ч. разный игнор предупреждений)
 set common_flags=-DDEV_MODE=1 -DSLOW_MODE=1^
     -std:c++17 -permissive- -MTd -GR- -EHa- -fp:fast -Zi -Od -Oi -RTC1 ^
-    -Wall -experimental:external -external:W0 -wd4100 -wd4191 -wd4505 -wd4514 -wd4577 -wd4623 -wd4626 -wd4668 -wd4820 -wd5045 -nologo
+    -Wall -experimental:external -external:W0 -wd4100 -wd4191 -wd4390 -wd4505 -wd4514 -wd4577 -wd4623 -wd4626 -wd4668 -wd4820 -wd5045 -nologo
 
 IF NOT EXIST build mkdir build
 pushd build

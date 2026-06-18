@@ -354,7 +354,6 @@ static Replayer create_replayer(const Game::Memory& game_memory) {
 	return replayer;
 }
 
-// TODO: сломался выход из режима реплея, игра не реагирует на нажатие кнопок
 static void replayer_next_state(Replayer& replayer, Game::Memory& game_memory, Game::Input& game_input) {
 	replayer.state = (Replayer_State)((replayer.state + 1) % Replayer_State::Count);
 	switch (replayer.state) {
@@ -365,7 +364,10 @@ static void replayer_next_state(Replayer& replayer, Game::Memory& game_memory, G
 			replayer_start_play(replayer, game_memory);
 		} break;
 		case Replayer_State::Idle: {
-			game_input = {}; // принудительно отжимаем нажатые кнопки
+			// принудительно отжимаем нажатые кнопки
+			auto frame_dt = game_input.frame_dt;
+			game_input = {};
+			game_input.frame_dt = frame_dt;
 		} break;
 		case Replayer_State::Count: break;
 	}

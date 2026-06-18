@@ -41,13 +41,13 @@ static constexpr Out safe_down_cast(In value) {
     return casted_value;
 }
 
-static const f64 PI64 = 3.14159265358979323846;
-static const f32 PI32 = trunc<f32>(PI64);
-static const f32 DOUBLE_PI32 = 2.0f * PI32;
+static constexpr f64 PI64 = 3.14159265358979323846;
+static constexpr f32 PI32 = trunc<f32>(PI64);
+static constexpr f32 DOUBLE_PI32 = 2.0f * PI32;
 
-static constexpr i64 operator ""_KB(u64 value) { return (i64)(value << 10); }
-static constexpr i64 operator ""_MB(u64 value) { return (i64)(value << 20); }
-static constexpr i64 operator ""_GB(u64 value) { return (i64)(value << 30); }
+static constexpr i64 operator ""_KB(u64 value) { return cast<i64>(value << 10); }
+static constexpr i64 operator ""_MB(u64 value) { return cast<i64>(value << 20); }
+static constexpr i64 operator ""_GB(u64 value) { return cast<i64>(value << 30); }
 
 template <typename F>
 struct Deferrer {
@@ -91,8 +91,10 @@ struct slice {
     T* begin()    { return base; }
     T* end()      { return base + count(); }
     T& operator[](i64 index) {
-        i64 max_index = count();
-        assert(index >= 0 && index < max_index);
+        if constexpr (SLOW_MODE) {
+            i64 max_index = count();
+            assert(index >= 0 && index < max_index);
+        }
         return base[index];
     }
 };
