@@ -80,7 +80,6 @@ namespace Game {
 		for (auto& sample : sound.samples) {
 			sample = {};
 		}
-
 	}
 
 	static void draw_rectangle(Screen& screen, const Color& color, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32) {
@@ -118,16 +117,16 @@ namespace Game {
 		auto& chunks = game_state.world.tile_map.chunks;
 		auto& world_arena = game_state.world_arena;
 
-		world_arena.base = memory.permanent.base + sizeof(Game_State);
-		world_arena.size = memory.permanent.size - (i64)sizeof(Game_State);
+		world_arena.base = memory.permanent.base + size_of(Game_State);
+		world_arena.size = memory.permanent.size - size_of(Game_State);
 
-		chunks.size = sizeof(Tiles::Chunk) * Tiles::WORLD_SIZE_CHUNKS * Tiles::WORLD_SIZE_CHUNKS;
+		chunks.size = size_of(Tiles::Chunk) * Tiles::WORLD_SIZE_CHUNKS * Tiles::WORLD_SIZE_CHUNKS;
 		chunks.base = (Tiles::Chunk*)arena_push<u8>(world_arena, chunks.size).base;
 
 		for (    i32 chunk_y = 0; chunk_y < Tiles::WORLD_SIZE_CHUNKS; ++chunk_y) {
 			for (i32 chunk_x = 0; chunk_x < Tiles::WORLD_SIZE_CHUNKS; ++chunk_x) {
 				auto& chunk = chunks[chunk_y * Tiles::WORLD_SIZE_CHUNKS + chunk_x];
-				chunk.tiles.size = sizeof(Tiles::Tile) * Tiles::CHUNK_SIZE_TILES * Tiles::CHUNK_SIZE_TILES;
+				chunk.tiles.size = size_of(Tiles::Tile) * Tiles::CHUNK_SIZE_TILES * Tiles::CHUNK_SIZE_TILES;
 				chunk.tiles.base = (Tiles::Tile*)arena_push<u8>(world_arena, chunk.tiles.size).base;
 			}
 		}
@@ -150,7 +149,7 @@ namespace Game {
 		player_pos.tile_y = 1.0f;
 		Tiles::normalize_position(player_pos);
 		
-		assert((i64)sizeof(Game_State) <= memory.permanent.size);
+		assert(size_of(Game_State) <= memory.permanent.size);
 		assert(Tiles::check_empty_tile(tile_map, player_pos));
 		memory.is_initialized = true;
 	}

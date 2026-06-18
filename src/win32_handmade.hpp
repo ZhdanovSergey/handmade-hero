@@ -66,9 +66,13 @@ struct Sound {
 	DWORD buffer_size;
 	DWORD bytes_per_frame;
 	DWORD safety_bytes;
+	bool is_valid;
 	Sound_Time_Marker dev_markers[32]; // ожидаемый фреймрейт - 1
 	i32 dev_markers_index;
 };
+
+static HWND create_window(HINSTANCE hInstance);
+static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 
 static Game::Memory create_game_memory();
 
@@ -101,9 +105,6 @@ static void draw_vertical_line(Screen& screen, i32 x, i32 top, i32 bottom, u32 c
 static Sound create_sound(HWND window);
 static void calc_sound_samples_to_write(Sound& sound, i64 flip_timestamp);
 static void submit_sound(Sound& sound);
-
-static HWND create_window(HINSTANCE hInstance);
-static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 
 static void wait_until_end_of_frame(i64 flip_timestamp);
 static f32 get_seconds_elapsed(i64 start);
