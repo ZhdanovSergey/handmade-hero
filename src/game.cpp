@@ -3,6 +3,7 @@
 
 namespace Game {
 	extern "C" void update_and_render(const Input& input, Memory& memory, Screen& screen) {
+		assert(input.frame_dt > 0);
 		if (!memory.is_initialized) init_memory(memory);
 
 		auto& game_state = *(Game_State*)memory.permanent.base;

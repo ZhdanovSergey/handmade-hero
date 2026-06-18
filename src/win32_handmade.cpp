@@ -365,9 +365,10 @@ static void replayer_next_state(Replayer& replayer, Game::Memory& game_memory, G
 		} break;
 		case Replayer_State::Idle: {
 			// принудительно отжимаем нажатые кнопки
-			auto frame_dt = game_input.frame_dt;
-			game_input = {};
-			game_input.frame_dt = frame_dt;
+			game_input.mouse = {};
+			for (auto& controller : game_input.controllers) {
+				controller = {};
+			}
 		} break;
 		case Replayer_State::Count: break;
 	}
@@ -389,33 +390,31 @@ static void replayer_record_or_replace(Replayer& replayer, Game::Memory& game_me
 static void replayer_start_record(Replayer& replayer, const Game::Memory& game_memory) {
 	SetFilePointer(replayer.state_handle, 0, 0, FILE_BEGIN);
 	SetFilePointer(replayer.input_handle, 0, 0, FILE_BEGIN);
-	DWORD bytes_written = 0;
-	DWORD bytes_to_write = safe_down_cast<DWORD>(game_memory.permanent.size + game_memory.transient.size);
-	if (!WriteFile(replayer.state_handle, game_memory.permanent.base, bytes_to_write, &bytes_written, nullptr)) assert(false);
-	assert(bytes_written == bytes_to_write);
+	DWORD game_memory_size = safe_down_cast<DWORD>(game_memory.permanent.size + game_memory.transient.size);
+	DWORD bytes_written;
+	WriteFile(replayer.state_handle, game_memory.permanent.base, game_memory_size, &bytes_written, nullptr);
+}
+
+static void replayer_record(Replayer& replayer, const Game::Input& game_input) {
+	DWORD bytes_written;
+	WriteFile(replayer.input_handle, &game_input, sizeof(game_input), &bytes_written, nullptr);
 }
 
 static void replayer_start_play(Replayer& replayer, Game::Memory& game_memory) {
 	SetFilePointer(replayer.state_handle, 0, 0, FILE_BEGIN);
 	SetFilePointer(replayer.input_handle, 0, 0, FILE_BEGIN);
-	DWORD bytes_read = 0;
-	DWORD bytes_to_read = safe_down_cast<DWORD>(game_memory.permanent.size + game_memory.transient.size);
-	if (!ReadFile(replayer.state_handle, game_memory.permanent.base, bytes_to_read, &bytes_read, nullptr)) assert(false);
-	assert(bytes_read == bytes_to_read);
-}
-
-static void replayer_record(Replayer& replayer, const Game::Input& game_input) {
-	DWORD bytes_written = 0;
-	if (!WriteFile(replayer.input_handle, &game_input, sizeof(game_input), &bytes_written, nullptr)) assert(false);
-	assert(bytes_written == sizeof(game_input));
+	DWORD game_memory_size = safe_down_cast<DWORD>(game_memory.permanent.size + game_memory.transient.size);
+	DWORD bytes_read;
+	ReadFile(replayer.state_handle, game_memory.permanent.base, game_memory_size, &bytes_read, nullptr);
+	assert(bytes_read == game_memory_size);
 }
 
 static void replayer_play(Replayer& replayer, Game::Memory& game_memory, Game::Input& game_input) {
-	DWORD bytes_read = 0;
-	if (!ReadFile(replayer.input_handle, &game_input, sizeof(game_input), &bytes_read, nullptr)) assert(false);
+	DWORD bytes_read;
+	ReadFile(replayer.input_handle, &game_input, sizeof(game_input), &bytes_read, nullptr);
 	if (!bytes_read) {
 		replayer_start_play(replayer, game_memory);
-		if (!ReadFile(replayer.input_handle, &game_input, sizeof(game_input), &bytes_read, nullptr)) assert(false);
+		ReadFile(replayer.input_handle, &game_input, sizeof(game_input), &bytes_read, nullptr);
 	}
 	assert(bytes_read == sizeof(game_input));
 }
@@ -658,33 +657,33 @@ static void draw_sound_sync(Screen& screen, Sound& sound) {
 namespace Platform {
 	slice<u8> read_file_sync(const char* file_name) {
 		slice<u8> result = {};
-		LARGE_INTEGER file_size = {};
 
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
 		defer(CloseHandle(file_handle));
 
-		GetFileSizeEx(file_handle, &file_size);
-		result.size = file_size.QuadPart;
-		DWORD file_size_casted = safe_down_cast<DWORD>(result.size);
+		LARGE_INTEGER file_size_struct = {};
+		GetFileSizeEx(file_handle, &file_size_struct);
+		DWORD file_size_casted = safe_down_cast<DWORD>(file_size_struct.QuadPart);
+		result.size = file_size_casted;
 
 		HANDLE heap_handle = GetProcessHeap();
 		result.base = (u8*)HeapAlloc(heap_handle, 0, file_size_casted);
-		defer(HeapFree(heap_handle, 0, result.base));
 
-		DWORD bytes_read = 0;
-		if (!ReadFile(file_handle, result.base, file_size_casted, &bytes_read, nullptr)) assert(false);
-		assert(bytes_read == file_size_casted);
+		DWORD bytes_read;
+		if (!ReadFile(file_handle, result.base, file_size_casted, &bytes_read, nullptr)) {
+			assert(false);
+			HeapFree(heap_handle, 0, result.base);
+			return {};
+		}
+		
 		return result;
 	}
 
 	void write_file_sync(const char* file_name, slice<const u8> file) {
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
 		defer(CloseHandle(file_handle));
-
-		DWORD bytes_written = 0;
-		DWORD file_size_casted = safe_down_cast<DWORD>(file.size);
-		if (!WriteFile(file_handle, file.base, file_size_casted, &bytes_written, nullptr)) assert(false);
-		assert(bytes_written == file_size_casted);
+		DWORD bytes_written;
+		WriteFile(file_handle, file.base, safe_down_cast<DWORD>(file.size), &bytes_written, nullptr);
 	}
 	
 	void free_file_memory(void*& memory) {

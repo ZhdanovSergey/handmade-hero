@@ -1,12 +1,14 @@
 #pragma once
 
+#include <cassert>
 #include <cstdint>
 #include <cstdio>
 
+// включаем/выключаем assert
 #if SLOW_MODE
-    #define assert(expr) if (!(expr)) *(int*)nullptr = 0;
+    #undef NDEBUG
 #else
-    #define assert(expr)
+    #define NDEBUG
 #endif
 
 #define CONCAT_INTERNAL(a, b) a##b
