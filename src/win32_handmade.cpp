@@ -494,7 +494,6 @@ static void draw_vertical_line(Screen& screen, i32 x, i32 top, i32 bottom, u32 c
 	}
 }
 
-// TODO: проверить что игра работает при проблемах со звуком
 static Sound create_sound(HWND window) {
 	Sound sound = {};
 	sound.wave_format.wFormatTag = WAVE_FORMAT_PCM;
@@ -576,9 +575,10 @@ static void calc_sound_samples_to_write(Sound& sound, i64 flip_timestamp) {
 		: write_cursor_unwrapped + sound.bytes_per_frame + sound.safety_bytes;
 
 	DWORD target_cursor = target_cursor_unwrapped % sound.buffer_size;
-	DWORD output_byte_count = sound.output_location < target_cursor ? 0 : sound.buffer_size;
-	output_byte_count += target_cursor - sound.output_location;
-	sound.game_sound.samples.size = (i64)(output_byte_count / sound.wave_format.nBlockAlign);
+	DWORD output_byte_count = target_cursor - sound.output_location;
+	if (target_cursor < sound.output_location) output_byte_count += sound.buffer_size;
+	output_byte_count -= output_byte_count % sizeof(Game::Sound_Sample);
+	sound.game_sound.samples.size = (i64)output_byte_count;
 
 	if constexpr (DEV_MODE) {
 		sound.dev_markers[sound.dev_markers_index] = {};
@@ -593,7 +593,7 @@ static void calc_sound_samples_to_write(Sound& sound, i64 flip_timestamp) {
 static void submit_sound(Sound& sound) {
 	if (!sound.is_valid) return;
 
-	DWORD bytes_to_lock = (DWORD)(sound.game_sound.samples.size * sound.wave_format.nBlockAlign);
+	DWORD bytes_to_lock = (DWORD)(sound.game_sound.samples.size);
 	void *region1, *region2; DWORD region1_size, region2_size;
 	if (sound.buffer->Lock(sound.output_location, bytes_to_lock, &region1, &region1_size, &region2, &region2_size, 0) == DS_OK) {
 		sound.output_location = (sound.output_location + region1_size + region2_size) % sound.buffer_size;

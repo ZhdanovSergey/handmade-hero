@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 
@@ -31,20 +32,18 @@ using u64 = uint64_t;
 template <typename Out, typename In>
 static constexpr Out cast(In value) { return (Out)value; }
 
-// TODO: ограничить типы для trunc? float -> T, i64 -> i32, u64 -> u32
-// но вообще даже если это будет аналог cast, использовать все равно имеет смысл
-template <typename Out, typename In>
-static constexpr Out trunc(In value) { return cast<Out>(value); }
+#define size_of(value) cast<i64>(sizeof(value))
 
 template <typename Out, typename In>
 static constexpr Out safe_down_cast(In value) {
+    static_assert(size_of(Out) < size_of(In));
     Out casted_value = cast<Out>(value);
     assert(casted_value == value);
     return casted_value;
 }
 
 static constexpr f64 PI64 = 3.14159265358979323846;
-static constexpr f32 PI32 = trunc<f32>(PI64);
+static constexpr f32 PI32 = cast<f32>(PI64);
 static constexpr f32 DOUBLE_PI32 = 2.0f * PI32;
 
 static constexpr i64 operator ""_KB(u64 value) { return cast<i64>(value << 10); }
@@ -59,8 +58,6 @@ struct Deferrer {
 template <typename F>
 Deferrer(F) -> Deferrer<F>;
 #define defer(code) Deferrer CONCAT(defer_, __LINE__){[&](){ code; }}
-
-#define size_of(value) cast<i64>(sizeof(value))
 
 template <typename T, typename U>
 struct is_same       { static constexpr bool value = false; };
@@ -140,14 +137,14 @@ namespace hm {
     };
 
     template <typename T>
-    static T   min(T a,   T b)   { return a < b ? a : b; }
-    static i32 max(i32 a, i32 b) { return a > b ? a : b; }
+    static constexpr T   min(T a,   T b)   { return a < b ? a : b; }
+    static constexpr i32 max(i32 a, i32 b) { return a > b ? a : b; }
     template <typename T>
-    static T   sign  (T x)   { return cast<T>((x > 0) - (x < 0)); }
-    static i16 abs   (i16 x) { return sign(x) * x; }
-    static i32 round (f32 x) { return trunc<i32>(x + 0.5f * sign(x)); }
-    static i32 ceil  (f32 x) { i32 x_trunc = trunc<i32>(x); return x_trunc + (x > x_trunc); }
-    static i32 floor (f32 x) { i32 x_trunc = trunc<i32>(x); return x_trunc - (x < x_trunc); }
+    static constexpr T   sign  (T x)   { return cast<T>((x > 0) - (x < 0)); }
+    static constexpr i16 abs   (i16 x) { return sign(x) * x; }
+    static constexpr i32 round (f32 x) { return cast<i32>(x + 0.5f * sign(x)); }
+    static constexpr i32 ceil  (f32 x) { i32 x_trunc = cast<i32>(x); return x_trunc + (x > x_trunc); }
+    static constexpr i32 floor (f32 x) { i32 x_trunc = cast<i32>(x); return x_trunc - (x < x_trunc); }
 
     template <typename T, i32 N>
     static constexpr i32 array_size(const T (&)[N]) { return N; }

@@ -73,6 +73,7 @@ namespace Game {
 		Arena<u8> world_arena; // Кейси использует одну арену для структур разных размеров, пока сделаю так же, поэтому тип u8
 		Tiles::Map_Position player_pos;
 		f32 pixels_per_unit;
+		f32 sound_t_sin;
 	};
 
 	extern "C" void update_and_render(const Input& input, Memory& memory, Screen& screen_buffer);

@@ -78,8 +78,20 @@ namespace Game {
 	};
 
 	extern "C" void get_sound_samples(Memory& memory, Sound& sound) {
+		auto& game_state = *(Game_State*)memory.permanent.base;
+		auto& sound_t_sin = game_state.sound_t_sin;
+
+		// f32 volume = 5000.0f;
+		f32 volume = 0;
+		u32 frequency = 261;
+		f32 samples_per_wave_period = (f32)(sound.samples_per_second / frequency);
+
 		for (auto& sample : sound.samples) {
-			sample = {};
+			i16 value = (i16)(std::sinf(sound_t_sin) * volume);
+			sample.left  = value;
+			sample.right = value;
+			sound_t_sin += DOUBLE_PI32 / samples_per_wave_period;
+			if (sound_t_sin >= DOUBLE_PI32) sound_t_sin -= DOUBLE_PI32;
 		}
 	}
 
