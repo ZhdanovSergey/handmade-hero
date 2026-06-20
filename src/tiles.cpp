@@ -48,8 +48,8 @@ namespace Tiles {
 		Chunk_Position result = {};
 		result.lookup_x = tile_abs_x >> CHUNK_POSITION_SHIFT;
 		result.lookup_y = tile_abs_y >> CHUNK_POSITION_SHIFT;
-		result.chunk_x = (i32)(tile_abs_x & CHUNK_POSITION_MASK);
-		result.chunk_y = (i32)(tile_abs_y & CHUNK_POSITION_MASK);
+		result.chunk_x = cast<i32>(tile_abs_x & CHUNK_POSITION_MASK);
+		result.chunk_y = cast<i32>(tile_abs_y & CHUNK_POSITION_MASK);
 		return result;
 	}
 

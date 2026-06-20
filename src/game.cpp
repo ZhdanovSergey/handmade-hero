@@ -6,7 +6,7 @@ namespace Game {
 		assert(input.frame_dt > 0);
 		if (!memory.is_initialized) init_memory(memory);
 
-		auto& game_state = *(Game_State*)memory.permanent.base;
+		auto& game_state = get_game_state(memory);
 		auto& player_pos = game_state.player_pos;
 		auto& tile_map = game_state.world.tile_map;
 
@@ -54,7 +54,8 @@ namespace Game {
 		for (    i32 y = player_chunk_pos.chunk_y - half_screen_height_tiles - 1; y <= player_chunk_pos.chunk_y + half_screen_height_tiles + 1; ++y) {
 			for (i32 x = player_chunk_pos.chunk_x - half_screen_width_tiles  - 1; x <= player_chunk_pos.chunk_x + half_screen_width_tiles  + 1; ++x) {
 
-				Color color = y >= 0 && x >= 0 && Tiles::get_tile(tile_map, static_cast<u32>(x), static_cast<u32>(y))
+				// TODO: избавиться от кастов x и y
+				Color color = y >= 0 && x >= 0 && Tiles::get_tile(tile_map, cast<u32>(x), cast<u32>(y))
 					? Color{ 1.0f, 1.0f, 1.0f }
 					: Color{ 0.5f, 0.5f, 0.5f };
 
@@ -78,16 +79,16 @@ namespace Game {
 	};
 
 	extern "C" void get_sound_samples(Memory& memory, Sound& sound) {
-		auto& game_state = *(Game_State*)memory.permanent.base;
+		auto& game_state = get_game_state(memory);
 		auto& sound_t_sin = game_state.sound_t_sin;
 
 		// f32 volume = 5000.0f;
 		f32 volume = 0;
 		u32 frequency = 261;
-		f32 samples_per_wave_period = (f32)(sound.samples_per_second / frequency);
+		f32 samples_per_wave_period = cast<f32>(sound.samples_per_second / frequency);
 
 		for (auto& sample : sound.samples) {
-			i16 value = (i16)(std::sinf(sound_t_sin) * volume);
+			i16 value = cast<i16>(std::sinf(sound_t_sin) * volume);
 			sample.left  = value;
 			sample.right = value;
 			sound_t_sin += DOUBLE_PI32 / samples_per_wave_period;
@@ -124,7 +125,7 @@ namespace Game {
 	};
 
 	static void init_memory(Memory& memory) {
-		auto& game_state = *(Game_State*)memory.permanent.base;
+		auto& game_state = get_game_state(memory);
 		auto& player_pos = game_state.player_pos;
 		auto& tile_map = game_state.world.tile_map;
 		auto& chunks = game_state.world.tile_map.chunks;
@@ -133,14 +134,14 @@ namespace Game {
 		world_arena.base = memory.permanent.base + size_of(Game_State);
 		world_arena.size = memory.permanent.size - size_of(Game_State);
 
-		chunks.size = size_of(Tiles::Chunk) * Tiles::WORLD_SIZE_CHUNKS * Tiles::WORLD_SIZE_CHUNKS;
-		chunks.base = (Tiles::Chunk*)arena_push<u8>(world_arena, chunks.size).base;
+		chunks.set_count(Tiles::WORLD_SIZE_CHUNKS * Tiles::WORLD_SIZE_CHUNKS);
+		chunks.base = cast<Tiles::Chunk*>(arena_push<u8>(world_arena, chunks.size).base);
 
 		for (    i32 chunk_y = 0; chunk_y < Tiles::WORLD_SIZE_CHUNKS; ++chunk_y) {
 			for (i32 chunk_x = 0; chunk_x < Tiles::WORLD_SIZE_CHUNKS; ++chunk_x) {
 				auto& chunk = chunks[chunk_y * Tiles::WORLD_SIZE_CHUNKS + chunk_x];
-				chunk.tiles.size = size_of(Tiles::Tile) * Tiles::CHUNK_SIZE_TILES * Tiles::CHUNK_SIZE_TILES;
-				chunk.tiles.base = (Tiles::Tile*)arena_push<u8>(world_arena, chunk.tiles.size).base;
+				chunk.tiles.set_count(Tiles::CHUNK_SIZE_TILES * Tiles::CHUNK_SIZE_TILES);
+				chunk.tiles.base = cast<Tiles::Tile*>(arena_push<u8>(world_arena, chunk.tiles.size).base);
 			}
 		}
 		
@@ -168,12 +169,16 @@ namespace Game {
 	}
 
 	static u32 get_hex_color(const Color& color) {
-		return ((u32)hm::round(color.red   * 255.0f) << 16)
-			 | ((u32)hm::round(color.green * 255.0f) << 8)
-			 | ((u32)hm::round(color.blue  * 255.0f));
+		return (cast<u32>(hm::round(color.red   * 255.0f)) << 16)
+			 | (cast<u32>(hm::round(color.green * 255.0f)) << 8)
+			 | (cast<u32>(hm::round(color.blue  * 255.0f)));
 	}
 
 	static f32 get_pixels_per_unit(const Screen& screen) {
-		return (f32)screen.height / (SCREEN_HEIGHT_TILES * Tiles::TILE_SIZE);
+		return cast<f32>(screen.height) / (SCREEN_HEIGHT_TILES * Tiles::TILE_SIZE);
+	}
+
+	static Game_State& get_game_state(Memory& memory) {
+		return *cast<Game_State*>(memory.permanent.base);
 	}
 }

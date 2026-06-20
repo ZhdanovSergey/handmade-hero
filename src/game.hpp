@@ -86,5 +86,6 @@ namespace Game {
 	static f32 get_pixels_per_unit(const Screen& screen);
 	
 	static void init_memory(Memory& memory);
+	static Game_State& get_game_state(Memory& memory);
 	static u32 get_hex_color(const Color& color);
 }

@@ -12,9 +12,6 @@
     #define NDEBUG
 #endif
 
-#define CONCAT_INTERNAL(a, b) a##b
-#define CONCAT(a, b) CONCAT_INTERNAL(a, b)
-
 using f32 = float;
 using f64 = double;
 
@@ -28,19 +25,21 @@ using u16 = uint16_t;
 using u32 = uint32_t;
 using u64 = uint64_t;
 
-// TODO: использовать вместо C-style каста
 template <typename Out, typename In>
 static constexpr Out cast(In value) { return (Out)value; }
 
-#define size_of(value) cast<i64>(sizeof(value))
-
+// TODO: добавить safe_unsigned_cast с проверкой? (i32 -> u32)
 template <typename Out, typename In>
 static constexpr Out safe_down_cast(In value) {
-    static_assert(size_of(Out) < size_of(In));
+    static_assert(sizeof(Out) < sizeof(In));
     Out casted_value = cast<Out>(value);
     assert(casted_value == value);
     return casted_value;
 }
+
+#define CONCAT_INTERNAL(a, b) a##b
+#define CONCAT(a, b) CONCAT_INTERNAL(a, b)
+#define size_of(value) cast<i64>(sizeof(value))
 
 static constexpr f64 PI64 = 3.14159265358979323846;
 static constexpr f32 PI32 = cast<f32>(PI64);
@@ -86,12 +85,13 @@ struct slice {
     template <typename U, i64 N, i64 M>
     slice(U (&arr)[N][M]) : slice{reinterpret_cast<U*>(arr), size_of(arr)} {}
 
-    i64 count()   { return size / size_of(T); }
-    T* begin()    { return base; }
-    T* end()      { return base + count(); }
+    i64  get_count() { return size / size_of(T); }
+    void set_count(i64 count) { size = count * size_of(T); }
+    T* begin() { return base; }
+    T* end()   { return base + get_count(); }
     T& operator[](i64 index) {
         if constexpr (SLOW_MODE) {
-            i64 max_index = count();
+            i64 max_index = get_count();
             assert(index >= 0 && index < max_index);
         }
         return base[index];
@@ -119,7 +119,7 @@ template <typename T>
 static slice<T> arena_push(Arena<T>& arena, i64 count) {
     slice<T> new_slice = {};
     new_slice.base = cast<T*>(cast<u8*>(arena.base) + arena.used);
-    new_slice.size = size_of(T) * count;
+    new_slice.set_count(count);
     
     arena.used += new_slice.size;
     assert(arena.used <= arena.size);
@@ -130,7 +130,7 @@ static slice<T> arena_push(Arena<T>& arena, i64 count) {
 namespace hm {
     template <typename T>
     static i64 find_last_index(slice<T> slice, predicate<T> predicate) {
-        for (i64 index = slice.count() - 1; index >= 0; index--) {
+        for (i64 index = slice.get_count() - 1; index >= 0; index--) {
             if (predicate(slice[index])) return index;
         }
         return -1;
@@ -141,7 +141,7 @@ namespace hm {
     static constexpr i32 max(i32 a, i32 b) { return a > b ? a : b; }
     template <typename T>
     static constexpr T   sign  (T x)   { return cast<T>((x > 0) - (x < 0)); }
-    static constexpr i16 abs   (i16 x) { return sign(x) * x; }
+    static constexpr i32 abs   (i32 x) { return sign(x) * x; }
     static constexpr i32 round (f32 x) { return cast<i32>(x + 0.5f * sign(x)); }
     static constexpr i32 ceil  (f32 x) { i32 x_trunc = cast<i32>(x); return x_trunc + (x > x_trunc); }
     static constexpr i32 floor (f32 x) { i32 x_trunc = cast<i32>(x); return x_trunc - (x < x_trunc); }
