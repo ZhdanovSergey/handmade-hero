@@ -423,7 +423,7 @@ static Screen create_screen() {
 	Screen screen = {};
 	screen.bitmap_info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
 	screen.bitmap_info.bmiHeader.biPlanes = 1;
-	screen.bitmap_info.bmiHeader.biBitCount = sizeof(*screen.game_screen.pixels) * 8;
+	screen.bitmap_info.bmiHeader.biBitCount = sizeof(*screen.game_screen.base) * 8;
 	screen.bitmap_info.bmiHeader.biCompression = BI_RGB;	
 	resize_screen(screen, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT);
 	return screen;
@@ -452,17 +452,17 @@ static void reset_input_counters(Input& input) {
 }
 
 static void resize_screen(Screen& screen, i32 width, i32 height) {
-	if (screen.game_screen.pixels) {
-		VirtualFree(screen.game_screen.pixels, 0, MEM_RELEASE);
+	if (screen.game_screen.base) {
+		VirtualFree(screen.game_screen.base, 0, MEM_RELEASE);
 	}
 
-	screen.game_screen.width = width;
-	screen.game_screen.height = height;
 	screen.bitmap_info.bmiHeader.biWidth = width;
 	screen.bitmap_info.bmiHeader.biHeight = - height; // отрицательный чтобы верхний левый пиксель был первым в буфере
 
-	SIZE_T memory_size = width * height * sizeof(*screen.game_screen.pixels);
-	screen.game_screen.pixels = cast<u32*>(VirtualAlloc(nullptr, memory_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+	screen.game_screen.width = width;
+	screen.game_screen.height = height;
+	SIZE_T memory_size = cast<SIZE_T>(screen.game_screen.get_size());
+	screen.game_screen.base = cast<u32*>(VirtualAlloc(nullptr, memory_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
 }
 
 static void submit_screen(const Screen& screen, HWND window, HDC device_context) {
@@ -481,13 +481,13 @@ static void submit_screen(const Screen& screen, HWND window, HDC device_context)
 	StretchDIBits(device_context,
 		0, 0, dest_width, dest_height,
 		0, 0, src_width, src_height,
-		screen.game_screen.pixels, &screen.bitmap_info,
+		screen.game_screen.base, &screen.bitmap_info,
 		DIB_RGB_COLORS, SRCCOPY
 	);
 }
 
 static void draw_vertical_line(Screen& screen, i32 x, i32 top, i32 bottom, u32 color) {
-	u32* pixel = screen.game_screen.pixels + top * screen.game_screen.width + x;
+	u32* pixel = screen.game_screen.base + top * screen.game_screen.width + x;
 	for (i32 y = top; y < bottom; ++y) {
 		*pixel = color;
 		pixel += screen.game_screen.width;

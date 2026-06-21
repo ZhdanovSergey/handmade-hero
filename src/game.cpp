@@ -97,7 +97,7 @@ namespace Game {
 	}
 
 	static void draw_rectangle(Screen& screen, const Color& color, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32) {
-		hm::swap(min_y_f32, max_y_f32); // screen.pixels инвертирован по вертикали относительно координат игры
+		hm::swap(min_y_f32, max_y_f32); // screen.base инвертирован по вертикали относительно координат игры
 
 		f32 pixels_per_unit = get_pixels_per_unit(screen);
 		f32 offset_x = - Tiles::TILE_SIZE / 2;
@@ -114,7 +114,7 @@ namespace Game {
 		max_y = hm::min(max_y, screen.height);
 
 		u32 hex_color = get_hex_color(color);
-		u32* row = screen.pixels + min_y * screen.width + min_x;
+		u32* row = screen.base + min_y * screen.width + min_x;
 		for (i32 y = min_y; y < max_y; ++y) {
 			u32* pixel = row;
 			for (i32 x = min_x; x < max_x; ++x) {

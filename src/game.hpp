@@ -46,10 +46,7 @@ namespace Game {
 		i32 samples_per_second;
 	};
 
-	struct Screen {
-		i32 width, height;
-		u32* pixels;
-	};
+	using Screen = slice2<u32>;
 
 	struct Memory {
 		bool is_initialized;
