@@ -4,12 +4,10 @@
 
 namespace Tiles {
 	// временные значения для проверки перехода через границы чанков
-	static const i32 WORLD_SIZE_CHUNKS = 128;
-	static const i32 CHUNK_POSITION_SHIFT = 4;
-
-	// TODO: отказаться от таких констант после написания многомерного slice
 	// static const i32 WORLD_SIZE_CHUNKS = 4;
 	// static const i32 CHUNK_POSITION_SHIFT = 8;
+	static const i32 WORLD_SIZE_CHUNKS = 128;
+	static const i32 CHUNK_POSITION_SHIFT = 4;
 
 	static const i32 CHUNK_SIZE_TILES = 1 << CHUNK_POSITION_SHIFT;
 	static const u32 CHUNK_POSITION_MASK = CHUNK_SIZE_TILES - 1;
@@ -18,11 +16,11 @@ namespace Tiles {
 	using Tile = u32;
 
 	struct Chunk {
-		slice<Tile> tiles;
+		slice2<Tile> tiles;
 	};
 
     struct Map {
-		slice<Chunk> chunks;
+		slice2<Chunk> chunks;
     };
 
 	// TODO: переименовать в Position

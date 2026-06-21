@@ -33,14 +33,14 @@ namespace Tiles {
 		auto chunk_pos = get_chunk_position(abs_x, abs_y);
 		auto* chunk = get_chunk(map, chunk_pos);
 		assert(chunk); // TODO: обработать null
-		return chunk->tiles[chunk_pos.chunk_y * CHUNK_SIZE_TILES + chunk_pos.chunk_x];
+		return chunk->tiles.get(chunk_pos.chunk_x, chunk_pos.chunk_y);
 	};
 
 	static void set_tile(Map& map, u32 abs_x, u32 abs_y, Tile value) {
 		auto chunk_pos = get_chunk_position(abs_x, abs_y);
 		auto* chunk = get_chunk(map, chunk_pos);
 		assert(chunk); // TODO: обработать null
-		chunk->tiles[chunk_pos.chunk_y * CHUNK_SIZE_TILES + chunk_pos.chunk_x] = value;
+		chunk->tiles.get(chunk_pos.chunk_x, chunk_pos.chunk_y) = value;
 	}
 
 	// TODO: сделать 2 отдельные функции/структуры

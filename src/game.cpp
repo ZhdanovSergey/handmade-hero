@@ -134,15 +134,14 @@ namespace Game {
 		world_arena.base = memory.permanent.base + size_of(Game_State);
 		world_arena.size = memory.permanent.size - size_of(Game_State);
 
-		chunks.set_count(Tiles::WORLD_SIZE_CHUNKS * Tiles::WORLD_SIZE_CHUNKS);
-		chunks.base = cast<Tiles::Chunk*>(arena_push<u8>(world_arena, chunks.size).base);
+		chunks.width = Tiles::WORLD_SIZE_CHUNKS;
+		chunks.height = Tiles::WORLD_SIZE_CHUNKS;
+		chunks.base = cast<Tiles::Chunk*>(arena_push<u8>(world_arena, chunks.get_size()).base);
 
-		for (    i32 chunk_y = 0; chunk_y < Tiles::WORLD_SIZE_CHUNKS; ++chunk_y) {
-			for (i32 chunk_x = 0; chunk_x < Tiles::WORLD_SIZE_CHUNKS; ++chunk_x) {
-				auto& chunk = chunks[chunk_y * Tiles::WORLD_SIZE_CHUNKS + chunk_x];
-				chunk.tiles.set_count(Tiles::CHUNK_SIZE_TILES * Tiles::CHUNK_SIZE_TILES);
-				chunk.tiles.base = cast<Tiles::Tile*>(arena_push<u8>(world_arena, chunk.tiles.size).base);
-			}
+		for (auto& chunk : chunks) {
+			chunk.tiles.width = Tiles::CHUNK_SIZE_TILES;
+			chunk.tiles.height = Tiles::CHUNK_SIZE_TILES;
+			chunk.tiles.base = cast<Tiles::Tile*>(arena_push<u8>(world_arena, chunk.tiles.get_size()).base);
 		}
 		
 		for (    u32 screen_y = 0; screen_y < 32; ++screen_y) {

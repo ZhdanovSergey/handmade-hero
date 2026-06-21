@@ -31,7 +31,7 @@ template <typename T>
 struct is_same<T, T> { static constexpr bool value = true; };
 
 template <typename Out, typename In>
-static constexpr Out cast(In value) {    
+static constexpr Out cast(In value) {
     assert(((In)(Out)value == value)
         || (is_same<In, f32 >::value)
         || (is_same<In, f64 >::value));
@@ -65,7 +65,9 @@ Deferrer(F) -> Deferrer<F>;
 template <typename T>
 using predicate = bool (*)(T);
 
-// TODO: добавить slice для многомерных блоков
+template <typename T>
+struct slice2;
+
 template <typename T>
 struct slice {
     T* base;
@@ -83,6 +85,8 @@ struct slice {
     slice(U (&arr)[N])    : slice{reinterpret_cast<U*>(arr), size_of(arr)} {}
     template <typename U, i64 N, i64 M>
     slice(U (&arr)[N][M]) : slice{reinterpret_cast<U*>(arr), size_of(arr)} {}
+    template <typename U>
+    slice(slice2<U> other) : slice{other.base, other.get_size()} {};
 
     i64  get_count() { return size / size_of(T); }
     void set_count(i64 count) { size = count * size_of(T); }
@@ -98,6 +102,30 @@ struct slice {
 };
 template <typename T>
 slice(T*, i64) -> slice<T>;
+
+template <typename T>
+struct slice2 {
+    T* base;
+    i32 width;
+    i32 height;
+
+    slice2() : base{}, width{}, height{} {}
+    template <typename U>
+    slice2(slice2<U> other) : slice2{other.base, other.width, other.height} {}
+    template <typename U, i32 N, i32 M>
+    slice2(U (&arr)[N][M]) : slice2{reinterpret_cast<U*>(arr), M, N} {}
+
+    i64 get_size() { return size_of(T) * width * height; }
+    T* begin() { return base; }
+    T* end()   { return base + width * height; }
+    T& get(i32 x, i32 y) {
+        assert(x >= 0 && x < width);
+        assert(y >= 0 && y < height);
+        return base[y * width + x];
+    }
+};
+template <typename T>
+slice2(T*, i32, i32) -> slice2<T>;
 
 template <typename T>
 struct Arena {
