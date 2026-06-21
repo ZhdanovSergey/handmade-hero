@@ -67,8 +67,6 @@ namespace Game {
 
 	struct Game_State {
 		World world;
-		// Кейси использует одну арену для структур разных размеров,
-		// пока сделаю так же (при рефакторинге исправить передаваемые размеры)
 		Arena<u8> world_arena;
 		Tiles::Map_Position player_pos;
 		f32 pixels_per_unit;

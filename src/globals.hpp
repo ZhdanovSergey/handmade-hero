@@ -36,12 +36,11 @@ static constexpr Out cast(In value) {
         || (value > 0 && (Out)value >= 0)
         || (value < 0 && (Out)value <= 0));
 
-    if constexpr (SLOW_MODE) {
-        if constexpr (is_same<In, f32>::value || is_same<In, f64>::value) {
-            assert((value - (In)(Out)value) < 1);
-        } else {
-            assert((value == (In)(Out)value)); // pointer-friendly assert for non-floats
-        }
+    if constexpr (is_same<In, f32>::value || is_same<In, f64>::value) {
+        assert((value - (In)(Out)value) > -1);
+        assert((value - (In)(Out)value) < 1);
+    } else {
+        assert((value == (In)(Out)value)); // pointer-friendly check for non-floats
     }
 
     return (Out)value;
@@ -133,6 +132,8 @@ struct slice2 {
 template <typename T>
 slice2(T*, i32, i32) -> slice2<T>;
 
+
+// TODO: убрать типизацию у арены, при рефакторинге исправить передаваемые размеры
 template <typename T>
 struct Arena {
     T* base;
