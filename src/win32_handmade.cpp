@@ -333,11 +333,11 @@ static void collect_mouse_input(Input& input, HWND window) {
 	mouse.x = point.x;
 	mouse.y = point.y;
 
-	if (mouse.left_button.is_pressed != cast<bool>(GetKeyState(VK_LBUTTON) & (1 << 15))) {
+	if (mouse.left_button.is_pressed != bool(GetKeyState(VK_LBUTTON) & (1 << 15))) {
 		mouse.left_button.is_pressed = !mouse.left_button.is_pressed;
 		mouse.left_button.transitions_count += 1;
 	}
-	if (mouse.right_button.is_pressed != cast<bool>(GetKeyState(VK_RBUTTON) & (1 << 15))) {
+	if (mouse.right_button.is_pressed != bool(GetKeyState(VK_RBUTTON) & (1 << 15))) {
 		mouse.right_button.is_pressed = !mouse.right_button.is_pressed;
 		mouse.right_button.transitions_count += 1;
 	}
@@ -390,7 +390,7 @@ static void replayer_record_or_replace(Replayer& replayer, Game::Memory& game_me
 static void replayer_start_record(Replayer& replayer, const Game::Memory& game_memory) {
 	SetFilePointer(replayer.state_handle, 0, 0, FILE_BEGIN);
 	SetFilePointer(replayer.input_handle, 0, 0, FILE_BEGIN);
-	DWORD game_memory_size = safe_down_cast<DWORD>(game_memory.permanent.size + game_memory.transient.size);
+	DWORD game_memory_size = cast<DWORD>(game_memory.permanent.size + game_memory.transient.size);
 	DWORD bytes_written;
 	WriteFile(replayer.state_handle, game_memory.permanent.base, game_memory_size, &bytes_written, nullptr);
 }
@@ -403,7 +403,7 @@ static void replayer_record(Replayer& replayer, const Game::Input& game_input) {
 static void replayer_start_play(Replayer& replayer, Game::Memory& game_memory) {
 	SetFilePointer(replayer.state_handle, 0, 0, FILE_BEGIN);
 	SetFilePointer(replayer.input_handle, 0, 0, FILE_BEGIN);
-	DWORD game_memory_size = safe_down_cast<DWORD>(game_memory.permanent.size + game_memory.transient.size);
+	DWORD game_memory_size = cast<DWORD>(game_memory.permanent.size + game_memory.transient.size);
 	DWORD bytes_read;
 	ReadFile(replayer.state_handle, game_memory.permanent.base, game_memory_size, &bytes_read, nullptr);
 	assert(bytes_read == game_memory_size);
@@ -662,7 +662,7 @@ namespace Platform {
 
 		LARGE_INTEGER file_size_struct = {};
 		GetFileSizeEx(file_handle, &file_size_struct);
-		DWORD file_size_casted = safe_down_cast<DWORD>(file_size_struct.QuadPart);
+		DWORD file_size_casted = cast<DWORD>(file_size_struct.QuadPart);
 		result.size = file_size_casted;
 
 		HANDLE heap_handle = GetProcessHeap();
@@ -682,7 +682,7 @@ namespace Platform {
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
 		defer(CloseHandle(file_handle));
 		DWORD bytes_written;
-		WriteFile(file_handle, file.base, safe_down_cast<DWORD>(file.size), &bytes_written, nullptr);
+		WriteFile(file_handle, file.base, cast<DWORD>(file.size), &bytes_written, nullptr);
 	}
 	
 	void free_file_memory(void*& memory) {

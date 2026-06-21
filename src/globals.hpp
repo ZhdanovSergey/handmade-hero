@@ -25,16 +25,20 @@ using u16 = uint16_t;
 using u32 = uint32_t;
 using u64 = uint64_t;
 
-template <typename Out, typename In>
-static constexpr Out cast(In value) { return (Out)value; }
+template <typename T, typename U>
+struct is_same       { static constexpr bool value = false; };
+template <typename T>
+struct is_same<T, T> { static constexpr bool value = true; };
 
-// TODO: добавить safe_unsigned_cast с проверкой? (i32 -> u32)
 template <typename Out, typename In>
-static constexpr Out safe_down_cast(In value) {
-    static_assert(sizeof(Out) < sizeof(In));
-    Out casted_value = cast<Out>(value);
-    assert(casted_value == value);
-    return casted_value;
+static constexpr Out cast(In value) {    
+    assert(((In)(Out)value == value)
+        || (is_same<In, f32 >::value)
+        || (is_same<In, f64 >::value));
+    assert((value == 0)
+        || (value > 0 && (Out)value >= 0)
+        || (value < 0 && (Out)value <= 0));
+    return (Out)value;
 }
 
 #define CONCAT_INTERNAL(a, b) a##b
@@ -57,11 +61,6 @@ struct Deferrer {
 template <typename F>
 Deferrer(F) -> Deferrer<F>;
 #define defer(code) Deferrer CONCAT(defer_, __LINE__){[&](){ code; }}
-
-template <typename T, typename U>
-struct is_same       { static constexpr bool value = false; };
-template <typename T>
-struct is_same<T, T> { static constexpr bool value = true; };
 
 template <typename T>
 using predicate = bool (*)(T);
@@ -130,7 +129,7 @@ static slice<T> arena_push(Arena<T>& arena, i64 count) {
 namespace hm {
     template <typename T>
     static i64 find_last_index(slice<T> slice, predicate<T> predicate) {
-        for (i64 index = slice.get_count() - 1; index >= 0; index--) {
+        for (i64 index = slice.get_count() - 1; index >= 0; --index) {
             if (predicate(slice[index])) return index;
         }
         return -1;
