@@ -132,33 +132,21 @@ struct slice2 {
 template <typename T>
 slice2(T*, i32, i32) -> slice2<T>;
 
-
-// TODO: убрать типизацию у арены, при рефакторинге исправить передаваемые размеры
-template <typename T>
 struct Arena {
-    T* base;
+    u8* base;
     i64 size;
     i64 used;
 
     void clear() { used = 0; }
 
-    T& push() {
+    template <typename T>
+    T* push(i64 new_size) {
         auto& arena = *this;
-        T* new_item = cast<T*>(cast<u8*>(arena.base) + arena.used);
-        arena.used += size_of(T);
+        T* new_ptr = cast<T*>(arena.base + arena.used);
+        arena.used += new_size;
+        assert(new_size % size_of(T) == 0);
         assert(arena.used <= arena.size);
-        return *new_item;
-    }
-
-    slice<T> push(i64 count) {
-        auto& arena = *this;
-        slice<T> new_slice = {};
-        new_slice.base = cast<T*>(cast<u8*>(arena.base) + arena.used);
-        new_slice.set_count(count);
-        
-        arena.used += new_slice.size;
-        assert(arena.used <= arena.size);
-        return new_slice;
+        return new_ptr;
     }
 };
 
