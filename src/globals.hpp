@@ -32,12 +32,18 @@ struct is_same<T, T> { static constexpr bool value = true; };
 
 template <typename Out, typename In>
 static constexpr Out cast(In value) {
-    assert(((In)(Out)value == value)
-        || (is_same<In, f32 >::value)
-        || (is_same<In, f64 >::value));
     assert((value == 0)
         || (value > 0 && (Out)value >= 0)
         || (value < 0 && (Out)value <= 0));
+
+    if constexpr (SLOW_MODE) {
+        if constexpr (is_same<In, f32>::value || is_same<In, f64>::value) {
+            assert((value - (In)(Out)value) < 1);
+        } else {
+            assert((value == (In)(Out)value)); // pointer-friendly assert for non-floats
+        }
+    }
+
     return (Out)value;
 }
 
@@ -132,26 +138,28 @@ struct Arena {
     T* base;
     i64 size;
     i64 used;
+
+    void clear() { used = 0; }
+
+    T& push() {
+        auto& arena = *this;
+        T* new_item = cast<T*>(cast<u8*>(arena.base) + arena.used);
+        arena.used += size_of(T);
+        assert(arena.used <= arena.size);
+        return *new_item;
+    }
+
+    slice<T> push(i64 count) {
+        auto& arena = *this;
+        slice<T> new_slice = {};
+        new_slice.base = cast<T*>(cast<u8*>(arena.base) + arena.used);
+        new_slice.set_count(count);
+        
+        arena.used += new_slice.size;
+        assert(arena.used <= arena.size);
+        return new_slice;
+    }
 };
-
-template <typename T>
-static T& arena_push(Arena<T>& arena) {
-    T* new_item = cast<T*>(cast<u8*>(arena.base) + arena.used);
-    arena.used += size_of(T);
-    assert(arena.used <= arena.size);
-    return *new_item;
-}
-
-template <typename T>
-static slice<T> arena_push(Arena<T>& arena, i64 count) {
-    slice<T> new_slice = {};
-    new_slice.base = cast<T*>(cast<u8*>(arena.base) + arena.used);
-    new_slice.set_count(count);
-    
-    arena.used += new_slice.size;
-    assert(arena.used <= arena.size);
-    return new_slice;
-}
 
 // TODO: вынести hm и Platform в отдельные файлы?
 namespace hm {

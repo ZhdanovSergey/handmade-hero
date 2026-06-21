@@ -136,12 +136,12 @@ namespace Game {
 
 		chunks.width = Tiles::WORLD_SIZE_CHUNKS;
 		chunks.height = Tiles::WORLD_SIZE_CHUNKS;
-		chunks.base = cast<Tiles::Chunk*>(arena_push<u8>(world_arena, chunks.get_size()).base);
+		chunks.base = cast<Tiles::Chunk*>(world_arena.push(chunks.get_size()).base);
 
 		for (auto& chunk : chunks) {
 			chunk.tiles.width = Tiles::CHUNK_SIZE_TILES;
 			chunk.tiles.height = Tiles::CHUNK_SIZE_TILES;
-			chunk.tiles.base = cast<Tiles::Tile*>(arena_push<u8>(world_arena, chunk.tiles.get_size()).base);
+			chunk.tiles.base = cast<Tiles::Tile*>(world_arena.push(chunk.tiles.get_size()).base);
 		}
 		
 		for (    u32 screen_y = 0; screen_y < 32; ++screen_y) {
