@@ -131,17 +131,16 @@ static void wait_until_end_of_frame(i64 flip_timestamp) {
 }
 
 static void get_build_file_path(slice<const char> file_name, slice<char> dest) {
-	char file_path_storage[MAX_PATH];
-	slice<char> file_path = file_path_storage;
+	// LATER: обработать пути длиннее MAX_PATH
+	char file_path[MAX_PATH];
 
 	SetLastError(0);
-	GetModuleFileNameA(nullptr, file_path.base, cast<DWORD>(file_path.size));
-	// TODO: обработать пути длиннее MAX_PATH
+	GetModuleFileNameA(nullptr, file_path, sizeof(file_path));
 	assert(GetLastError() != ERROR_INSUFFICIENT_BUFFER);
 
-	slice<char> folder_path = {};
-	folder_path.base = file_path.base;
-	folder_path.size = hm::find_last_index(file_path, +[](char ch) { return ch == '\\'; }) + 1;
+	slice<char> folder_path = file_path;
+	folder_path.size = hm::find_last_index(folder_path, +[](char ch) { return ch == '\\'; }) + 1;
+	assert(folder_path.size > 0); // against -1 from find_last_index
 
 	hm::strcat(folder_path, file_name, dest);
 }
@@ -186,7 +185,7 @@ static Game::Memory create_game_memory() {
 	i64 permanent_size = 64_MB;
 	i64 transient_size = 1_GB;
 	void* base_address = DEV_MODE && UINTPTR_MAX == UINT64_MAX ? (void*)1024_GB : nullptr;
-	// TODO: проверить эффект использования MEM_LARGE_PAGES и AdjustTokenPrivileges в 64-битном билде
+	// LATER: проверить эффект использования MEM_LARGE_PAGES и AdjustTokenPrivileges в 64-битном билде
 	u8* game_storage = cast<u8*>(VirtualAlloc(base_address, cast<SIZE_T>(permanent_size + transient_size), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
 
 	Game::Memory game_memory = {};

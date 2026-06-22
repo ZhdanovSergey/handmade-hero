@@ -39,7 +39,7 @@ namespace Tiles {
 	};
 
 	// TODO: заменить структуры координат на числа x/y в функциях где возможно
-	// TODO: появляются первые признаки const-poisoning, поискать решение без отказа от const
+	// LATER: появляются первые признаки const-poisoning, подумать над отказом от const
 	static bool check_empty_tile(Map& map, const Map_Position& map_pos);
 	static Tile get_tile(Map& map, u32 abs_x, u32 abs_y);
 	static void set_tile(Map& map, u32 abs_x, u32 abs_y, Tile value);

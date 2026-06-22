@@ -87,22 +87,33 @@ struct slice {
     template <typename U>
     slice(slice<U> other) : slice{other.base, other.size} {}
     template <typename U, i64 N>
-    slice(U (&arr)[N])    : slice{reinterpret_cast<U*>(arr), size_of(arr)} {}
+    slice(U (&arr)[N])    : slice{reinterpret_cast<U*>(arr), size_of(arr)} {
+        if constexpr (is_same<U,const char>::value) {
+            // считаем что const char[] всегда означает строковый литерал и оставляем null-term за пределами slice.
+            // завязываться на const не очень прикольно, но такова жизнь
+            if constexpr (SLOW_MODE) {
+                for (i64 i = 0; i < size; ++i) {
+                    assert(i == size - 1 ? !base[i] : base[i]);
+                }
+            }
+            size -= 1;
+        }
+    }
     template <typename U, i64 N, i64 M>
     slice(U (&arr)[N][M]) : slice{reinterpret_cast<U*>(arr), size_of(arr)} {}
     template <typename U>
     slice(slice2<U> other) : slice{other.base, other.get_size()} {};
 
-    i64  get_count() { return size / size_of(T); }
-    void set_count(i64 count) { size = count * size_of(T); }
     T* begin() { return base; }
     T* end()   { return base + get_count(); }
     T& operator[](i64 index) {
-        if constexpr (SLOW_MODE) {
-            i64 max_index = get_count();
-            assert(index >= 0 && index < max_index);
-        }
+        assert(index >= 0 && index < get_count());
         return base[index];
+    }
+    void set_count(i64 count) { size = count * size_of(T); }
+    i64 get_count() {
+        assert(size % size_of(T) == 0);
+        return size / size_of(T);
     }
 };
 template <typename T>
@@ -120,9 +131,9 @@ struct slice2 {
     template <typename U, i32 N, i32 M>
     slice2(U (&arr)[N][M]) : slice2{reinterpret_cast<U*>(arr), M, N} {}
 
+    T* begin()     { return base; }
+    T* end()       { return base + width * height; }
     i64 get_size() { return size_of(T) * width * height; }
-    T* begin() { return base; }
-    T* end()   { return base + width * height; }
     T& get(i32 x, i32 y) {
         assert(x >= 0 && x < width);
         assert(y >= 0 && y < height);
@@ -138,7 +149,7 @@ struct Arena {
     i64 used;
 
     void clear() { used = 0; }
-
+    
     template <typename T>
     T* push(i64 new_size) {
         auto& arena = *this;
@@ -150,7 +161,7 @@ struct Arena {
     }
 };
 
-// TODO: вынести hm и Platform в отдельные файлы?
+// LATER: вынести hm и Platform в отдельные файлы?
 namespace hm {
     template <typename T>
     static i64 find_last_index(slice<T> slice, predicate<T> predicate) {
@@ -187,15 +198,19 @@ namespace hm {
         }
     }
 
-    // TODO: придумать что делать с возможным наличием/отсутствием null в конце src1
-    static void strcat(slice<const char> src1, slice<const char> src2, slice<char> dest) {
-        assert(src1.size + src2.size <= dest.size);
-        src1.size = min(src1.size, dest.size);
-        src2.size = min(src2.size, dest.size - src1.size);
-        memcpy(src1, slice{ dest.base, src1.size });
-        memcpy(src2, slice{ dest.base + src1.size, src2.size });
-        char* last_char = dest.base + src1.size + src2.size - 1;
-        *last_char = 0;
+    static void strcat(slice<const char> src1, slice<const char> src2, slice<char>& dest) {
+        assert(src1.size + src2.size + 1 <= dest.size);
+        if constexpr (SLOW_MODE) {
+            for (auto& ch : src1) assert(ch);
+            for (auto& ch : src2) assert(ch);
+        }
+
+        src1.size = min(src1.size, dest.size - 1);
+        src2.size = min(src2.size, dest.size - 1 - src1.size);
+        dest.size = min(dest.size, src1.size + src2.size + 1);
+        memcpy(src1, dest);
+        memcpy(src2, slice{ dest.base + src1.size, dest.size - src1.size });
+        *(dest.base + dest.size) = 0; // пишем null за пределами slice
     }
 }
 
