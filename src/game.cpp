@@ -43,39 +43,37 @@ namespace Game {
 			player_pos = new_player_pos;
 		}
 
-		// TODO: player_chunk_pos это остатки старой реализации, пока оставил чтобы закоммитить проект в относительно рабочем состоянии.
-		// Сейчас при движении по вертикали видно как появляются/исчезают стенки, видимо сейчас мы рисуем стенки только для текущего чанка
-		auto player_chunk_pos = Tiles::get_chunk_position(player_pos.world_x, player_pos.world_y);
-		
+		draw_rectangle(screen, Color{ 1.0f, 0.0f, 1.0f }, 0.0f, SCREEN_WIDTH_TILES * Tiles::TILE_SIZE, SCREEN_HEIGHT_TILES * Tiles::TILE_SIZE, 0.0f);
+
+		// LATER: код рендеринга ужасен
+		// -----------------------------------------------------------------------------------------------------------------------
+		i32 player_world_x = static_cast<i32>(player_pos.world_x);
+		i32 player_world_y = static_cast<i32>(player_pos.world_y);
 		i32 half_screen_width_tiles  = SCREEN_WIDTH_TILES  / 2;
 		i32 half_screen_height_tiles = SCREEN_HEIGHT_TILES / 2;
-
-		draw_rectangle(screen, Color{ 1.0f, 0.0f, 1.0f }, 0.0f, SCREEN_WIDTH_TILES * Tiles::TILE_SIZE, SCREEN_HEIGHT_TILES * Tiles::TILE_SIZE, 0.0f);
-		for (    i32 y = player_chunk_pos.chunk_y - half_screen_height_tiles - 1; y <= player_chunk_pos.chunk_y + half_screen_height_tiles + 1; ++y) {
-			for (i32 x = player_chunk_pos.chunk_x - half_screen_width_tiles  - 1; x <= player_chunk_pos.chunk_x + half_screen_width_tiles  + 1; ++x) {
-
-				// TODO: избавиться от кастов x и y
+		for (    i32 y = player_world_y - half_screen_height_tiles - 1; y <= player_world_y + half_screen_height_tiles + 1; ++y) {
+			for (i32 x = player_world_x - half_screen_width_tiles  - 1; x <= player_world_x + half_screen_width_tiles  + 1; ++x) {
 				Color color = y >= 0 && x >= 0 && Tiles::get_tile(tile_map, cast<u32>(x), cast<u32>(y))
 					? Color{ 1.0f, 1.0f, 1.0f }
 					: Color{ 0.5f, 0.5f, 0.5f };
 
-				if (x == player_chunk_pos.chunk_x && y == player_chunk_pos.chunk_y) {
+				if (x == player_world_x && y == player_world_y) {
 					color = Color{ 0.0f, 0.0f, 0.0f };
 				}
 
-				f32 min_x =   (x - player_chunk_pos.chunk_x + half_screen_width_tiles)  * Tiles::TILE_SIZE - player_pos.tile_x;
-				f32 min_y = - (y - player_chunk_pos.chunk_y - half_screen_height_tiles) * Tiles::TILE_SIZE + player_pos.tile_y;
+				f32 min_x =   (x - player_world_x + half_screen_width_tiles)  * Tiles::TILE_SIZE - player_pos.tile_x;
+				f32 min_y = - (y - player_world_y - half_screen_height_tiles) * Tiles::TILE_SIZE + player_pos.tile_y;
 				f32 max_x = min_x + Tiles::TILE_SIZE;
 				f32 max_y = min_y - Tiles::TILE_SIZE;
 				draw_rectangle(screen, color, min_x, max_x, min_y, max_y);
 			}
 		}
-
 		f32 player_min_x = half_screen_width_tiles  * Tiles::TILE_SIZE - player_width / 2;
 		f32 player_min_y = half_screen_height_tiles * Tiles::TILE_SIZE;
 		f32 player_max_x = player_min_x + player_width;
 		f32 player_max_y = player_min_y - player_height;
 		draw_rectangle(screen, Color{ 1.0f, 0.0f, 0.0f }, player_min_x, player_max_x, player_min_y, player_max_y);
+		// -----------------------------------------------------------------------------------------------------------------------
 	};
 
 	extern "C" void get_sound_samples(Memory& memory, Sound& sound) {
@@ -143,9 +141,10 @@ namespace Game {
 			chunk.tiles.height = Tiles::CHUNK_SIZE_TILES;
 			chunk.tiles.base = world_arena.push<Tiles::Tile>(chunk.tiles.get_size());
 		}
-		
-		for (    u32 screen_y = 0; screen_y < 32; ++screen_y) {
-			for (u32 screen_x = 0; screen_x < 32; ++screen_x) {
+
+		const u32 SCREENS_TO_INITIALIZE_DIM = 32;
+		for (    u32 screen_y = 0; screen_y < SCREENS_TO_INITIALIZE_DIM; ++screen_y) {
+			for (u32 screen_x = 0; screen_x < SCREENS_TO_INITIALIZE_DIM; ++screen_x) {
 				for (    u32 tile_y = 0; tile_y < SCREEN_HEIGHT_TILES; ++tile_y) {
 					for (u32 tile_x = 0; tile_x < SCREEN_WIDTH_TILES;  ++tile_x) {
 						u32 tile_abs_x = screen_x * SCREEN_WIDTH_TILES  + tile_x;
@@ -156,8 +155,8 @@ namespace Game {
 			}
 		}
 
-		player_pos.world_x = 1;
-		player_pos.world_y = 1;
+		player_pos.world_x = SCREENS_TO_INITIALIZE_DIM * SCREEN_WIDTH_TILES / 2;
+		player_pos.world_y = SCREENS_TO_INITIALIZE_DIM * SCREEN_HEIGHT_TILES / 2;
 		player_pos.tile_x = 1.0f;
 		player_pos.tile_y = 1.0f;
 		Tiles::normalize_position(player_pos);
