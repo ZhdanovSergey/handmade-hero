@@ -30,19 +30,45 @@ struct is_same       { static constexpr bool value = false; };
 template <typename T>
 struct is_same<T, T> { static constexpr bool value = true; };
 
-template <typename Out, typename In>
-static constexpr Out cast(In value) {
-    assert((value == 0)
-        || (value > 0 && (Out)value >= 0)
-        || (value < 0 && (Out)value <= 0));
-
-    if constexpr (is_same<In, f32>::value || is_same<In, f64>::value) {
-        assert((value - (In)(Out)value) > -1);
-        assert((value - (In)(Out)value) < 1);
-    } else {
-        assert((value == (In)(Out)value)); // pointer-friendly check for non-floats
+#define assert_cast_preserves_sign(Type_Out, VALUE)      \
+    if constexpr (SLOW_MODE) {                           \
+        auto orig_value = (VALUE);                       \
+        auto casted_value = (Type_Out)(orig_value);      \
+        assert((orig_value == 0)                         \
+            || (orig_value > 0 && casted_value >= 0)     \
+            || (orig_value < 0 && casted_value <= 0));   \
     }
 
+#define assert_cast_preserves_value(Type_Out, VALUE)                                      \
+    if constexpr (SLOW_MODE) {                                                            \
+        using Type_In = decltype(VALUE);                                                  \
+        auto orig_value = (VALUE);                                                        \
+        auto casted_in_and_out = (Type_In)(Type_Out)(orig_value);                         \
+                                                                                          \
+        if constexpr (is_same<Type_In, f32>::value || is_same<Type_In, f64>::value) {     \
+            assert((orig_value - casted_in_and_out) > - 1);                               \
+            assert((orig_value - casted_in_and_out) <   1);                               \
+        } else {                                                                          \
+            assert((orig_value == casted_in_and_out));                                    \
+        }                                                                                 \
+    }
+
+template <typename Out, typename In>
+static constexpr Out cast(In value) {
+    assert_cast_preserves_sign(Out, value);
+    assert_cast_preserves_value(Out, value);
+    return (Out)value;
+}
+
+template <typename Out, typename In>
+static constexpr Out cast_ignore_sign(In value) {
+    assert_cast_preserves_value(Out, value);
+    return (Out)value;
+}
+
+template <typename Out, typename In>
+static constexpr Out cast_ignore_overflow(In value) {
+    assert_cast_preserves_sign(Out, value);
     return (Out)value;
 }
 

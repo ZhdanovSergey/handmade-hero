@@ -47,13 +47,14 @@ namespace Game {
 
 		// LATER: код рендеринга ужасен
 		// -----------------------------------------------------------------------------------------------------------------------
-		i32 player_world_x = static_cast<i32>(player_pos.world_x);
-		i32 player_world_y = static_cast<i32>(player_pos.world_y);
+		i32 player_world_x = cast_ignore_sign<i32>(player_pos.world_x);
+		i32 player_world_y = cast_ignore_sign<i32>(player_pos.world_y);
 		i32 half_screen_width_tiles  = SCREEN_WIDTH_TILES  / 2;
 		i32 half_screen_height_tiles = SCREEN_HEIGHT_TILES / 2;
+
 		for (    i32 y = player_world_y - half_screen_height_tiles - 1; y <= player_world_y + half_screen_height_tiles + 1; ++y) {
 			for (i32 x = player_world_x - half_screen_width_tiles  - 1; x <= player_world_x + half_screen_width_tiles  + 1; ++x) {
-				Color color = y >= 0 && x >= 0 && Tiles::get_tile(tile_map, cast<u32>(x), cast<u32>(y))
+				Color color = Tiles::get_tile(tile_map, cast_ignore_sign<u32>(x), cast_ignore_sign<u32>(y))
 					? Color{ 1.0f, 1.0f, 1.0f }
 					: Color{ 0.5f, 0.5f, 0.5f };
 
@@ -68,6 +69,7 @@ namespace Game {
 				draw_rectangle(screen, color, min_x, max_x, min_y, max_y);
 			}
 		}
+
 		f32 player_min_x = half_screen_width_tiles  * Tiles::TILE_SIZE - player_width / 2;
 		f32 player_min_y = half_screen_height_tiles * Tiles::TILE_SIZE;
 		f32 player_max_x = player_min_x + player_width;
@@ -155,10 +157,14 @@ namespace Game {
 			}
 		}
 
-		player_pos.world_x = SCREENS_TO_INITIALIZE_DIM * SCREEN_WIDTH_TILES / 2;
-		player_pos.world_y = SCREENS_TO_INITIALIZE_DIM * SCREEN_HEIGHT_TILES / 2;
-		player_pos.tile_x = 1.0f;
-		player_pos.tile_y = 1.0f;
+		// TODO: проверить что произойдет при underflow координат игрока
+		// player_pos.world_x = SCREENS_TO_INITIALIZE_DIM * SCREEN_WIDTH_TILES / 2;
+		// player_pos.world_y = SCREENS_TO_INITIALIZE_DIM * SCREEN_HEIGHT_TILES / 2;
+		player_pos.world_x = 1;
+		player_pos.world_y = 1;
+
+		player_pos.tile_x = Tiles::TILE_SIZE / 2;
+		player_pos.tile_y = Tiles::TILE_SIZE / 2;
 		Tiles::normalize_position(player_pos);
 		
 		assert(size_of(Game_State) <= memory.permanent.size);

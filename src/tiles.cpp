@@ -54,7 +54,7 @@ namespace Tiles {
 	}
 
 	static Chunk* get_chunk(Map& map, const Chunk_Position& chunk_pos) {
-		// TODO: finish this
+		// TODO: реализовать, сейчас все время отдаем один и тот же чанк
 		return map.chunks.base;
 	};
 }
