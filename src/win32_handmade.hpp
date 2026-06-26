@@ -20,10 +20,10 @@ static const f32 SLEEP_GRANULARITY_SECONDS = (f32)(timeBeginPeriod(1) == TIMERR_
 static const f32 TARGET_SECONDS_PER_FRAME = get_target_seconds_per_frame();
 
 struct Game_Code {
-	HMODULE dll;
-	FILETIME write_time;
 	char dll_path[MAX_PATH];
 	char temp_dll_path[MAX_PATH];
+	HMODULE dll;
+	FILETIME write_time;
 	Game::Update_And_Render* update_and_render;
 	Game::Get_Sound_Samples* get_sound_samples;
 };
@@ -110,5 +110,5 @@ static void wait_until_end_of_frame(i64 flip_timestamp);
 static f32 get_seconds_elapsed(i64 start);
 static i64 get_timestamp();
 
-static void get_build_file_path(slice<const char> file_name, slice<char> dest);
+static void get_build_file_path(const char* file_name, char* result, DWORD result_size);
 static FILETIME get_file_write_time(const char* file_name);

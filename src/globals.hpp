@@ -68,9 +68,6 @@ Deferrer(F) -> Deferrer<F>;
 #define defer(code) Deferrer CONCAT(defer_, __LINE__){[&](){ code; }}
 
 template <typename T>
-using predicate = bool (*)(T);
-
-template <typename T>
 struct slice2;
 
 template <typename T>
@@ -87,18 +84,7 @@ struct slice {
     template <typename U>
     slice(slice<U> other) : slice{other.base, other.size} {}
     template <typename U, i64 N>
-    slice(U (&arr)[N])    : slice{reinterpret_cast<U*>(arr), size_of(arr)} {
-        if constexpr (is_same<U,const char>::value) {
-            // считаем что const char[] всегда означает строковый литерал и оставляем null-term за пределами slice.
-            // завязываться на const не очень прикольно, но такова жизнь
-            if constexpr (SLOW_MODE) {
-                for (i64 i = 0; i < size; ++i) {
-                    assert(i == size - 1 ? !base[i] : base[i]);
-                }
-            }
-            size -= 1;
-        }
-    }
+    slice(U (&arr)[N])    : slice{reinterpret_cast<U*>(arr), size_of(arr)} {}
     template <typename U, i64 N, i64 M>
     slice(U (&arr)[N][M]) : slice{reinterpret_cast<U*>(arr), size_of(arr)} {}
     template <typename U>
@@ -164,14 +150,6 @@ struct Arena {
 // LATER: вынести hm и Platform в отдельные файлы?
 namespace hm {
     template <typename T>
-    static i64 find_last_index(slice<T> slice, predicate<T> predicate) {
-        for (i64 index = slice.get_count() - 1; index >= 0; --index) {
-            if (predicate(slice[index])) return index;
-        }
-        return -1;
-    };
-
-    template <typename T>
     static constexpr T   min(T a,   T b)   { return a < b ? a : b; }
     static constexpr i32 max(i32 a, i32 b) { return a > b ? a : b; }
     template <typename T>
@@ -182,7 +160,7 @@ namespace hm {
     static constexpr i32 floor (f32 x) { i32 x_trunc = cast<i32>(x); return x_trunc - (x < x_trunc); }
 
     template <typename T, i32 N>
-    static constexpr i32 array_size(const T (&)[N]) { return N; }
+    static constexpr i32 array_count(const T (&)[N]) { return N; }
     
     template <typename T>
     static void swap(T& a, T& b) { T temp = a; a = b; b = temp; }
@@ -196,21 +174,6 @@ namespace hm {
         for (i64 i = 0; i < min(src.size, dest.size); ++i) {
             dest[i] = src[i];
         }
-    }
-
-    static void strcat(slice<const char> src1, slice<const char> src2, slice<char>& dest) {
-        assert(src1.size + src2.size + 1 <= dest.size);
-        if constexpr (SLOW_MODE) {
-            for (auto& ch : src1) assert(ch);
-            for (auto& ch : src2) assert(ch);
-        }
-
-        src1.size = min(src1.size, dest.size - 1);
-        src2.size = min(src2.size, dest.size - 1 - src1.size);
-        dest.size = min(dest.size, src1.size + src2.size + 1);
-        memcpy(src1, dest);
-        memcpy(src2, slice{ dest.base + src1.size, dest.size - src1.size });
-        *(dest.base + dest.size) = 0; // пишем null за пределами slice
     }
 }
 

@@ -130,19 +130,24 @@ static void wait_until_end_of_frame(i64 flip_timestamp) {
 	}
 }
 
-static void get_build_file_path(slice<const char> file_name, slice<char> dest) {
-	// LATER: обработать пути длиннее MAX_PATH
-	char file_path[MAX_PATH];
-
+static void get_build_file_path(const char* file_name, char* result, DWORD result_size) {
 	SetLastError(0);
-	GetModuleFileNameA(nullptr, file_path, sizeof(file_path));
-	assert(GetLastError() != ERROR_INSUFFICIENT_BUFFER);
+	GetModuleFileNameA(nullptr, result, result_size);
+	if (GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
+		// LATER: обработать пути длиннее MAX_PATH
+		assert(false);
+		return;
+	}
 
-	slice<char> folder_path = file_path;
-	folder_path.size = hm::find_last_index(folder_path, +[](char ch) { return ch == '\\'; }) + 1;
-	assert(folder_path.size > 0); // against -1 from find_last_index
+	i64 folder_path_size = strrchr(result, '\\') + 1 - result;
+	assert(folder_path_size >= 0 && folder_path_size < result_size);
+	result[folder_path_size] = 0;
 
-	hm::strcat(folder_path, file_name, dest);
+	if (strcat_s(result, result_size, file_name) == ERANGE) {
+		// LATER: обработать пути длиннее MAX_PATH
+		assert(false);
+		return;
+	}
 }
 
 static FILETIME get_file_write_time(const char* file_name) {
@@ -199,8 +204,8 @@ static Game::Memory create_game_memory() {
 
 static Game_Code create_game_code() {
 	Game_Code game_code = {};
-	get_build_file_path("game.dll", game_code.dll_path);
-	get_build_file_path("game_temp.dll", game_code.temp_dll_path);
+	get_build_file_path("game.dll",      game_code.dll_path,      sizeof(game_code.dll_path));
+	get_build_file_path("game_temp.dll", game_code.temp_dll_path, sizeof(game_code.temp_dll_path));
 	load_game_code(game_code);
 	return game_code;
 }
@@ -346,8 +351,8 @@ static Replayer create_replayer(const Game::Memory& game_memory) {
 	if constexpr (!DEV_MODE) return {};
 
 	Replayer replayer = {};
-	get_build_file_path("replay_state.hms", replayer.state_path);
-	get_build_file_path("replay_input.hmi", replayer.input_path);
+	get_build_file_path("replay_state.hms", replayer.state_path, sizeof(replayer.state_path));
+	get_build_file_path("replay_input.hmi", replayer.input_path, sizeof(replayer.input_path));
 	replayer.state_handle = CreateFileA(replayer.state_path, GENERIC_READ | GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_FLAG_NO_BUFFERING, nullptr);
 	replayer.input_handle = CreateFileA(replayer.input_path, GENERIC_READ | GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
 	return replayer;
@@ -616,7 +621,7 @@ static void draw_sound_sync(Screen& screen, Sound& sound) {
 
 	if (!sound.game_sound.samples.size ||
 		sound.buffer->GetCurrentPosition(&sound.dev_markers[sound.dev_markers_index].flip_play_cursor, nullptr) != DS_OK) {
-		sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_size(sound.dev_markers);
+		sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_count(sound.dev_markers);
 		return;
 	}
 
@@ -649,7 +654,7 @@ static void draw_sound_sync(Screen& screen, Sound& sound) {
 		draw_vertical_line(screen, (flip_play_cursor_x + safety_bytes_x / 2) % screen.game_screen.width, top, bottom, 0xffffff);
 	}
 	
-	sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_size(sound.dev_markers);
+	sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_count(sound.dev_markers);
 }
 
 namespace Platform {
