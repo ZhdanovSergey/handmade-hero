@@ -68,7 +68,7 @@ namespace Game {
 	struct Game_State {
 		World world;
 		Arena world_arena;
-		Tiles::Map_Position player_pos;
+		Tiles::Position player_pos;
 		f32 pixels_per_unit;
 		f32 sound_t_sin;
 	};

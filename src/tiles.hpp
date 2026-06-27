@@ -5,12 +5,12 @@
 namespace Tiles {
 	// временные значения для проверки перехода через границы чанков
 	// static const i32 WORLD_SIZE_CHUNKS = 4;
-	// static const i32 CHUNK_POSITION_SHIFT = 8;
+	// static const i32 CHUNK_LOOKUP_KEY_SHIFT = 8;
 	static const i32 WORLD_SIZE_CHUNKS = 128;
-	static const i32 CHUNK_POSITION_SHIFT = 4;
+	static const i32 CHUNK_LOOKUP_KEY_SHIFT = 4;
 
-	static const i32 CHUNK_SIZE_TILES = 1 << CHUNK_POSITION_SHIFT;
-	static const u32 CHUNK_POSITION_MASK = CHUNK_SIZE_TILES - 1;
+	static const i32 CHUNK_SIZE_TILES = 1 << CHUNK_LOOKUP_KEY_SHIFT;
+	static const u32 CHUNK_REL_TILE_POSITION_MASK = CHUNK_SIZE_TILES - 1;
 	static const f32 TILE_SIZE = 1.4f;
 
 	using Tile = u32;
@@ -23,27 +23,26 @@ namespace Tiles {
 		slice2<Chunk> chunks;
     };
 
-	// TODO: переименовать в Position
-	// TODO: сделать сеттеры с автоматической нормализацией после введения векторов + конструктор с нормализацией
-	struct Map_Position {
-		// TODO: поменять названия на tile_abs_x/tile_rel_x
-		u32 world_x, world_y; // верхние биты это координаты чанка в мире, нижние биты это координаты ячейки внутри чанка
+	// LATER: сделать сеттеры с нормализацией после введения векторов (без конструктора)
+	struct Position {
+		u32 world_x, world_y; // нижние CHUNK_LOOKUP_KEY_SHIFT бит это координаты ячейки внутри чанка, верхние биты это координаты чанка в мире
 		f32 tile_x, tile_y;
 	};
 
-	// TODO: разбить эту структуру на 2
-	struct Chunk_Position {
-		// TODO: поменять названия на chunk_lookup_x/chunk_rel_x
-		u32 lookup_x, lookup_y;
-		i32 chunk_x, chunk_y;
+	struct Chunk_Lookup_Key {
+		i32 x, y;
 	};
 
-	// TODO: заменить структуры координат на числа x/y в функциях где возможно
+	struct Chunk_Rel_Tile_Position {
+		i32 x, y;
+	};
+
 	// LATER: появляются первые признаки const-poisoning, подумать над отказом от const
-	static bool check_empty_tile(Map& map, const Map_Position& map_pos);
-	static Tile get_tile(Map& map, u32 abs_x, u32 abs_y);
-	static void set_tile(Map& map, u32 abs_x, u32 abs_y, Tile value);
-	static Chunk* get_chunk(Map& map, const Chunk_Position& map_pos);
-	static Chunk_Position get_chunk_position(u32 tile_abs_x, u32 tile_abs_y);
-	static void normalize_position(Map_Position& position);
+	static bool check_empty_tile(Map& map, u32 world_x, u32 world_y);
+	static Tile get_tile(Map& map, u32 world_x, u32 world_y);
+	static void set_tile(Map& map, u32 world_x, u32 world_y, Tile value);
+	static Chunk* get_chunk(Map& map, u32 world_x, u32 world_y);
+	static Chunk_Lookup_Key get_chunk_lookup_key(u32 world_x, u32 world_y);
+	static Chunk_Rel_Tile_Position get_chunk_rel_tile_position(u32 world_x, u32 world_y);
+	static void normalize_position(Position& position);
 }

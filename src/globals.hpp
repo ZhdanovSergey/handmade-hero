@@ -14,12 +14,10 @@
 
 using f32 = float;
 using f64 = double;
-
 using i8  = int8_t;
 using i16 = int16_t;
 using i32 = int32_t;
 using i64 = int64_t;
-
 using u8  = uint8_t;
 using u16 = uint16_t;
 using u32 = uint32_t;
@@ -39,15 +37,15 @@ struct is_same<T, T> { static constexpr bool value = true; };
             || (orig_value < 0 && casted_value <= 0));   \
     }
 
-#define assert_cast_preserves_value(Type_Out, VALUE)                                      \
+#define assert_cast_preserves_data(Type_Out, VALUE)                                       \
     if constexpr (SLOW_MODE) {                                                            \
         using Type_In = decltype(VALUE);                                                  \
         auto orig_value = (VALUE);                                                        \
         auto casted_in_and_out = (Type_In)(Type_Out)(orig_value);                         \
                                                                                           \
         if constexpr (is_same<Type_In, f32>::value || is_same<Type_In, f64>::value) {     \
-            assert((orig_value - casted_in_and_out) > - 1);                               \
-            assert((orig_value - casted_in_and_out) <   1);                               \
+            auto diff = orig_value - casted_in_and_out;                                   \
+            assert(-1 < diff && diff < 1);                                                \
         } else {                                                                          \
             assert((orig_value == casted_in_and_out));                                    \
         }                                                                                 \
@@ -55,19 +53,19 @@ struct is_same<T, T> { static constexpr bool value = true; };
 
 template <typename Out, typename In>
 static constexpr Out cast(In value) {
+    assert_cast_preserves_data(Out, value);
     assert_cast_preserves_sign(Out, value);
-    assert_cast_preserves_value(Out, value);
     return (Out)value;
 }
 
 template <typename Out, typename In>
 static constexpr Out cast_ignore_sign(In value) {
-    assert_cast_preserves_value(Out, value);
+    assert_cast_preserves_data(Out, value);
     return (Out)value;
 }
 
 template <typename Out, typename In>
-static constexpr Out cast_ignore_overflow(In value) {
+static constexpr Out cast_ignore_data_loss(In value) {
     assert_cast_preserves_sign(Out, value);
     return (Out)value;
 }
@@ -182,8 +180,8 @@ namespace hm {
     static constexpr T   sign  (T x)   { return cast<T>((x > 0) - (x < 0)); }
     static constexpr i32 abs   (i32 x) { return sign(x) * x; }
     static constexpr i32 round (f32 x) { return cast<i32>(x + 0.5f * sign(x)); }
-    static constexpr i32 ceil  (f32 x) { i32 x_trunc = cast<i32>(x); return x_trunc + (x > x_trunc); }
-    static constexpr i32 floor (f32 x) { i32 x_trunc = cast<i32>(x); return x_trunc - (x < x_trunc); }
+    static constexpr i32 ceil  (f32 x) { i32 x_trunc = cast<i32>(x); return x_trunc + (x_trunc < x); }
+    static constexpr i32 floor (f32 x) { i32 x_trunc = cast<i32>(x); return x_trunc - (x_trunc > x); }
 
     template <typename T, i32 N>
     static constexpr i32 array_count(const T (&)[N]) { return N; }

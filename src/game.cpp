@@ -37,16 +37,14 @@ namespace Game {
 		new_player_pos_right.tile_x += player_width / 2;
 		Tiles::normalize_position(new_player_pos_right);
 
-		if (Tiles::check_empty_tile(tile_map, new_player_pos_left)
-		 && Tiles::check_empty_tile(tile_map, new_player_pos)
-		 && Tiles::check_empty_tile(tile_map, new_player_pos_right)) {
+		if (Tiles::check_empty_tile(tile_map, new_player_pos_left.world_x,  new_player_pos_left.world_y)
+		 && Tiles::check_empty_tile(tile_map, new_player_pos.world_x,       new_player_pos.world_y)
+		 && Tiles::check_empty_tile(tile_map, new_player_pos_right.world_x, new_player_pos_right.world_y)) {
 			player_pos = new_player_pos;
 		}
 
 		draw_rectangle(screen, Color{ 1.0f, 0.0f, 1.0f }, 0.0f, SCREEN_WIDTH_TILES * Tiles::TILE_SIZE, SCREEN_HEIGHT_TILES * Tiles::TILE_SIZE, 0.0f);
 
-		// LATER: код рендеринга ужасен
-		// -----------------------------------------------------------------------------------------------------------------------
 		i32 player_world_x = cast_ignore_sign<i32>(player_pos.world_x);
 		i32 player_world_y = cast_ignore_sign<i32>(player_pos.world_y);
 		i32 half_screen_width_tiles  = SCREEN_WIDTH_TILES  / 2;
@@ -75,7 +73,6 @@ namespace Game {
 		f32 player_max_x = player_min_x + player_width;
 		f32 player_max_y = player_min_y - player_height;
 		draw_rectangle(screen, Color{ 1.0f, 0.0f, 0.0f }, player_min_x, player_max_x, player_min_y, player_max_y);
-		// -----------------------------------------------------------------------------------------------------------------------
 	};
 
 	extern "C" void get_sound_samples(Memory& memory, Sound& sound) {
@@ -157,9 +154,9 @@ namespace Game {
 			}
 		}
 
-		// TODO: проверить что произойдет при underflow координат игрока
 		// player_pos.world_x = SCREENS_TO_INITIALIZE_DIM * SCREEN_WIDTH_TILES / 2;
 		// player_pos.world_y = SCREENS_TO_INITIALIZE_DIM * SCREEN_HEIGHT_TILES / 2;
+		// TODO: убедиться что при underflow координат игрока все нормально работает
 		player_pos.world_x = 1;
 		player_pos.world_y = 1;
 
@@ -168,7 +165,7 @@ namespace Game {
 		Tiles::normalize_position(player_pos);
 		
 		assert(size_of(Game_State) <= memory.permanent.size);
-		assert(Tiles::check_empty_tile(tile_map, player_pos));
+		assert(Tiles::check_empty_tile(tile_map, player_pos.world_x, player_pos.world_y));
 		memory.is_initialized = true;
 	}
 
