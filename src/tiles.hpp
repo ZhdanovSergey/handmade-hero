@@ -25,24 +25,24 @@ namespace Tiles {
 
 	// LATER: сделать сеттеры с нормализацией после введения векторов (без конструктора)
 	struct Position {
-		u32 world_x, world_y; // нижние CHUNK_LOOKUP_KEY_SHIFT бит это координаты ячейки внутри чанка, верхние биты это координаты чанка в мире
-		f32 tile_x, tile_y;
+		u32 abs_x, abs_y; // нижние CHUNK_LOOKUP_KEY_SHIFT бит это координаты ячейки внутри чанка, верхние биты это координаты чанка в мире
+		f32 tile_rel_x, tile_rel_y;
 	};
 
 	struct Chunk_Lookup_Key {
 		i32 x, y;
 	};
 
-	struct Chunk_Rel_Tile_Position {
+	struct Chunk_Rel_Position {
 		i32 x, y;
 	};
 
 	// LATER: появляются первые признаки const-poisoning, подумать над отказом от const
-	static bool check_empty_tile(Map& map, u32 world_x, u32 world_y);
-	static Tile get_tile(Map& map, u32 world_x, u32 world_y);
-	static void set_tile(Map& map, u32 world_x, u32 world_y, Tile value);
-	static Chunk* get_chunk(Map& map, u32 world_x, u32 world_y);
-	static Chunk_Lookup_Key get_chunk_lookup_key(u32 world_x, u32 world_y);
-	static Chunk_Rel_Tile_Position get_chunk_rel_tile_position(u32 world_x, u32 world_y);
+	static bool check_empty_tile(Map& map, u32 abs_x, u32 abs_y);
+	static Tile get_tile(Map& map, u32 abs_x, u32 abs_y);
+	static void set_tile(Map& map, u32 abs_x, u32 abs_y, Tile value);
+	static Chunk* get_chunk(Map& map, u32 abs_x, u32 abs_y);
+	static Chunk_Lookup_Key get_chunk_lookup_key(u32 abs_x, u32 abs_y);
+	static Chunk_Rel_Position get_chunk_rel_position(u32 abs_x, u32 abs_y);
 	static void normalize_position(Position& position);
 }

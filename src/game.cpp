@@ -21,8 +21,8 @@ namespace Game {
 			if (controller.move_up.is_pressed)    player_dy =   player_speed;
 			if (controller.move_down.is_pressed)  player_dy = - player_speed;
 			
-			new_player_pos.tile_x += player_dx * input.frame_dt;
-			new_player_pos.tile_y += player_dy * input.frame_dt;
+			new_player_pos.tile_rel_x += player_dx * input.frame_dt;
+			new_player_pos.tile_rel_y += player_dy * input.frame_dt;
 			Tiles::normalize_position(new_player_pos);
 		}
 
@@ -30,38 +30,38 @@ namespace Game {
 		f32 player_height = 1.4f;
 
 		auto new_player_pos_left = new_player_pos;
-		new_player_pos_left.tile_x -= player_width / 2;
+		new_player_pos_left.tile_rel_x -= player_width / 2;
 		Tiles::normalize_position(new_player_pos_left);
 
 		auto new_player_pos_right = new_player_pos;
-		new_player_pos_right.tile_x += player_width / 2;
+		new_player_pos_right.tile_rel_x += player_width / 2;
 		Tiles::normalize_position(new_player_pos_right);
 
-		if (Tiles::check_empty_tile(tile_map, new_player_pos_left.world_x,  new_player_pos_left.world_y)
-		 && Tiles::check_empty_tile(tile_map, new_player_pos.world_x,       new_player_pos.world_y)
-		 && Tiles::check_empty_tile(tile_map, new_player_pos_right.world_x, new_player_pos_right.world_y)) {
+		if (Tiles::check_empty_tile(tile_map, new_player_pos_left.abs_x,  new_player_pos_left.abs_y)
+		 && Tiles::check_empty_tile(tile_map, new_player_pos.abs_x,       new_player_pos.abs_y)
+		 && Tiles::check_empty_tile(tile_map, new_player_pos_right.abs_x, new_player_pos_right.abs_y)) {
 			player_pos = new_player_pos;
 		}
 
 		draw_rectangle(screen, Color{ 1.0f, 0.0f, 1.0f }, 0.0f, SCREEN_WIDTH_TILES * Tiles::TILE_SIZE, SCREEN_HEIGHT_TILES * Tiles::TILE_SIZE, 0.0f);
 
-		i32 player_world_x = cast_ignore_sign<i32>(player_pos.world_x);
-		i32 player_world_y = cast_ignore_sign<i32>(player_pos.world_y);
+		i32 player_abs_x = cast_ignore_sign<i32>(player_pos.abs_x);
+		i32 player_abs_y = cast_ignore_sign<i32>(player_pos.abs_y);
 		i32 half_screen_width_tiles  = SCREEN_WIDTH_TILES  / 2;
 		i32 half_screen_height_tiles = SCREEN_HEIGHT_TILES / 2;
 
-		for (    i32 y = player_world_y - half_screen_height_tiles - 1; y <= player_world_y + half_screen_height_tiles + 1; ++y) {
-			for (i32 x = player_world_x - half_screen_width_tiles  - 1; x <= player_world_x + half_screen_width_tiles  + 1; ++x) {
+		for (    i32 y = player_abs_y - half_screen_height_tiles - 1; y <= player_abs_y + half_screen_height_tiles + 1; ++y) {
+			for (i32 x = player_abs_x - half_screen_width_tiles  - 1; x <= player_abs_x + half_screen_width_tiles  + 1; ++x) {
 				Color color = Tiles::get_tile(tile_map, cast_ignore_sign<u32>(x), cast_ignore_sign<u32>(y))
 					? Color{ 1.0f, 1.0f, 1.0f }
 					: Color{ 0.5f, 0.5f, 0.5f };
 
-				if (x == player_world_x && y == player_world_y) {
+				if (x == player_abs_x && y == player_abs_y) {
 					color = Color{ 0.0f, 0.0f, 0.0f };
 				}
 
-				f32 min_x =   (x - player_world_x + half_screen_width_tiles)  * Tiles::TILE_SIZE - player_pos.tile_x;
-				f32 min_y = - (y - player_world_y - half_screen_height_tiles) * Tiles::TILE_SIZE + player_pos.tile_y;
+				f32 min_x =   (x - player_abs_x + half_screen_width_tiles)  * Tiles::TILE_SIZE - player_pos.tile_rel_x;
+				f32 min_y = - (y - player_abs_y - half_screen_height_tiles) * Tiles::TILE_SIZE + player_pos.tile_rel_y;
 				f32 max_x = min_x + Tiles::TILE_SIZE;
 				f32 max_y = min_y - Tiles::TILE_SIZE;
 				draw_rectangle(screen, color, min_x, max_x, min_y, max_y);
@@ -154,18 +154,18 @@ namespace Game {
 			}
 		}
 
-		// player_pos.world_x = SCREENS_TO_INITIALIZE_DIM * SCREEN_WIDTH_TILES / 2;
-		// player_pos.world_y = SCREENS_TO_INITIALIZE_DIM * SCREEN_HEIGHT_TILES / 2;
+		// player_pos.abs_x = SCREENS_TO_INITIALIZE_DIM * SCREEN_WIDTH_TILES / 2;
+		// player_pos.abs_y = SCREENS_TO_INITIALIZE_DIM * SCREEN_HEIGHT_TILES / 2;
 		// TODO: убедиться что при underflow координат игрока все нормально работает
-		player_pos.world_x = 1;
-		player_pos.world_y = 1;
+		player_pos.abs_x = 1;
+		player_pos.abs_y = 1;
 
-		player_pos.tile_x = Tiles::TILE_SIZE / 2;
-		player_pos.tile_y = Tiles::TILE_SIZE / 2;
+		player_pos.tile_rel_x = Tiles::TILE_SIZE / 2;
+		player_pos.tile_rel_y = Tiles::TILE_SIZE / 2;
 		Tiles::normalize_position(player_pos);
 		
 		assert(size_of(Game_State) <= memory.permanent.size);
-		assert(Tiles::check_empty_tile(tile_map, player_pos.world_x, player_pos.world_y));
+		assert(Tiles::check_empty_tile(tile_map, player_pos.abs_x, player_pos.abs_y));
 		memory.is_initialized = true;
 	}
 
