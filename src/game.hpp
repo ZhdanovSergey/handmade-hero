@@ -6,9 +6,9 @@
 namespace Game {
 	static const i32 SCENE_WIDTH_TILES = 17;
 	static const i32 SCENE_HEIGHT_TILES = 9;
-	static const i32 SCENES_PER_SCREEN = 10;
+	static const i32 SCENES_PER_SCREEN = 1;
 
-	struct Button {
+	struct Controller_Button {
 		bool is_pressed;
 		i32 transitions_count;
 	};
@@ -20,16 +20,16 @@ namespace Game {
 		f32 average_x, average_y;
 		f32 min_x, min_y;
 		f32 max_x, max_y;
-		Button start, back;
-		Button left_shoulder, right_shoulder;
-		Button move_up, move_down, move_left, move_right;
-		Button action_up, action_down, action_left, action_right;
+		Controller_Button start, back;
+		Controller_Button left_shoulder, right_shoulder;
+		Controller_Button move_up, move_down, move_left, move_right;
+		Controller_Button action_up, action_down, action_left, action_right;
 	};
 
 	struct Mouse {
 		i32 x, y;
-		Button left_button;
-		Button right_button;
+		Controller_Button left_button;
+		Controller_Button right_button;
 	};
 
 	struct Input {

@@ -264,43 +264,52 @@ static Input create_input() {
 static void collect_gamepad_input(Input& input) {
 	auto& controller = input.game_input.controllers[1];
 
-	XINPUT_STATE state;
-	if (input.XInputGetState(0, &state)) {
-		controller.is_connected = false;
-		return;
-	};
-	
-	controller.is_connected = true;
+	XINPUT_STATE xinput_state;
+	controller.is_connected = !input.XInputGetState(0, &xinput_state);
+	if (!controller.is_connected) return;
+
 	controller.start_x = controller.end_x;
 	controller.start_y = controller.end_y;
-	controller.end_x = get_normalized_gamepad_stick_value(state.Gamepad.sThumbLX);
-	controller.end_y = get_normalized_gamepad_stick_value(state.Gamepad.sThumbLY);
-	controller.average_x = controller.min_x = controller.max_x = controller.end_x;
-	controller.average_y = controller.min_y = controller.max_y = controller.end_y;
-	controller.is_analog = controller.average_x || controller.average_y;
+	controller.end_x = get_normalized_gamepad_stick_value(xinput_state.Gamepad.sThumbLX);
+	controller.end_y = get_normalized_gamepad_stick_value(xinput_state.Gamepad.sThumbLY);
 
-	collect_gamepad_button_input(controller.start,		    state.Gamepad.wButtons & XINPUT_GAMEPAD_START);
-	collect_gamepad_button_input(controller.back,			state.Gamepad.wButtons & XINPUT_GAMEPAD_BACK);
-	collect_gamepad_button_input(controller.left_shoulder,  state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER);
-	collect_gamepad_button_input(controller.right_shoulder, state.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER);
+	controller.min_x = min(controller.start_x, controller.end_x);
+	controller.min_y = min(controller.start_y, controller.end_y);
+	controller.max_x = max(controller.start_x, controller.end_x);
+	controller.max_y = max(controller.start_y, controller.end_y);
+	controller.average_x = (controller.start_x + controller.end_x) / 2;
+	controller.average_y = (controller.start_y + controller.end_y) / 2;
 
-	collect_gamepad_button_input(controller.move_up, 	    state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_UP);
-	collect_gamepad_button_input(controller.move_down, 	    state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_DOWN);
-	collect_gamepad_button_input(controller.move_left, 	    state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_LEFT);
-	collect_gamepad_button_input(controller.move_right,     state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT);
+	controller.is_analog = controller.start_x || controller.start_y || controller.end_x || controller.end_y;
+	if (controller.is_analog) {
+		process_gamepad_button_input(controller.move_left,  controller.average_x < 0);
+		process_gamepad_button_input(controller.move_right, controller.average_x > 0);
+		process_gamepad_button_input(controller.move_down,  controller.average_y < 0);
+		process_gamepad_button_input(controller.move_up,    controller.average_y > 0);
+	} else {
+		process_gamepad_button_input(controller.move_left, 	xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_LEFT);
+		process_gamepad_button_input(controller.move_right, xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT);
+		process_gamepad_button_input(controller.move_down, 	xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_DOWN);
+		process_gamepad_button_input(controller.move_up, 	xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_UP);
+	}
 
-	collect_gamepad_button_input(controller.action_up, 	    state.Gamepad.wButtons & XINPUT_GAMEPAD_Y);
-	collect_gamepad_button_input(controller.action_down,    state.Gamepad.wButtons & XINPUT_GAMEPAD_A);
-	collect_gamepad_button_input(controller.action_left,    state.Gamepad.wButtons & XINPUT_GAMEPAD_X);
-	collect_gamepad_button_input(controller.action_right,   state.Gamepad.wButtons & XINPUT_GAMEPAD_B);
+	process_gamepad_button_input(controller.start,		    xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_START);
+	process_gamepad_button_input(controller.back,			xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_BACK);
+	process_gamepad_button_input(controller.left_shoulder,  xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER);
+	process_gamepad_button_input(controller.right_shoulder, xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER);
+
+	process_gamepad_button_input(controller.action_up, 	    xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_Y);
+	process_gamepad_button_input(controller.action_down,    xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_A);
+	process_gamepad_button_input(controller.action_left,    xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_X);
+	process_gamepad_button_input(controller.action_right,   xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_B);
 }
 
 static f32 get_normalized_gamepad_stick_value(SHORT value) {
 	bool is_outside_deadzone = hm::abs(value) > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE;
-	return is_outside_deadzone * value / 32768.0f;
+	return is_outside_deadzone * value / cast<f32>(- INT16_MIN);
 }
 
-static void collect_gamepad_button_input(Game::Button& state, bool is_pressed) {
+static void process_gamepad_button_input(Game::Controller_Button& state, bool is_pressed) {
 	state.transitions_count += is_pressed != state.is_pressed;
 	state.is_pressed = is_pressed;
 }
@@ -309,7 +318,7 @@ static void collect_keyboard_button_input(Input& input, WPARAM key_code, bool is
 	auto& controller = input.game_input.controllers[0];
 	controller.is_connected = true;
 
-	Game::Button* button = nullptr;
+	Game::Controller_Button* button = nullptr;
 	switch (key_code) {
 		case VK_RETURN: button = &controller.start;		     break;
 		case VK_ESCAPE: button = &controller.back;		     break;

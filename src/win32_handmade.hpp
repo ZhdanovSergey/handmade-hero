@@ -29,7 +29,6 @@ struct Game_Code {
 };
 
 struct Input {
-	// TODO: использовать 2 game_input на случай, если в будущем будем считывать чаще чем каждый кадр
 	Game::Input game_input;
 	Xinput_Get_State* XInputGetState;
 	Xinput_Set_State* XInputSetState;
@@ -87,12 +86,12 @@ static void load_game_code(Game_Code& game_code);
 static void reload_game_code_if_recompiled(Game_Code& game_code);
 
 static Input create_input();
+static void reset_input_counters(Input& input);
 static void collect_keyboard_button_input(Input& input, WPARAM key_code, bool is_pressed);
 static void collect_mouse_input(Input& input, HWND window);
 static void collect_gamepad_input(Input& input);
-static void collect_gamepad_button_input(Game::Button& state, bool is_pressed);
+static void process_gamepad_button_input(Game::Controller_Button& state, bool is_pressed);
 static f32 get_normalized_gamepad_stick_value(SHORT value);
-static void reset_input_counters(Input& input);
 
 static Replayer create_replayer(const Game::Memory& game_memory);
 static void replayer_next_state(Replayer& replayer, Game::Memory& game_memory, Game::Input& game_input);
