@@ -161,17 +161,19 @@ static f32 get_seconds_elapsed(i64 start) {
 }
 
 static f32 get_target_seconds_per_frame() {
-	f32 target_frame_rate = 33.0f;
+	f32 target_fps = 30.0f;
 
-    HDC device_context = GetDC(0);
-	defer(ReleaseDC(0, device_context));
-    f32 refresh_rate = cast<f32>(GetDeviceCaps(device_context, VREFRESH));
+	// синхронизация с частотой монитора
+	// f32 min_fps = 30.0f;
+    // HDC device_context = GetDC(0);
+	// defer(ReleaseDC(0, device_context));
+    // f32 refresh_rate = cast<f32>(GetDeviceCaps(device_context, VREFRESH));
+	// if (refresh_rate > 1.0f) {
+	// 	f32 sync_fps = refresh_rate / hm::ceil(refresh_rate / target_fps);
+	// 	if (sync_fps >= min_fps) target_fps = sync_fps;
+	// }
 
-	if (refresh_rate > 1.0f) {
-		f32 sync_frame_rate = refresh_rate / hm::ceil(refresh_rate / target_frame_rate);
-		if (sync_frame_rate >= 30.0f) target_frame_rate = sync_frame_rate;
-	}
-	return 1.0f / target_frame_rate;
+	return 1.0f / target_fps;
 }
 
 static i64 get_perf_frequency() {
@@ -307,25 +309,25 @@ static void collect_keyboard_button_input(Input& input, WPARAM key_code, bool is
 	auto& controller = input.game_input.controllers[0];
 	controller.is_connected = true;
 
-	Game::Button* button_state;
+	Game::Button* button = nullptr;
 	switch (key_code) {
-		case VK_RETURN: button_state = &controller.start;		   break;
-		case VK_ESCAPE: button_state = &controller.back;		   break;
-		case VK_UP: 	button_state = &controller.move_up;	       break;
-		case VK_DOWN: 	button_state = &controller.move_down;	   break;
-		case VK_LEFT: 	button_state = &controller.move_left;	   break;
-		case VK_RIGHT: 	button_state = &controller.move_right;	   break;
-		case 'W': 		button_state = &controller.action_up;	   break;
-		case 'S': 		button_state = &controller.action_down;	   break;
-		case 'A': 		button_state = &controller.action_left;	   break;
-		case 'D': 		button_state = &controller.action_right;   break;
-		case 'Q': 		button_state = &controller.left_shoulder;  break;
-		case 'E': 		button_state = &controller.right_shoulder; break;
+		case VK_RETURN: button = &controller.start;		     break;
+		case VK_ESCAPE: button = &controller.back;		     break;
+		case VK_UP: 	button = &controller.move_up;	     break;
+		case VK_DOWN: 	button = &controller.move_down;	     break;
+		case VK_LEFT: 	button = &controller.move_left;	     break;
+		case VK_RIGHT: 	button = &controller.move_right;     break;
+		case 'W': 		button = &controller.action_up;	     break;
+		case 'S': 		button = &controller.action_down;    break;
+		case 'A': 		button = &controller.action_left;    break;
+		case 'D': 		button = &controller.action_right;   break;
+		case 'Q': 		button = &controller.left_shoulder;  break;
+		case 'E': 		button = &controller.right_shoulder; break;
 		default: return;
 	}
 
-	button_state->is_pressed = is_pressed;
-	button_state->transitions_count += 1;
+	button->is_pressed = is_pressed;
+	button->transitions_count += 1;
 }
 
 static void collect_mouse_input(Input& input, HWND window) {
@@ -394,7 +396,7 @@ static void replayer_record_or_replace(Replayer& replayer, Game::Memory& game_me
 static void replayer_start_record(Replayer& replayer, const Game::Memory& game_memory) {
 	SetFilePointer(replayer.state_handle, 0, 0, FILE_BEGIN);
 	SetFilePointer(replayer.input_handle, 0, 0, FILE_BEGIN);
-	DWORD game_memory_size = cast<DWORD>(game_memory.permanent.size + game_memory.transient.size);
+	DWORD game_memory_size = cast<DWORD>(game_memory.permanent.get_size() + game_memory.transient.get_size());
 	DWORD bytes_written;
 	WriteFile(replayer.state_handle, game_memory.permanent.base, game_memory_size, &bytes_written, nullptr);
 }
@@ -407,7 +409,7 @@ static void replayer_record(Replayer& replayer, const Game::Input& game_input) {
 static void replayer_start_play(Replayer& replayer, Game::Memory& game_memory) {
 	SetFilePointer(replayer.state_handle, 0, 0, FILE_BEGIN);
 	SetFilePointer(replayer.input_handle, 0, 0, FILE_BEGIN);
-	DWORD game_memory_size = cast<DWORD>(game_memory.permanent.size + game_memory.transient.size);
+	DWORD game_memory_size = cast<DWORD>(game_memory.permanent.get_size() + game_memory.transient.get_size());
 	DWORD bytes_read;
 	ReadFile(replayer.state_handle, game_memory.permanent.base, game_memory_size, &bytes_read, nullptr);
 	assert(bytes_read == game_memory_size);
@@ -463,8 +465,8 @@ static void resize_screen(Screen& screen, i32 width, i32 height) {
 	screen.bitmap_info.bmiHeader.biWidth = width;
 	screen.bitmap_info.bmiHeader.biHeight = - height; // отрицательный чтобы верхний левый пиксель был первым в буфере
 
-	screen.game_screen.width = width;
-	screen.game_screen.height = height;
+	screen.game_screen.count_x = width;
+	screen.game_screen.count_y = height;
 	SIZE_T memory_size = cast<SIZE_T>(screen.game_screen.get_size());
 	screen.game_screen.base = cast<u32*>(VirtualAlloc(nullptr, memory_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
 }
@@ -473,9 +475,9 @@ static void submit_screen(const Screen& screen, HWND window, HDC device_context)
 	RECT client_rect = {};
 	GetClientRect(window, &client_rect);
 
-	int src_width = screen.game_screen.width;
-	int src_height = screen.game_screen.height;
-	int dest_width = client_rect.right - client_rect.left;
+	int src_width   = screen.game_screen.count_x;
+	int src_height  = screen.game_screen.count_y;
+	int dest_width  = client_rect.right  - client_rect.left;
 	int dest_height = client_rect.bottom - client_rect.top;
 
 	// выводим пиксели 1 к 1 на время разработки рендерера
@@ -491,10 +493,10 @@ static void submit_screen(const Screen& screen, HWND window, HDC device_context)
 }
 
 static void draw_vertical_line(Screen& screen, i32 x, i32 top, i32 bottom, u32 color) {
-	u32* pixel = screen.game_screen.base + top * screen.game_screen.width + x;
+	u32* pixel = screen.game_screen.base + top * screen.game_screen.count_x + x;
 	for (i32 y = top; y < bottom; ++y) {
 		*pixel = color;
-		pixel += screen.game_screen.width;
+		pixel += screen.game_screen.count_x;
 	}
 }
 
@@ -560,7 +562,7 @@ static void calc_sound_samples_to_write(Sound& sound, i64 flip_timestamp) {
 
 	DWORD play_cursor = 0, write_cursor = 0;
 	if (!sound.is_valid || sound.buffer->GetCurrentPosition(&play_cursor, &write_cursor) != DS_OK) {
-		sound.game_sound.samples.size = 0;
+		sound.game_sound.samples.count = 0;
 		sound.dev_markers[sound.dev_markers_index] = {};
 		return;
 	}
@@ -580,8 +582,7 @@ static void calc_sound_samples_to_write(Sound& sound, i64 flip_timestamp) {
 	DWORD target_cursor = target_cursor_unwrapped % sound.buffer_size;
 	DWORD output_byte_count = target_cursor - sound.output_location;
 	if (target_cursor < sound.output_location) output_byte_count += sound.buffer_size;
-	output_byte_count -= output_byte_count % sizeof(Game::Sound_Sample);
-	sound.game_sound.samples.size = cast<i64>(output_byte_count);
+	sound.game_sound.samples.count = cast<i64>(output_byte_count / sizeof(Game::Sound_Sample));
 
 	if constexpr (DEV_MODE) {
 		sound.dev_markers[sound.dev_markers_index] = {};
@@ -596,7 +597,7 @@ static void calc_sound_samples_to_write(Sound& sound, i64 flip_timestamp) {
 static void submit_sound(Sound& sound) {
 	if (!sound.is_valid) return;
 
-	DWORD bytes_to_lock = cast<DWORD>(sound.game_sound.samples.size);
+	DWORD bytes_to_lock = cast<DWORD>(sound.game_sound.samples.get_size());
 	void *region1, *region2; DWORD region1_size, region2_size;
 	if (sound.buffer->Lock(sound.output_location, bytes_to_lock, &region1, &region1_size, &region2, &region2_size, 0) == DS_OK) {
 		sound.output_location = (sound.output_location + region1_size + region2_size) % sound.buffer_size;
@@ -609,17 +610,17 @@ static void submit_sound(Sound& sound) {
 static void draw_sound_sync(Screen& screen, Sound& sound) {
 	if (!sound.is_valid) return;
 
-	f32 horizontal_scaling = cast<f32>(screen.game_screen.width) / cast<f32>(sound.buffer_size);
+	f32 horizontal_scaling = cast<f32>(screen.game_screen.count_x) / cast<f32>(sound.buffer_size);
 	for (auto& marker : sound.dev_markers) {
 		i32 top = 0;
-		i32 bottom = screen.game_screen.height * 1/4;
+		i32 bottom = screen.game_screen.count_y * 1/4;
 		i32 historic_output_play_cursor_x  = cast<i32>(cast<f32>(marker.output_play_cursor)  * horizontal_scaling);
 		i32 historic_output_write_cursor_x = cast<i32>(cast<f32>(marker.output_write_cursor) * horizontal_scaling);
 		draw_vertical_line(screen, historic_output_play_cursor_x,  top, bottom, 0xffffff);
 		draw_vertical_line(screen, historic_output_write_cursor_x, top, bottom, 0xff0000);
 	}
 
-	if (!sound.game_sound.samples.size ||
+	if (!sound.game_sound.samples.count ||
 		sound.buffer->GetCurrentPosition(&sound.dev_markers[sound.dev_markers_index].flip_play_cursor, nullptr) != DS_OK) {
 		sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_count(sound.dev_markers);
 		return;
@@ -627,31 +628,31 @@ static void draw_sound_sync(Screen& screen, Sound& sound) {
 
 	auto current_marker = sound.dev_markers[sound.dev_markers_index];
 	i32 expected_flip_play_cursor_x = cast<i32>(cast<f32>(current_marker.expected_flip_play_cursor) * horizontal_scaling);
-	draw_vertical_line(screen, expected_flip_play_cursor_x, 0, screen.game_screen.height, 0xffff00);
+	draw_vertical_line(screen, expected_flip_play_cursor_x, 0, screen.game_screen.count_y, 0xffff00);
 
 	{
-		i32 top 	= screen.game_screen.height * 1/4;
-		i32 bottom  = screen.game_screen.height * 2/4;
+		i32 top 	= screen.game_screen.count_y * 1/4;
+		i32 bottom  = screen.game_screen.count_y * 2/4;
 		i32 output_play_cursor_x  = cast<i32>(cast<f32>(current_marker.output_play_cursor)  * horizontal_scaling);
 		i32 output_write_cursor_x = cast<i32>(cast<f32>(current_marker.output_write_cursor) * horizontal_scaling);
 		draw_vertical_line(screen, output_play_cursor_x,  top, bottom, 0xffffff);
 		draw_vertical_line(screen, output_write_cursor_x, top, bottom, 0xff0000);
 	}
 	{
-		i32 top 	= screen.game_screen.height * 2/4;
-		i32 bottom  = screen.game_screen.height * 3/4;
+		i32 top 	= screen.game_screen.count_y * 2/4;
+		i32 bottom  = screen.game_screen.count_y * 3/4;
 		i32 output_location_x   = (i32)(cast<f32>(current_marker.output_location)   * horizontal_scaling);
 		i32 output_byte_count_x = (i32)(cast<f32>(current_marker.output_byte_count) * horizontal_scaling);
 		draw_vertical_line(screen, output_location_x, top, bottom, 0xffffff);
-		draw_vertical_line(screen, (output_location_x + output_byte_count_x) % screen.game_screen.width, top, bottom, 0xff0000);
+		draw_vertical_line(screen, (output_location_x + output_byte_count_x) % screen.game_screen.count_x, top, bottom, 0xff0000);
 	}
 	{
-		i32 top 	= screen.game_screen.height * 3/4;
-		i32 bottom  = screen.game_screen.height;
+		i32 top 	= screen.game_screen.count_y * 3/4;
+		i32 bottom  = screen.game_screen.count_y;
 		i32 flip_play_cursor_x = cast<i32>(cast<f32>(current_marker.flip_play_cursor) * horizontal_scaling);
 		i32 safety_bytes_x     = cast<i32>(cast<f32>(sound.safety_bytes)              * horizontal_scaling);
-		draw_vertical_line(screen, (flip_play_cursor_x - safety_bytes_x / 2) % screen.game_screen.width, top, bottom, 0xffffff);
-		draw_vertical_line(screen, (flip_play_cursor_x + safety_bytes_x / 2) % screen.game_screen.width, top, bottom, 0xffffff);
+		draw_vertical_line(screen, (flip_play_cursor_x - safety_bytes_x / 2) % screen.game_screen.count_x, top, bottom, 0xffffff);
+		draw_vertical_line(screen, (flip_play_cursor_x + safety_bytes_x / 2) % screen.game_screen.count_x, top, bottom, 0xffffff);
 	}
 	
 	sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_count(sound.dev_markers);
@@ -667,7 +668,7 @@ namespace Platform {
 		LARGE_INTEGER file_size_struct = {};
 		GetFileSizeEx(file_handle, &file_size_struct);
 		DWORD file_size_casted = cast<DWORD>(file_size_struct.QuadPart);
-		result.size = file_size_casted;
+		result.set_size(file_size_casted);
 
 		HANDLE heap_handle = GetProcessHeap();
 		result.base = cast<u8*>(HeapAlloc(heap_handle, 0, file_size_casted));
@@ -686,7 +687,7 @@ namespace Platform {
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
 		defer(CloseHandle(file_handle));
 		DWORD bytes_written;
-		WriteFile(file_handle, file.base, cast<DWORD>(file.size), &bytes_written, nullptr);
+		WriteFile(file_handle, file.base, cast<DWORD>(file.get_size()), &bytes_written, nullptr);
 	}
 	
 	void free_file_memory(void*& memory) {

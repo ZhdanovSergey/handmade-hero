@@ -29,12 +29,18 @@ struct Game_Code {
 };
 
 struct Input {
+	// TODO: использовать 2 game_input на случай, если в будущем будем считывать чаще чем каждый кадр
 	Game::Input game_input;
 	Xinput_Get_State* XInputGetState;
 	Xinput_Set_State* XInputSetState;
 };
 
-enum Replayer_State { Idle, Recording, Playing, Count };
+enum Replayer_State {
+	Idle,
+	Recording,
+	Playing,
+	Count
+};
 
 struct Replayer {
 	char state_path[MAX_PATH];

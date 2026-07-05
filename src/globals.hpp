@@ -92,66 +92,91 @@ Deferrer(F) -> Deferrer<F>;
 #define defer(code) Deferrer CONCAT(defer_, __LINE__){[&](){ code; }}
 
 template <typename T>
-struct slice2;
-
-template <typename T>
 struct slice {
     T* base;
-    i64 size;
+    i64 count;
 
-    slice() : base{}, size{} {}
-    template <typename U>
-    slice(U* base, i64 size) : base{reinterpret_cast<T*>(base)}, size{size} {
-        static_assert(is_same<T,u8>::value || is_same<T,const u8>::value
-                   || is_same<T,U >::value || is_same<T,const U >::value);
-    }
-    template <typename U>
-    slice(slice<U> other) : slice{other.base, other.size} {}
+    slice() = default;
     template <typename U, i64 N>
-    slice(U (&arr)[N])    : slice{reinterpret_cast<U*>(arr), size_of(arr)} {}
-    template <typename U, i64 N, i64 M>
-    slice(U (&arr)[N][M]) : slice{reinterpret_cast<U*>(arr), size_of(arr)} {}
+    slice(U (&arr)[N])    : slice{ arr, N } {}
     template <typename U>
-    slice(slice2<U> other) : slice{other.base, other.get_size()} {};
+    slice(slice<U> other) : slice{ other.base, other.count } {}
+    template <typename U>
+    slice(U* base, i64 count) {
+        if constexpr (is_same<T,u8>::value || is_same<T,const u8>::value) {
+            this->base  = reinterpret_cast<T*>(base);
+            this->count = count * size_of(U);
+        } else {
+            static_assert(is_same<T,U >::value || is_same<T,const U >::value);
+            this->base  = base;
+            this->count = count;
+        }
+    }
 
     T* begin() { return base; }
-    T* end()   { return base + get_count(); }
+    T* end()   { return base + count; }
     T& operator[](i64 index) {
-        assert(index >= 0 && index < get_count());
+        assert(index >= 0 && index < count);
         return base[index];
     }
-    void set_count(i64 count) { size = count * size_of(T); }
-    i64 get_count() {
-        assert(size % size_of(T) == 0);
-        return size / size_of(T);
+    i64  get_size() const { return size_of(T) * count; }
+    void set_size(i64 size) {
+        static_assert(is_same<T,u8>::value || is_same<T,const u8>::value);
+        this->count = size;
     }
 };
 template <typename T>
-slice(T*, i64) -> slice<T>;
+slice(T*) -> slice<T>;
 
 template <typename T>
 struct slice2 {
     T* base;
-    i32 width;
-    i32 height;
+    i32 count_x;
+    i32 count_y;
 
-    slice2() : base{}, width{}, height{} {}
-    template <typename U>
-    slice2(slice2<U> other) : slice2{other.base, other.width, other.height} {}
+    slice2() = default;
     template <typename U, i32 N, i32 M>
-    slice2(U (&arr)[N][M]) : slice2{reinterpret_cast<U*>(arr), M, N} {}
+    slice2(U (&arr)[N][M]) : base{reinterpret_cast<U*>(arr)}, count_x{M}, count_y{N} {}
+    template <typename U>
+    slice2(slice2<U> other) : base{other.base}, count_x{other.count_x}, count_y{other.count_y} {}
 
-    T* begin()     { return base; }
-    T* end()       { return base + width * height; }
-    i64 get_size() { return size_of(T) * width * height; }
+    T* begin() { return base; }
+    T* end()   { return base + count_x * count_y; }
     T& get(i32 x, i32 y) {
-        assert(x >= 0 && x < width);
-        assert(y >= 0 && y < height);
-        return base[y * width + x];
+        assert(x >= 0 && x < count_x);
+        assert(y >= 0 && y < count_y);
+        return base[y * count_x + x];
     }
+    i64 get_size() const { return size_of(T) * count_x * count_y; }
 };
 template <typename T>
-slice2(T*, i32, i32) -> slice2<T>;
+slice2(T*) -> slice2<T>;
+
+template <typename T, i32 Count_X, i32 Count_Y>
+struct static_slice2 {
+    T* base;
+
+    static_slice2() = default;
+    template <typename U, i32 N, i32 M>
+    static_slice2(U (&arr)[N][M]) : base{reinterpret_cast<U*>(arr)} {
+        static_assert(M == Count_X && N == Count_Y);
+    }
+    template <typename U, i32 N, i32 M>
+    static_slice2(static_slice2<U, M, N> other) : base{other.base} {
+        static_assert(M == Count_X && N == Count_Y);
+    }
+
+    T* begin() { return base; }
+    T* end()   { return base + Count_X * Count_Y; }
+    T& get(i32 x, i32 y) {
+        assert(x >= 0 && x < Count_X);
+        assert(y >= 0 && y < Count_Y);
+        return base[y * Count_X + x];
+    }
+    i64 get_size() const { return size_of(T) * Count_X * Count_Y; }
+    i32 get_count_x()    { return Count_X; }
+    i32 get_count_y()    { return Count_Y; }
+};
 
 struct Arena {
     u8* base;
@@ -194,8 +219,8 @@ namespace hm {
     }
 
     static void memcpy(slice<const u8> src, slice<u8> dest) {
-        assert(src.size <= dest.size);
-        for (i64 i = 0; i < min(src.size, dest.size); ++i) {
+        assert(src.count <= dest.count);
+        for (i64 i = 0; i < min(src.count, dest.count); ++i) {
             dest[i] = src[i];
         }
     }

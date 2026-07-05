@@ -4,8 +4,9 @@
 #include "tiles.hpp"
 
 namespace Game {
-	static const i32 SCREEN_WIDTH_TILES = 17;
-	static const i32 SCREEN_HEIGHT_TILES = 9;
+	static const i32 SCENE_WIDTH_TILES = 17;
+	static const i32 SCENE_HEIGHT_TILES = 9;
+	static const i32 SCENES_PER_SCREEN = 10;
 
 	struct Button {
 		bool is_pressed;
