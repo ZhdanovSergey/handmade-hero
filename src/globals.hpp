@@ -32,9 +32,9 @@ struct is_same<T, T> { static constexpr bool value = true; };
     if constexpr (SLOW_MODE) {                           \
         auto orig_value = (VALUE);                       \
         auto casted_value = (Type_Out)(orig_value);      \
-        assert((orig_value == 0)                         \
-            || (orig_value > 0 && casted_value >= 0)     \
-            || (orig_value < 0 && casted_value <= 0));   \
+        assert((orig_value == 0 && casted_value == 0)    \
+            || (orig_value >  0 && casted_value >= 0)    \
+            || (orig_value <  0 && casted_value <= 0));  \
     }
 
 #define assert_cast_preserves_data(Type_Out, VALUE)                                       \
@@ -65,7 +65,7 @@ static constexpr Out cast_ignore_sign(In value) {
 }
 
 template <typename Out, typename In>
-static constexpr Out cast_ignore_data_loss(In value) {
+static constexpr Out cast_ignore_overflow(In value) {
     assert_cast_preserves_sign(Out, value);
     return (Out)value;
 }
@@ -134,6 +134,52 @@ template <typename T, i32 M, i32 N, i32 O>
 static_slice(T (&)[O][N][M]) -> static_slice<T, M, N, O>;
 
 template <typename T>
+struct slice3 {
+    T* base;
+    i32 count_x;
+    i32 count_y;
+    i32 count_z;
+
+    slice3() = default;
+    template <typename U>
+    slice3(slice3<U> other) : base{other.base}, count_x{other.count_x}, count_y{other.count_y}, count_z{other.count_z} {}
+
+    T* begin() { return base; }
+    T* end()   { return base + count_x * count_y * count_z; }
+    T& get(i32 x, i32 y, i32 z) {
+        assert(x >= 0 && x < count_x);
+        assert(y >= 0 && y < count_y);
+        assert(z >= 0 && z < count_z);
+        return base[ z * count_y * count_x + y * count_x + x];
+    }
+    i64 get_size() const { return size_of(T) * count_x * count_y * count_z; }
+};
+template <typename T>
+slice3(T*) -> slice3<T>;
+
+template <typename T>
+struct slice2 {
+    T* base;
+    i32 count_x;
+    i32 count_y;
+
+    slice2() = default;
+    template <typename U>
+    slice2(slice2<U> other) : base{other.base}, count_x{other.count_x}, count_y{other.count_y} {}
+
+    T* begin() { return base; }
+    T* end()   { return base + count_x * count_y; }
+    T& get(i32 x, i32 y) {
+        assert(x >= 0 && x < count_x);
+        assert(y >= 0 && y < count_y);
+        return base[y * count_x + x];
+    }
+    i64 get_size() const { return size_of(T) * count_x * count_y; }
+};
+template <typename T>
+slice2(T*) -> slice2<T>;
+
+template <typename T>
 struct slice1 {
     T* base;
     i64 count;
@@ -168,52 +214,6 @@ struct slice1 {
 };
 template <typename T>
 slice1(T*) -> slice1<T>;
-
-template <typename T>
-struct slice2 {
-    T* base;
-    i32 count_x;
-    i32 count_y;
-
-    slice2() = default;
-    template <typename U>
-    slice2(slice2<U> other) : base{other.base}, count_x{other.count_x}, count_y{other.count_y} {}
-
-    T* begin() { return base; }
-    T* end()   { return base + count_x * count_y; }
-    T& get(i32 x, i32 y) {
-        assert(x >= 0 && x < count_x);
-        assert(y >= 0 && y < count_y);
-        return base[y * count_x + x];
-    }
-    i64 get_size() const { return size_of(T) * count_x * count_y; }
-};
-template <typename T>
-slice2(T*) -> slice2<T>;
-
-template <typename T>
-struct slice3 {
-    T* base;
-    i32 count_x;
-    i32 count_y;
-    i32 count_z;
-
-    slice3() = default;
-    template <typename U>
-    slice3(slice3<U> other)   : base{other.base}, count_x{other.count_x}, count_y{other.count_y}, count_z{other.count_z} {}
-
-    T* begin() { return base; }
-    T* end()   { return base + count_x * count_y * count_z; }
-    T& get(i32 x, i32 y, i32 z) {
-        assert(x >= 0 && x < count_x);
-        assert(y >= 0 && y < count_y);
-        assert(z >= 0 && z < count_z);
-        return base[ z * count_y * count_x + y * count_x + x];
-    }
-    i64 get_size() const { return size_of(T) * count_x * count_y * count_z; }
-};
-template <typename T>
-slice3(T*) -> slice3<T>;
 
 struct Arena {
     u8* base;

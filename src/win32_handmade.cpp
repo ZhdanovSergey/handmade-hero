@@ -370,35 +370,30 @@ static Replayer create_replayer(const Game::Memory& game_memory) {
 }
 
 static void replayer_next_state(Replayer& replayer, Game::Memory& game_memory, Game::Input& game_input) {
-	replayer.state = cast<Replayer_State>((replayer.state + 1) % Replayer_State::Count);
 	switch (replayer.state) {
-		case Replayer_State::Recording: {
-			replayer_start_record(replayer, game_memory);
-		} break;
-		case Replayer_State::Playing: {
-			replayer_start_play(replayer, game_memory);
-		} break;
+		case Replayer_State::Idle:      replayer.state = Replayer_State::Recording; break;
+		case Replayer_State::Recording: replayer.state = Replayer_State::Playing;   break;
+		case Replayer_State::Playing:   replayer.state = Replayer_State::Idle;      break;
+	}
+
+	switch (replayer.state) {
 		case Replayer_State::Idle: {
 			// принудительно отжимаем нажатые кнопки
 			game_input.mouse = {};
 			for (auto& controller : game_input.controllers) {
 				controller = {};
 			}
-		} break;
-		case Replayer_State::Count: break;
+		}                                                                             break;
+		case Replayer_State::Recording: replayer_start_record(replayer, game_memory); break;
+		case Replayer_State::Playing:   replayer_start_play(replayer, game_memory);   break;
 	}
 }
 
 static void replayer_record_or_replace(Replayer& replayer, Game::Memory& game_memory, Game::Input& game_input) {
 	switch (replayer.state) {
-		case Replayer_State::Recording: {
-			replayer_record(replayer, game_input);
-		} break;
-		case Replayer_State::Playing: {
-			replayer_play(replayer, game_memory, game_input);
-		} break;
-		case Replayer_State::Idle:
-		case Replayer_State::Count: break;
+		case Replayer_State::Idle:                                                        break;
+		case Replayer_State::Recording: replayer_record(replayer, game_input);            break;
+		case Replayer_State::Playing:   replayer_play(replayer, game_memory, game_input); break;
 	}
 }
 

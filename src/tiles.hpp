@@ -12,7 +12,7 @@ namespace Tiles {
 	static const u32 CHUNK_REL_POSITION_MASK = CHUNK_DIM_TILES - 1;
 	static const f32 TILE_DIM = 1.4f;
 
-	enum Tile {
+	enum class Tile {
 		Not_Initialized,
 		Floor,
 		Wall,
