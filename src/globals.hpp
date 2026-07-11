@@ -91,93 +91,6 @@ template <typename F>
 Deferrer(F) -> Deferrer<F>;
 #define defer(code) Deferrer CONCAT(defer_, __LINE__){[&](){ code; }}
 
-template <typename T>
-struct slice1 {
-    T* base;
-    i64 count;
-
-    slice1() = default;
-    template <typename U, i64 N>
-    slice1(U (&arr)[N])     : slice1{ arr, N } {}
-    template <typename U>
-    slice1(slice1<U> other) : slice1{ other.base, other.count } {}
-    template <typename U>
-    slice1(U* base, i64 count) {
-        if constexpr (is_same<T,u8>::value || is_same<T,const u8>::value) {
-            this->base  = reinterpret_cast<T*>(base);
-            this->count = count * size_of(U);
-        } else {
-            static_assert(is_same<T,U >::value || is_same<T,const U >::value);
-            this->base  = base;
-            this->count = count;
-        }
-    }
-
-    T* begin() { return base; }
-    T* end()   { return base + count; }
-    T& get(i64 index) {
-        assert(index >= 0 && index < count);
-        return base[index];
-    }
-    i64  get_size() const { return size_of(T) * count; }
-    void set_size(i64 size) {
-        static_assert(is_same<T,u8>::value || is_same<T,const u8>::value);
-        this->count = size;
-    }
-};
-template <typename T>
-slice1(T*) -> slice1<T>;
-
-template <typename T>
-struct slice2 {
-    T* base;
-    i32 count_x;
-    i32 count_y;
-
-    slice2() = default;
-    template <typename U, i32 M, i32 N>
-    slice2(U (&arr)[N][M]) : base{reinterpret_cast<U*>(arr)}, count_x{M}, count_y{N} {}
-    template <typename U>
-    slice2(slice2<U> other) : base{other.base}, count_x{other.count_x}, count_y{other.count_y} {}
-
-    T* begin() { return base; }
-    T* end()   { return base + count_x * count_y; }
-    T& get(i32 x, i32 y) {
-        assert(x >= 0 && x < count_x);
-        assert(y >= 0 && y < count_y);
-        return base[y * count_x + x];
-    }
-    i64 get_size() const { return size_of(T) * count_x * count_y; }
-};
-template <typename T>
-slice2(T*) -> slice2<T>;
-
-template <typename T>
-struct slice3 {
-    T* base;
-    i32 count_x;
-    i32 count_y;
-    i32 count_z;
-
-    slice3() = default;
-    template <typename U, i32 M, i32 N, i32 O>
-    slice3(U (&arr)[O][N][M]) : base{reinterpret_cast<U*>(arr)}, count_x{M}, count_y{N}, count_z{O} {}
-    template <typename U>
-    slice3(slice3<U> other) : base{other.base}, count_x{other.count_x}, count_y{other.count_y}, count_z{other.count_z} {}
-
-    T* begin() { return base; }
-    T* end()   { return base + count_x * count_y * count_z; }
-    T& get(i32 x, i32 y, i32 z) {
-        assert(x >= 0 && x < count_x);
-        assert(y >= 0 && y < count_y);
-        assert(z >= 0 && z < count_z);
-        return base[ z * count_y * count_x + y * count_x + x];
-    }
-    i64 get_size() const { return size_of(T) * count_x * count_y * count_z; }
-};
-template <typename T>
-slice3(T*) -> slice3<T>;
-
 template <typename T, i32 Count_X, i32 Count_Y = 1, i32 Count_Z = 1>
 struct static_slice {
     T* base;
@@ -213,6 +126,94 @@ struct static_slice {
     i32 get_count_y()    { return Count_Y; }
     i32 get_count_z()    { return Count_Z; }
 };
+template <typename T, i32 M>
+static_slice(T (&)[M])       -> static_slice<T, M>;
+template <typename T, i32 M, i32 N>
+static_slice(T (&)[N][M])    -> static_slice<T, M, N>;
+template <typename T, i32 M, i32 N, i32 O>
+static_slice(T (&)[O][N][M]) -> static_slice<T, M, N, O>;
+
+template <typename T>
+struct slice1 {
+    T* base;
+    i64 count;
+
+    slice1() = default;
+    template <typename U>
+    slice1(slice1<U> other) : slice1{ other.base, other.count } {}
+    template <typename U>
+    slice1(U* base, i64 count) {
+        // финальный конструктор для возможной конвертации в u8
+        if constexpr (is_same<T,u8>::value || is_same<T,const u8>::value) {
+            this->base  = reinterpret_cast<T*>(base);
+            this->count = count * size_of(U);
+        } else {
+            static_assert(is_same<T,U >::value || is_same<T,const U >::value);
+            this->base  = base;
+            this->count = count;
+        }
+    }
+
+    T* begin() { return base; }
+    T* end()   { return base + count; }
+    T& get(i64 index) {
+        assert(index >= 0 && index < count);
+        return base[index];
+    }
+    i64  get_size() const { return size_of(T) * count; }
+    void set_size(i64 size) {
+        static_assert(is_same<T,u8>::value || is_same<T,const u8>::value);
+        this->count = size;
+    }
+};
+template <typename T>
+slice1(T*) -> slice1<T>;
+
+template <typename T>
+struct slice2 {
+    T* base;
+    i32 count_x;
+    i32 count_y;
+
+    slice2() = default;
+    template <typename U>
+    slice2(slice2<U> other) : base{other.base}, count_x{other.count_x}, count_y{other.count_y} {}
+
+    T* begin() { return base; }
+    T* end()   { return base + count_x * count_y; }
+    T& get(i32 x, i32 y) {
+        assert(x >= 0 && x < count_x);
+        assert(y >= 0 && y < count_y);
+        return base[y * count_x + x];
+    }
+    i64 get_size() const { return size_of(T) * count_x * count_y; }
+};
+template <typename T>
+slice2(T*) -> slice2<T>;
+
+template <typename T>
+struct slice3 {
+    T* base;
+    i32 count_x;
+    i32 count_y;
+    i32 count_z;
+
+    slice3() = default;
+    template <typename U>
+    slice3(slice3<U> other)   : base{other.base}, count_x{other.count_x}, count_y{other.count_y}, count_z{other.count_z} {}
+
+    T* begin() { return base; }
+    T* end()   { return base + count_x * count_y * count_z; }
+    T& get(i32 x, i32 y, i32 z) {
+        assert(x >= 0 && x < count_x);
+        assert(y >= 0 && y < count_y);
+        assert(z >= 0 && z < count_z);
+        return base[ z * count_y * count_x + y * count_x + x];
+    }
+    i64 get_size() const { return size_of(T) * count_x * count_y * count_z; }
+};
+template <typename T>
+slice3(T*) -> slice3<T>;
 
 struct Arena {
     u8* base;
