@@ -9,27 +9,27 @@ namespace Game {
 	static const i32 SCENES_PER_SCREEN = 1;
 
 	struct Controller_Button {
-		bool is_pressed;
 		i32 transitions_count;
+		bool is_pressed;
 	};
 
 	struct Controller {
-		bool is_connected, is_analog;
+		Controller_Button start, back;
+		Controller_Button left_shoulder, right_shoulder;
+		Controller_Button move_up, move_down, move_left, move_right;
+		Controller_Button action_up, action_down, action_left, action_right;
 		f32 start_x, start_y;
 		f32 end_x, end_y;
 		f32 average_x, average_y;
 		f32 min_x, min_y;
 		f32 max_x, max_y;
-		Controller_Button start, back;
-		Controller_Button left_shoulder, right_shoulder;
-		Controller_Button move_up, move_down, move_left, move_right;
-		Controller_Button action_up, action_down, action_left, action_right;
+		bool is_connected, is_analog;
 	};
 
 	struct Mouse {
-		i32 x, y;
 		Controller_Button left_button;
 		Controller_Button right_button;
+		i32 x, y;
 	};
 
 	struct Input {
@@ -43,7 +43,7 @@ namespace Game {
 	};
 
 	struct Sound {
-		slice<Sound_Sample> samples;
+		slice1<Sound_Sample> samples;
 		i32 samples_per_second;
 	};
 
@@ -51,8 +51,8 @@ namespace Game {
 
 	struct Memory {
 		bool is_initialized;
-		slice<u8> permanent;
-		slice<u8> transient;
+		slice1<u8> permanent;
+		slice1<u8> transient;
     	Platform::Read_File_Sync* read_file_sync;
     	Platform::Write_File_Sync* write_file_sync;
     	Platform::Free_File_Memory* free_file_memory;

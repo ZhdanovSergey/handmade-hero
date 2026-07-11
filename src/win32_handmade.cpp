@@ -668,8 +668,8 @@ static void draw_sound_sync(Screen& screen, Sound& sound) {
 }
 
 namespace Platform {
-	slice<u8> read_file_sync(const char* file_name) {
-		slice<u8> result = {};
+	slice1<u8> read_file_sync(const char* file_name) {
+		slice1<u8> result = {};
 
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
 		defer(CloseHandle(file_handle));
@@ -687,12 +687,11 @@ namespace Platform {
 			assert(false);
 			HeapFree(heap_handle, 0, result.base);
 			return {};
-		}
-		
+		}		
 		return result;
 	}
 
-	void write_file_sync(const char* file_name, slice<const u8> file) {
+	void write_file_sync(const char* file_name, slice1<const u8> file) {
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
 		defer(CloseHandle(file_handle));
 		DWORD bytes_written;

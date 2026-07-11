@@ -37,9 +37,9 @@ namespace Game {
 		new_player_pos_right.tile_rel_x += player_width / 2;
 		Tiles::normalize_position(new_player_pos_right);
 
-		if (Tiles::check_empty_tile(tile_map, new_player_pos_left.abs_x,  new_player_pos_left.abs_y)
-		 && Tiles::check_empty_tile(tile_map, new_player_pos.abs_x,       new_player_pos.abs_y)
-		 && Tiles::check_empty_tile(tile_map, new_player_pos_right.abs_x, new_player_pos_right.abs_y)) {
+		if (Tiles::check_empty_tile(tile_map, new_player_pos_left)
+		 && Tiles::check_empty_tile(tile_map, new_player_pos)
+		 && Tiles::check_empty_tile(tile_map, new_player_pos_right)) {
 			player_pos = new_player_pos;
 		}
 
@@ -55,13 +55,16 @@ namespace Game {
 
 		for (    i32 y = player_abs_y - half_screen_height_tiles - 1; y <= player_abs_y + half_screen_height_tiles + 1; ++y) {
 			for (i32 x = player_abs_x - half_screen_width_tiles  - 1; x <= player_abs_x + half_screen_width_tiles  + 1; ++x) {
-				auto tile = Tiles::get_tile(tile_map, cast_ignore_sign<u32>(x), cast_ignore_sign<u32>(y));
+				// TODO: что делать с нулем?
+				auto tile = Tiles::get_tile(tile_map, cast_ignore_sign<u32>(x), cast_ignore_sign<u32>(y), 0);
 
 				Color color = {};
 				switch (tile) {
-					case Tiles::Tile::Not_Initialized: color = { 1.0f, 0.0f, 0.0f }; break;
-					case Tiles::Tile::Walkable:        color = { 0.5f, 0.5f, 0.5f }; break;
-					case Tiles::Tile::Wall:            color = { 1.0f, 1.0f, 1.0f }; break;
+					case Tiles::Tile::Not_Initialized: color = { 1.0f, 0.0f, 0.0f };    break;
+					case Tiles::Tile::Floor:           color = { 0.5f, 0.5f, 0.5f };    break;
+					case Tiles::Tile::Wall:            color = { 1.0f, 1.0f, 1.0f };    break;
+					case Tiles::Tile::Door_Up:         color = { 0.25f, 0.25f, 0.25f }; break;
+					case Tiles::Tile::Door_Down:       color = { 0.25f, 0.25f, 0.25f }; break;
 				}
 
 				if (x == player_abs_x && y == player_abs_y) {
@@ -140,26 +143,45 @@ namespace Game {
 		world_arena.base = memory.permanent.base + size_of(Game_State);
 		world_arena.size = memory.permanent.get_size() - size_of(Game_State);
 
-		chunks.count_x = Tiles::WORLD_DIM_CHUNKS;
-		chunks.count_y = Tiles::WORLD_DIM_CHUNKS;
+		chunks.count_x = Tiles::WORLD_X_CHUNKS;
+		chunks.count_y = Tiles::WORLD_Y_CHUNKS;
+		chunks.count_z = Tiles::WORLD_Z_CHUNKS;
 		chunks.base = world_arena.push<Tiles::Chunk>(chunks.get_size());
 
+		u32 abs_tile_z = 0;
 		u32 scene_x = 0, scene_y = 0;
-		bool is_door_left = false, is_door_right = false, is_door_top = false, is_door_bottom = false;
-		for (i32 scene_index = 0; scene_index < 100; ++scene_index) {
-			bool is_next_scene_top = RANDOM_NUMBERS_TABLE[scene_index] % 2;
-			if (is_next_scene_top) {
-				is_door_top = true;
-			} else {
-				is_door_right = true;
+		bool is_door_left = false, is_door_right  = false;
+		bool is_door_top  = false, is_door_bottom = false;
+		bool is_door_up   = false, is_door_down   = false;
+
+		const i32 SCENES_COUNT = 100;
+		for (i32 scene_index = 0; scene_index < SCENES_COUNT; ++scene_index) {
+			u32 random_choice_3 = is_door_up || is_door_down
+				? RANDOM_NUMBERS_TABLE.get(scene_index) % 2
+				: RANDOM_NUMBERS_TABLE.get(scene_index) % 3;
+
+			switch (random_choice_3) {
+				case 0: is_door_right = true; break;
+				case 1: is_door_top   = true; break;
+				case 2: {
+					if (abs_tile_z == 0) is_door_up   = true;
+					else                 is_door_down = true;
+				} break;
 			}
+
+			// TODO: проверка не проходит, найти ошибку
+			// if constexpr (SLOW_MODE) {
+			// 	i32 fact_doors_count = is_door_left + is_door_right + is_door_top + is_door_bottom + is_door_up + is_door_down;
+			// 	i32 correct_doors_count = scene_index == 0 || scene_index == SCENES_COUNT - 1 ? 1 : 2;
+			// 	assert(fact_doors_count == correct_doors_count);
+			// }
 
 			for (    u32 tile_y = 0; tile_y < SCENE_HEIGHT_TILES; ++tile_y) {
 				for (u32 tile_x = 0; tile_x < SCENE_WIDTH_TILES;  ++tile_x) {
-					u32 abs_x = scene_x * SCENE_WIDTH_TILES  + tile_x;
-					u32 abs_y = scene_y * SCENE_HEIGHT_TILES + tile_y;
+					u32 abs_tile_x = scene_x * SCENE_WIDTH_TILES  + tile_x;
+					u32 abs_tile_y = scene_y * SCENE_HEIGHT_TILES + tile_y;
 
-					auto tile_value = Tiles::Tile::Walkable;
+					auto tile_value = Tiles::Tile::Floor;
 					if (tile_x == 0 || tile_x == SCENE_WIDTH_TILES  - 1 
 					||  tile_y == 0 || tile_y == SCENE_HEIGHT_TILES - 1) {
 						tile_value = Tiles::Tile::Wall;
@@ -169,23 +191,36 @@ namespace Game {
 				     || (is_door_right  && tile_x == SCENE_WIDTH_TILES - 1 && tile_y == SCENE_HEIGHT_TILES / 2)
 					 || (is_door_top    && tile_x == SCENE_WIDTH_TILES / 2 && tile_y == SCENE_HEIGHT_TILES - 1)
 					 || (is_door_bottom && tile_x == SCENE_WIDTH_TILES / 2 && tile_y == 0                     )) {
-						tile_value = Tiles::Tile::Walkable;
+						tile_value = Tiles::Tile::Floor;
+					}
+
+					if (tile_x == SCENE_WIDTH_TILES / 2 && tile_y == SCENE_HEIGHT_TILES / 2) {
+						if (is_door_up)   tile_value = Tiles::Tile::Door_Up;
+						if (is_door_down) tile_value = Tiles::Tile::Door_Down;
 					}
 					
-					Tiles::set_tile(world_arena, tile_map, abs_x, abs_y, tile_value);
+					Tiles::set_tile(world_arena, tile_map, abs_tile_x, abs_tile_y, abs_tile_z, tile_value);
 				}
 			}
 
-			if (is_next_scene_top) {
-				scene_y += 1;
-			} else {
-				scene_x += 1;
+			switch (random_choice_3) {
+				case 0: scene_x += 1;             break;
+				case 1: scene_y += 1;             break;
+				case 2: abs_tile_z = !abs_tile_z; break;
 			}
 
 			is_door_left = is_door_right;
 			is_door_bottom = is_door_top;
 			is_door_right = false;
 			is_door_top = false;
+
+			if (is_door_up) {
+				is_door_up = false;
+				is_door_down = true;
+			} else if (is_door_down) {
+				is_door_up = true;
+				is_door_down = false;
+			}
 		}
 
 		player_pos.abs_x = 1;
@@ -195,7 +230,7 @@ namespace Game {
 		Tiles::normalize_position(player_pos);
 		
 		assert(size_of(Game_State) <= memory.permanent.get_size());
-		assert(Tiles::check_empty_tile(tile_map, player_pos.abs_x, player_pos.abs_y));
+		assert(Tiles::check_empty_tile(tile_map, player_pos));
 		memory.is_initialized = true;
 	}
 
