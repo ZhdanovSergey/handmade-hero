@@ -32,9 +32,9 @@ struct is_same<T, T> { static constexpr bool value = true; };
     if constexpr (SLOW_MODE) {                           \
         auto orig_value = (VALUE);                       \
         auto casted_value = (Type_Out)(orig_value);      \
-        assert((orig_value == 0 && casted_value == 0)    \
-            || (orig_value >  0 && casted_value >= 0)    \
-            || (orig_value <  0 && casted_value <= 0));  \
+        assert((orig_value == 0 && casted_value == 0) || \
+               (orig_value >  0 && casted_value >= 0) || \
+               (orig_value <  0 && casted_value <= 0));  \
     }
 
 #define assert_cast_preserves_data(Type_Out, VALUE)                                       \
@@ -96,21 +96,21 @@ struct static_slice {
     T* base;
 
     static_slice() = default;
-    template <typename U, i32 M>
-    static_slice(U (&arr)[M])       : base{reinterpret_cast<U*>(arr)} {
-        static_assert(M == Count_X);
+    template <typename U, i32 X>
+    static_slice(U (&arr)[X])       : base{reinterpret_cast<U*>(arr)} {
+        static_assert(X == Count_X);
     }
-    template <typename U, i32 M, i32 N>
-    static_slice(U (&arr)[N][M])    : base{reinterpret_cast<U*>(arr)} {
-        static_assert(M == Count_X && N == Count_Y);
+    template <typename U, i32 X, i32 Y>
+    static_slice(U (&arr)[Y][X])    : base{reinterpret_cast<U*>(arr)} {
+        static_assert(X == Count_X && Y == Count_Y);
     }    
-    template <typename U, i32 M, i32 N, i32 O>
-    static_slice(U (&arr)[O][N][M]) : base{reinterpret_cast<U*>(arr)} {
-        static_assert(M == Count_X && N == Count_Y && O == Count_Z);
+    template <typename U, i32 X, i32 Y, i32 Z>
+    static_slice(U (&arr)[Z][Y][X]) : base{reinterpret_cast<U*>(arr)} {
+        static_assert(X == Count_X && Y == Count_Y && Z == Count_Z);
     }
-    template <typename U, i32 M, i32 N, i32 O>
-    static_slice(static_slice<U, M, N, O> other) : base{other.base} {
-        static_assert(M == Count_X && N == Count_Y && O == Count_Z);
+    template <typename U, i32 X, i32 Y, i32 Z>
+    static_slice(static_slice<U, X, Y, Z> other) : base{other.base} {
+        static_assert(X == Count_X && Y == Count_Y && Z == Count_Z);
     }
 
     T* begin() { return base; }
@@ -126,12 +126,12 @@ struct static_slice {
     i32 get_count_y()    { return Count_Y; }
     i32 get_count_z()    { return Count_Z; }
 };
-template <typename T, i32 M>
-static_slice(T (&)[M])       -> static_slice<T, M>;
-template <typename T, i32 M, i32 N>
-static_slice(T (&)[N][M])    -> static_slice<T, M, N>;
-template <typename T, i32 M, i32 N, i32 O>
-static_slice(T (&)[O][N][M]) -> static_slice<T, M, N, O>;
+template <typename T, i32 X>
+static_slice(T (&)[X])       -> static_slice<T, X>;
+template <typename T, i32 X, i32 Y>
+static_slice(T (&)[Y][X])    -> static_slice<T, X, Y>;
+template <typename T, i32 X, i32 Y, i32 Z>
+static_slice(T (&)[Z][Y][X]) -> static_slice<T, X, Y, Z>;
 
 template <typename T>
 struct slice3 {
@@ -194,7 +194,7 @@ struct slice1 {
             this->base  = reinterpret_cast<T*>(base);
             this->count = count * size_of(U);
         } else {
-            static_assert(is_same<T,U >::value || is_same<T,const U >::value);
+            static_assert(is_same<T,U >::value || is_same<T,const U>::value);
             this->base  = base;
             this->count = count;
         }

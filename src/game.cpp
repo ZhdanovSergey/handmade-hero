@@ -37,9 +37,14 @@ namespace Game {
 		new_player_pos_right.tile_rel_x += player_width / 2;
 		Tiles::normalize_position(new_player_pos_right);
 
-		if (Tiles::check_empty_tile(tile_map, new_player_pos_left)
-		 && Tiles::check_empty_tile(tile_map, new_player_pos)
-		 && Tiles::check_empty_tile(tile_map, new_player_pos_right)) {
+		if (Tiles::check_walkable_tile(tile_map, new_player_pos_left) &&
+		    Tiles::check_walkable_tile(tile_map, new_player_pos)      &&
+		    Tiles::check_walkable_tile(tile_map, new_player_pos_right)) {
+			if (!Tiles::check_same_tile(player_pos, new_player_pos)) {
+				auto new_tile = Tiles::get_tile(tile_map, new_player_pos.abs_x, new_player_pos.abs_y, new_player_pos.abs_z);
+				if (new_tile == Tiles::Tile::Stairs_Up)   new_player_pos.abs_z += 1;
+				if (new_tile == Tiles::Tile::Stairs_Down) new_player_pos.abs_z -= 1;
+			}
 			player_pos = new_player_pos;
 		}
 
@@ -48,31 +53,30 @@ namespace Game {
 			SCENES_PER_SCREEN * SCENE_HEIGHT_TILES * Tiles::TILE_DIM, 0.0f
 		);
 
-		i32 player_abs_x = cast_ignore_sign<i32>(player_pos.abs_x);
-		i32 player_abs_y = cast_ignore_sign<i32>(player_pos.abs_y);
+		i32 player_abs_x_casted = cast_ignore_sign<i32>(player_pos.abs_x);
+		i32 player_abs_y_casted = cast_ignore_sign<i32>(player_pos.abs_y);
 		i32 half_screen_width_tiles  = SCENE_WIDTH_TILES  * SCENES_PER_SCREEN / 2;
 		i32 half_screen_height_tiles = SCENE_HEIGHT_TILES * SCENES_PER_SCREEN / 2;
 
-		for (    i32 y = player_abs_y - half_screen_height_tiles - 1; y <= player_abs_y + half_screen_height_tiles + 1; ++y) {
-			for (i32 x = player_abs_x - half_screen_width_tiles  - 1; x <= player_abs_x + half_screen_width_tiles  + 1; ++x) {
-				// TODO: что делать с нулем?
-				auto tile = Tiles::get_tile(tile_map, cast_ignore_sign<u32>(x), cast_ignore_sign<u32>(y), 0);
+		for (    i32 y = player_abs_y_casted - half_screen_height_tiles - 1; y <= player_abs_y_casted + half_screen_height_tiles + 1; ++y) {
+			for (i32 x = player_abs_x_casted - half_screen_width_tiles  - 1; x <= player_abs_x_casted + half_screen_width_tiles  + 1; ++x) {
+				auto tile = Tiles::get_tile(tile_map, cast_ignore_sign<u32>(x), cast_ignore_sign<u32>(y), player_pos.abs_z);
 
 				Color color = {};
 				switch (tile) {
 					case Tiles::Tile::Not_Initialized: color = { 1.0f, 0.0f, 0.0f };    break;
 					case Tiles::Tile::Floor:           color = { 0.5f, 0.5f, 0.5f };    break;
 					case Tiles::Tile::Wall:            color = { 1.0f, 1.0f, 1.0f };    break;
-					case Tiles::Tile::Door_Up:         color = { 0.25f, 0.25f, 0.25f }; break;
-					case Tiles::Tile::Door_Down:       color = { 0.25f, 0.25f, 0.25f }; break;
+					case Tiles::Tile::Stairs_Up:       color = { 0.25f, 0.25f, 0.25f }; break;
+					case Tiles::Tile::Stairs_Down:     color = { 0.25f, 0.25f, 0.25f }; break;
 				}
 
-				if (x == player_abs_x && y == player_abs_y) {
+				if (x == player_abs_x_casted && y == player_abs_y_casted) {
 					color = Color{ 0.0f, 0.0f, 0.0f };
 				}
 
-				f32 min_x =   (x - player_abs_x + half_screen_width_tiles)  * Tiles::TILE_DIM - player_pos.tile_rel_x;
-				f32 min_y = - (y - player_abs_y - half_screen_height_tiles) * Tiles::TILE_DIM + player_pos.tile_rel_y;
+				f32 min_x =   (x - player_abs_x_casted + half_screen_width_tiles)  * Tiles::TILE_DIM - player_pos.tile_rel_x;
+				f32 min_y = - (y - player_abs_y_casted - half_screen_height_tiles) * Tiles::TILE_DIM + player_pos.tile_rel_y;
 				f32 max_x = min_x + Tiles::TILE_DIM;
 				f32 max_y = min_y - Tiles::TILE_DIM;
 				draw_rectangle(screen, color, min_x, max_x, min_y, max_y);
@@ -152,11 +156,11 @@ namespace Game {
 		u32 scene_x = 0, scene_y = 0;
 		bool is_door_left = false, is_door_right  = false;
 		bool is_door_top  = false, is_door_bottom = false;
-		bool is_door_up   = false, is_door_down   = false;
+		bool is_stairs_up = false, is_stairs_down = false;
 
 		const i32 SCENES_COUNT = 100;
 		for (i32 scene_index = 0; scene_index < SCENES_COUNT; ++scene_index) {
-			u32 random_choice_3 = is_door_up || is_door_down
+			u32 random_choice_3 = is_stairs_up || is_stairs_down
 				? RANDOM_NUMBERS_TABLE.get(scene_index) % 2
 				: RANDOM_NUMBERS_TABLE.get(scene_index) % 3;
 
@@ -164,17 +168,16 @@ namespace Game {
 				case 0: is_door_right = true; break;
 				case 1: is_door_top   = true; break;
 				case 2: {
-					if (abs_tile_z == 0) is_door_up   = true;
-					else                 is_door_down = true;
+					if (abs_tile_z == 0) is_stairs_up   = true;
+					else                 is_stairs_down = true;
 				} break;
 			}
 
-			// TODO: проверка не проходит, найти ошибку
-			// if constexpr (SLOW_MODE) {
-			// 	i32 fact_doors_count = is_door_left + is_door_right + is_door_top + is_door_bottom + is_door_up + is_door_down;
-			// 	i32 correct_doors_count = scene_index == 0 || scene_index == SCENES_COUNT - 1 ? 1 : 2;
-			// 	assert(fact_doors_count == correct_doors_count);
-			// }
+			if constexpr (SLOW_MODE) {
+				i32 fact_doors_count = is_door_left + is_door_right + is_door_top + is_door_bottom + is_stairs_up + is_stairs_down;
+				i32 correct_doors_count = scene_index == 0 ? 1 : 2; // на последнюю комнату пофиг
+				assert(fact_doors_count == correct_doors_count);
+			}
 
 			for (    u32 tile_y = 0; tile_y < SCENE_HEIGHT_TILES; ++tile_y) {
 				for (u32 tile_x = 0; tile_x < SCENE_WIDTH_TILES;  ++tile_x) {
@@ -182,45 +185,42 @@ namespace Game {
 					u32 abs_tile_y = scene_y * SCENE_HEIGHT_TILES + tile_y;
 
 					auto tile_value = Tiles::Tile::Floor;
-					if (tile_x == 0 || tile_x == SCENE_WIDTH_TILES  - 1 
-					||  tile_y == 0 || tile_y == SCENE_HEIGHT_TILES - 1) {
+					if (tile_x == 0 || tile_x == SCENE_WIDTH_TILES  - 1 ||
+					    tile_y == 0 || tile_y == SCENE_HEIGHT_TILES - 1) {
 						tile_value = Tiles::Tile::Wall;
 					}
 
-					if ((is_door_left   && tile_x == 0                     && tile_y == SCENE_HEIGHT_TILES / 2)
-				     || (is_door_right  && tile_x == SCENE_WIDTH_TILES - 1 && tile_y == SCENE_HEIGHT_TILES / 2)
-					 || (is_door_top    && tile_x == SCENE_WIDTH_TILES / 2 && tile_y == SCENE_HEIGHT_TILES - 1)
-					 || (is_door_bottom && tile_x == SCENE_WIDTH_TILES / 2 && tile_y == 0                     )) {
+					if ((is_door_left   && tile_x == 0                     && tile_y == SCENE_HEIGHT_TILES / 2) ||
+				        (is_door_right  && tile_x == SCENE_WIDTH_TILES - 1 && tile_y == SCENE_HEIGHT_TILES / 2) ||
+					    (is_door_top    && tile_x == SCENE_WIDTH_TILES / 2 && tile_y == SCENE_HEIGHT_TILES - 1) ||
+					    (is_door_bottom && tile_x == SCENE_WIDTH_TILES / 2 && tile_y == 0                     )) {
 						tile_value = Tiles::Tile::Floor;
 					}
 
 					if (tile_x == SCENE_WIDTH_TILES / 2 && tile_y == SCENE_HEIGHT_TILES / 2) {
-						if (is_door_up)   tile_value = Tiles::Tile::Door_Up;
-						if (is_door_down) tile_value = Tiles::Tile::Door_Down;
+						if (is_stairs_up)   tile_value = Tiles::Tile::Stairs_Up;
+						if (is_stairs_down) tile_value = Tiles::Tile::Stairs_Down;
 					}
 					
 					Tiles::set_tile(world_arena, tile_map, abs_tile_x, abs_tile_y, abs_tile_z, tile_value);
 				}
 			}
 
-			switch (random_choice_3) {
-				case 0: scene_x += 1;             break;
-				case 1: scene_y += 1;             break;
-				case 2: abs_tile_z = !abs_tile_z; break;
+			if (random_choice_3 == 2) {
+				abs_tile_z     = !abs_tile_z;
+				is_stairs_up   = !is_stairs_up;
+				is_stairs_down = !is_stairs_down;
+			} else {
+				is_stairs_up   = false;
+				is_stairs_down = false;
+				if (random_choice_3 == 0) scene_x += 1;
+				if (random_choice_3 == 1) scene_y += 1;
 			}
 
 			is_door_left = is_door_right;
 			is_door_bottom = is_door_top;
 			is_door_right = false;
 			is_door_top = false;
-
-			if (is_door_up) {
-				is_door_up = false;
-				is_door_down = true;
-			} else if (is_door_down) {
-				is_door_up = true;
-				is_door_down = false;
-			}
 		}
 
 		player_pos.abs_x = 1;
@@ -230,7 +230,7 @@ namespace Game {
 		Tiles::normalize_position(player_pos);
 		
 		assert(size_of(Game_State) <= memory.permanent.get_size());
-		assert(Tiles::check_empty_tile(tile_map, player_pos));
+		assert(Tiles::check_walkable_tile(tile_map, player_pos));
 		memory.is_initialized = true;
 	}
 

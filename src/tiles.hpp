@@ -12,12 +12,12 @@ namespace Tiles {
 	static const u32 CHUNK_REL_POSITION_MASK = CHUNK_DIM_TILES - 1;
 	static const f32 TILE_DIM = 1.4f;
 
-	enum class Tile {
+	enum struct Tile {
 		Not_Initialized,
 		Floor,
 		Wall,
-		Door_Up,
-		Door_Down
+		Stairs_Up,
+		Stairs_Down
 	};
 
 	struct Chunk {
@@ -43,11 +43,15 @@ namespace Tiles {
 		i32 x, y;
 	};
 
-	static bool check_empty_tile(Map& map, const Position& pos);
+	static bool check_same_tile(const Position& pos1, const Position& pos2);
+	static bool check_walkable_tile(Map& map, const Position& pos);
+
 	static Tile get_tile(Map& map, u32 abs_x, u32 abs_y, u32 abs_z);
 	static void set_tile(Arena& world_arena, Map& map, u32 abs_x, u32 abs_y, u32 abs_z, Tile value);
+
 	static Chunk* get_chunk(Map& map, u32 abs_x, u32 abs_y, u32 abs_z);
 	static Chunk_Lookup_Key get_chunk_lookup_key(u32 abs_x, u32 abs_y, u32 abs_z);
 	static Chunk_Rel_Position get_chunk_rel_position(u32 abs_x, u32 abs_y);
-	static void normalize_position(Position& position);
+	
+	static void normalize_position(Position& pos);
 }

@@ -34,7 +34,7 @@ struct Input {
 	Xinput_Set_State* XInputSetState;
 };
 
-enum class Replayer_State {
+enum struct Replayer_State {
 	Idle,
 	Recording,
 	Playing,
