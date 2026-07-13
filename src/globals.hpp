@@ -48,19 +48,17 @@ enum Cast_Flags : u32 {
 
 template <typename Out, Cast_Flags Flags = DEFAULT, typename In>
 static constexpr Out cast(In value) {
-    if constexpr (is_number<In>::value && is_number<Out>::value) {
-        if constexpr (!(Flags & IGNORE_SIGN)) {
-            assert((value == 0 && (Out)value == 0) ||
-                   (value >  0 && (Out)value >= 0) ||
-                   (value <  0 && (Out)value <= 0));
-        }
-        if constexpr (!(Flags & IGNORE_OVERFLOW)) {
-            if constexpr (is_same<In, f32>::value || is_same<In, f64>::value) {
-                assert(value - (In)(Out)value > -1 &&
-                       value - (In)(Out)value <  1);
-            } else {
-                assert((value == (In)(Out)value));
-            }
+    if constexpr (!(Flags & IGNORE_SIGN) && is_number<In>::value && is_number<Out>::value) {
+        assert((value == 0 && (Out)value == 0) ||
+               (value >  0 && (Out)value >= 0) ||
+               (value <  0 && (Out)value <= 0));
+    }
+    if constexpr (!(Flags & IGNORE_OVERFLOW) && is_number<In>::value && is_number<Out>::value) {
+        if constexpr (is_same<In, f32>::value || is_same<In, f64>::value) {
+            assert(value - (In)(Out)value > -1 &&
+                   value - (In)(Out)value <  1);
+        } else {
+            assert((value == (In)(Out)value));
         }
     }
     return (Out)value;
