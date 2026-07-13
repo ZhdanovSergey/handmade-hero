@@ -11,8 +11,6 @@
     #define NDEBUG
 #endif
 
-using f32 = float;
-using f64 = double;
 using i8  = int8_t;
 using u8  = uint8_t;
 using i16 = int16_t;
@@ -21,24 +19,34 @@ using i32 = int32_t;
 using u32 = uint32_t;
 using i64 = int64_t;
 using u64 = uint64_t;
+using f32 = float;
+using f64 = double;
 
-template <typename T, typename U>
-struct is_same       { static constexpr bool value = false; };
-template <typename T>
-struct is_same<T, T> { static constexpr bool value = true; };
+template <typename T> struct remove_cv                   { using type = T; };
+template <typename T> struct remove_cv<const T>          { using type = T; };
+template <typename T> struct remove_cv<volatile T>       { using type = T; };
+template <typename T> struct remove_cv<const volatile T> { using type = T; };
+template <typename T> using  remove_cv_t = typename remove_cv<T>::type;
 
-template <typename T>
-struct is_number { static constexpr bool value = false; };
-template <> struct is_number<i8>  { static constexpr bool value = true; };
-template <> struct is_number<u8>  { static constexpr bool value = true; };
-template <> struct is_number<i16> { static constexpr bool value = true; };
-template <> struct is_number<u16> { static constexpr bool value = true; };
-template <> struct is_number<i32> { static constexpr bool value = true; };
-template <> struct is_number<u32> { static constexpr bool value = true; };
-template <> struct is_number<f32> { static constexpr bool value = true; };
-template <> struct is_number<i64> { static constexpr bool value = true; };
-template <> struct is_number<u64> { static constexpr bool value = true; };
-template <> struct is_number<f64> { static constexpr bool value = true; };
+template <typename T, typename U> struct is_same_qualified      { static constexpr bool value = false; };
+template <typename T>             struct is_same_qualified<T,T> { static constexpr bool value = true; };
+template <typename T, typename U> constexpr bool is_same_v = is_same_qualified< remove_cv_t<T>, remove_cv_t<U> >::value;
+
+template <typename T> struct is_number_unqualified           { static constexpr bool value = false; };
+template <> struct is_number_unqualified<char>               { static constexpr bool value = true; };
+template <> struct is_number_unqualified<signed char>        { static constexpr bool value = true; };
+template <> struct is_number_unqualified<unsigned char>      { static constexpr bool value = true; };
+template <> struct is_number_unqualified<signed short>       { static constexpr bool value = true; };
+template <> struct is_number_unqualified<unsigned short>     { static constexpr bool value = true; };
+template <> struct is_number_unqualified<signed int>         { static constexpr bool value = true; };
+template <> struct is_number_unqualified<unsigned int>       { static constexpr bool value = true; };
+template <> struct is_number_unqualified<signed long>        { static constexpr bool value = true; };
+template <> struct is_number_unqualified<unsigned long>      { static constexpr bool value = true; };
+template <> struct is_number_unqualified<signed long long>   { static constexpr bool value = true; };
+template <> struct is_number_unqualified<unsigned long long> { static constexpr bool value = true; };
+template <> struct is_number_unqualified<float>              { static constexpr bool value = true; };
+template <> struct is_number_unqualified<double>             { static constexpr bool value = true; };
+template <typename T> constexpr bool is_number_v = is_number_unqualified<remove_cv_t<T>>::value;
 
 enum Cast_Flags : u32 {
     DEFAULT         = 0,
@@ -48,13 +56,13 @@ enum Cast_Flags : u32 {
 
 template <typename Out, Cast_Flags Flags = DEFAULT, typename In>
 static constexpr Out cast(In value) {
-    if constexpr (!(Flags & IGNORE_SIGN) && is_number<In>::value && is_number<Out>::value) {
+    if constexpr (!(Flags & IGNORE_SIGN) && is_number_v<In> && is_number_v<Out>) {
         assert((value == 0 && (Out)value == 0) ||
                (value >  0 && (Out)value >= 0) ||
                (value <  0 && (Out)value <= 0));
     }
-    if constexpr (!(Flags & IGNORE_OVERFLOW) && is_number<In>::value && is_number<Out>::value) {
-        if constexpr (is_same<In, f32>::value || is_same<In, f64>::value) {
+    if constexpr (!(Flags & IGNORE_OVERFLOW) && is_number_v<In> && is_number_v<Out>) {
+        if constexpr (is_same_v<In, f32> || is_same_v<In, f64>) {
             assert(value - (In)(Out)value > -1 &&
                    value - (In)(Out)value <  1);
         } else {
@@ -184,11 +192,11 @@ struct slice1 {
     template <typename U>
     slice1(U* base, i64 count) {
         // финальный конструктор для возможной конвертации в u8
-        if constexpr (is_same<T,u8>::value || is_same<T,const u8>::value) {
+        if constexpr (is_same_v<T,u8>) {
             this->base  = reinterpret_cast<T*>(base);
             this->count = count * size_of(U);
         } else {
-            static_assert(is_same<T,U >::value || is_same<T,const U>::value);
+            static_assert(is_same_v<T,U>);
             this->base  = base;
             this->count = count;
         }
@@ -202,7 +210,7 @@ struct slice1 {
     }
     i64  get_size() const { return size_of(T) * count; }
     void set_size(i64 size) {
-        static_assert(is_same<T,u8>::value || is_same<T,const u8>::value);
+        static_assert(is_same_v<T,u8>);
         this->count = size;
     }
 };
