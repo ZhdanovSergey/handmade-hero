@@ -3,7 +3,6 @@
 #include <cassert>
 #include <cmath>
 #include <cstdint>
-#include <cstdio>
 
 // включаем/выключаем assert
 #if SLOW_MODE
@@ -15,12 +14,12 @@
 using f32 = float;
 using f64 = double;
 using i8  = int8_t;
-using i16 = int16_t;
-using i32 = int32_t;
-using i64 = int64_t;
 using u8  = uint8_t;
+using i16 = int16_t;
 using u16 = uint16_t;
+using i32 = int32_t;
 using u32 = uint32_t;
+using i64 = int64_t;
 using u64 = uint64_t;
 
 template <typename T, typename U>
@@ -28,45 +27,42 @@ struct is_same       { static constexpr bool value = false; };
 template <typename T>
 struct is_same<T, T> { static constexpr bool value = true; };
 
-#define assert_cast_preserves_sign(Type_Out, VALUE)      \
-    if constexpr (SLOW_MODE) {                           \
-        auto orig_value = (VALUE);                       \
-        auto casted_value = (Type_Out)(orig_value);      \
-        assert((orig_value == 0 && casted_value == 0) || \
-               (orig_value >  0 && casted_value >= 0) || \
-               (orig_value <  0 && casted_value <= 0));  \
-    }
+template <typename T>
+struct is_number { static constexpr bool value = false; };
+template <> struct is_number<i8>  { static constexpr bool value = true; };
+template <> struct is_number<u8>  { static constexpr bool value = true; };
+template <> struct is_number<i16> { static constexpr bool value = true; };
+template <> struct is_number<u16> { static constexpr bool value = true; };
+template <> struct is_number<i32> { static constexpr bool value = true; };
+template <> struct is_number<u32> { static constexpr bool value = true; };
+template <> struct is_number<f32> { static constexpr bool value = true; };
+template <> struct is_number<i64> { static constexpr bool value = true; };
+template <> struct is_number<u64> { static constexpr bool value = true; };
+template <> struct is_number<f64> { static constexpr bool value = true; };
 
-#define assert_cast_preserves_data(Type_Out, VALUE)                                       \
-    if constexpr (SLOW_MODE) {                                                            \
-        using Type_In = decltype(VALUE);                                                  \
-        auto orig_value = (VALUE);                                                        \
-        auto casted_in_and_out = (Type_In)(Type_Out)(orig_value);                         \
-                                                                                          \
-        if constexpr (is_same<Type_In, f32>::value || is_same<Type_In, f64>::value) {     \
-            auto diff = orig_value - casted_in_and_out;                                   \
-            assert(-1 < diff && diff < 1);                                                \
-        } else {                                                                          \
-            assert((orig_value == casted_in_and_out));                                    \
-        }                                                                                 \
-    }
+enum Cast_Flags : u32 {
+    DEFAULT         = 0,
+    IGNORE_SIGN     = 1 << 0,
+    IGNORE_OVERFLOW = 1 << 1,
+};
 
-template <typename Out, typename In>
+template <typename Out, Cast_Flags Flags = DEFAULT, typename In>
 static constexpr Out cast(In value) {
-    assert_cast_preserves_data(Out, value);
-    assert_cast_preserves_sign(Out, value);
-    return (Out)value;
-}
-
-template <typename Out, typename In>
-static constexpr Out cast_ignore_sign(In value) {
-    assert_cast_preserves_data(Out, value);
-    return (Out)value;
-}
-
-template <typename Out, typename In>
-static constexpr Out cast_ignore_overflow(In value) {
-    assert_cast_preserves_sign(Out, value);
+    if constexpr (is_number<In>::value && is_number<Out>::value) {
+        if constexpr (!(Flags & IGNORE_SIGN)) {
+            assert((value == 0 && (Out)value == 0) ||
+                   (value >  0 && (Out)value >= 0) ||
+                   (value <  0 && (Out)value <= 0));
+        }
+        if constexpr (!(Flags & IGNORE_OVERFLOW)) {
+            if constexpr (is_same<In, f32>::value || is_same<In, f64>::value) {
+                assert(value - (In)(Out)value > -1 &&
+                       value - (In)(Out)value <  1);
+            } else {
+                assert((value == (In)(Out)value));
+            }
+        }
+    }
     return (Out)value;
 }
 

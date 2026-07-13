@@ -73,13 +73,13 @@ namespace Tiles {
 	static void normalize_position(Position& pos) {
 		if (pos.tile_rel_x < 0 || pos.tile_rel_x >= TILE_DIM) {
 			i32 tiles_diff = hm::floor(pos.tile_rel_x / TILE_DIM);
-			pos.abs_x += cast_ignore_sign<u32>(tiles_diff);
+			pos.abs_x += cast<u32, IGNORE_SIGN>(tiles_diff);
 			pos.tile_rel_x  -= tiles_diff * TILE_DIM;
 		}
 
 		if (pos.tile_rel_y < 0 || pos.tile_rel_y >= TILE_DIM) {
 			i32 tiles_diff = hm::floor(pos.tile_rel_y / TILE_DIM);
-			pos.abs_y += cast_ignore_sign<u32>(tiles_diff);
+			pos.abs_y += cast<u32, IGNORE_SIGN>(tiles_diff);
 			pos.tile_rel_y  -= tiles_diff * TILE_DIM;
 		}
 

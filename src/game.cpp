@@ -53,14 +53,14 @@ namespace Game {
 			SCENES_PER_SCREEN * SCENE_HEIGHT_TILES * Tiles::TILE_DIM, 0.0f
 		);
 
-		i32 player_abs_x_casted = cast_ignore_sign<i32>(player_pos.abs_x);
-		i32 player_abs_y_casted = cast_ignore_sign<i32>(player_pos.abs_y);
+		i32 player_abs_x_casted = cast<i32, IGNORE_SIGN>(player_pos.abs_x);
+		i32 player_abs_y_casted = cast<i32, IGNORE_SIGN>(player_pos.abs_y);
 		i32 half_screen_width_tiles  = SCENE_WIDTH_TILES  * SCENES_PER_SCREEN / 2;
 		i32 half_screen_height_tiles = SCENE_HEIGHT_TILES * SCENES_PER_SCREEN / 2;
 
 		for (    i32 y = player_abs_y_casted - half_screen_height_tiles - 1; y <= player_abs_y_casted + half_screen_height_tiles + 1; ++y) {
 			for (i32 x = player_abs_x_casted - half_screen_width_tiles  - 1; x <= player_abs_x_casted + half_screen_width_tiles  + 1; ++x) {
-				auto tile = Tiles::get_tile(tile_map, cast_ignore_sign<u32>(x), cast_ignore_sign<u32>(y), player_pos.abs_z);
+				auto tile = Tiles::get_tile(tile_map, cast<u32, IGNORE_SIGN>(x), cast<u32, IGNORE_SIGN>(y), player_pos.abs_z);
 
 				Color color = {};
 				switch (tile) {

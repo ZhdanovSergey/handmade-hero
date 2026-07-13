@@ -3,6 +3,7 @@
 #include "globals.hpp"
 #include "game.hpp"
 
+#include <cstdio>
 #include <windows.h>
 #include <dsound.h>
 #include <xinput.h>
