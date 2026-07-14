@@ -53,14 +53,12 @@ namespace Game {
 			SCENES_PER_SCREEN * SCENE_HEIGHT_TILES * Tiles::TILE_DIM, 0.0f
 		);
 
-		i32 player_abs_x_casted = cast<i32, IGNORE_SIGN>(player_pos.abs_x);
-		i32 player_abs_y_casted = cast<i32, IGNORE_SIGN>(player_pos.abs_y);
-		i32 half_screen_width_tiles  = SCENE_WIDTH_TILES  * SCENES_PER_SCREEN / 2;
-		i32 half_screen_height_tiles = SCENE_HEIGHT_TILES * SCENES_PER_SCREEN / 2;
+		i32 half_screen_width_tiles  = SCENES_PER_SCREEN * SCENE_WIDTH_TILES  / 2;
+		i32 half_screen_height_tiles = SCENES_PER_SCREEN * SCENE_HEIGHT_TILES / 2;
 
-		for (    i32 y = player_abs_y_casted - half_screen_height_tiles - 1; y <= player_abs_y_casted + half_screen_height_tiles + 1; ++y) {
-			for (i32 x = player_abs_x_casted - half_screen_width_tiles  - 1; x <= player_abs_x_casted + half_screen_width_tiles  + 1; ++x) {
-				auto tile = Tiles::get_tile(tile_map, cast<u32, IGNORE_SIGN>(x), cast<u32, IGNORE_SIGN>(y), player_pos.abs_z);
+		for (    i32 y = player_pos.abs_y - half_screen_height_tiles - 1; y <= player_pos.abs_y + half_screen_height_tiles + 1; ++y) {
+			for (i32 x = player_pos.abs_x - half_screen_width_tiles  - 1; x <= player_pos.abs_x + half_screen_width_tiles  + 1; ++x) {
+				auto tile = Tiles::get_tile(tile_map, x, y, player_pos.abs_z);
 
 				Color color = {};
 				switch (tile) {
@@ -71,12 +69,12 @@ namespace Game {
 					case Tiles::Tile::Stairs_Down:     color = { 0.25f, 0.25f, 0.25f }; break;
 				}
 
-				if (x == player_abs_x_casted && y == player_abs_y_casted) {
+				if (x == player_pos.abs_x && y == player_pos.abs_y) {
 					color = Color{ 0.0f, 0.0f, 0.0f };
 				}
 
-				f32 min_x =   (x - player_abs_x_casted + half_screen_width_tiles)  * Tiles::TILE_DIM - player_pos.tile_rel_x;
-				f32 min_y = - (y - player_abs_y_casted - half_screen_height_tiles) * Tiles::TILE_DIM + player_pos.tile_rel_y;
+				f32 min_x =   (x - player_pos.abs_x + half_screen_width_tiles)  * Tiles::TILE_DIM - player_pos.tile_rel_x;
+				f32 min_y = - (y - player_pos.abs_y - half_screen_height_tiles) * Tiles::TILE_DIM + player_pos.tile_rel_y;
 				f32 max_x = min_x + Tiles::TILE_DIM;
 				f32 max_y = min_y - Tiles::TILE_DIM;
 				draw_rectangle(screen, color, min_x, max_x, min_y, max_y);
@@ -96,7 +94,7 @@ namespace Game {
 
 		// f32 volume = 5000.0f;
 		f32 volume = 0;
-		u32 frequency = 261;
+		i32 frequency = 261;
 		f32 samples_per_wave_period = cast<f32>(sound.samples_per_second / frequency);
 
 		for (auto& sample : sound.samples) {
@@ -152,15 +150,15 @@ namespace Game {
 		chunks.count_z = Tiles::WORLD_Z_CHUNKS;
 		chunks.base = world_arena.push<Tiles::Chunk>(chunks.get_size());
 
-		u32 abs_tile_z = 0;
-		u32 scene_x = 0, scene_y = 0;
+		i32 abs_tile_z = 0;
+		i32 scene_x = 0, scene_y = 0;
 		bool is_door_left = false, is_door_right  = false;
 		bool is_door_top  = false, is_door_bottom = false;
 		bool is_stairs_up = false, is_stairs_down = false;
 
 		const i32 SCENES_COUNT = 100;
 		for (i32 scene_index = 0; scene_index < SCENES_COUNT; ++scene_index) {
-			u32 random_choice_3 = is_stairs_up || is_stairs_down
+			i32 random_choice_3 = is_stairs_up || is_stairs_down
 				? RANDOM_NUMBERS_TABLE.get(scene_index) % 2
 				: RANDOM_NUMBERS_TABLE.get(scene_index) % 3;
 
@@ -175,14 +173,14 @@ namespace Game {
 
 			if constexpr (SLOW_MODE) {
 				i32 fact_doors_count = is_door_left + is_door_right + is_door_top + is_door_bottom + is_stairs_up + is_stairs_down;
-				i32 correct_doors_count = scene_index == 0 ? 1 : 2; // на последнюю комнату пофиг
+				i32 correct_doors_count = scene_index == 0 ? 1 : 2;
 				assert(fact_doors_count == correct_doors_count);
 			}
 
-			for (    u32 tile_y = 0; tile_y < SCENE_HEIGHT_TILES; ++tile_y) {
-				for (u32 tile_x = 0; tile_x < SCENE_WIDTH_TILES;  ++tile_x) {
-					u32 abs_tile_x = scene_x * SCENE_WIDTH_TILES  + tile_x;
-					u32 abs_tile_y = scene_y * SCENE_HEIGHT_TILES + tile_y;
+			for (    i32 tile_y = 0; tile_y < SCENE_HEIGHT_TILES; ++tile_y) {
+				for (i32 tile_x = 0; tile_x < SCENE_WIDTH_TILES;  ++tile_x) {
+					i32 abs_tile_x = scene_x * SCENE_WIDTH_TILES  + tile_x;
+					i32 abs_tile_y = scene_y * SCENE_HEIGHT_TILES + tile_y;
 
 					auto tile_value = Tiles::Tile::Floor;
 					if (tile_x == 0 || tile_x == SCENE_WIDTH_TILES  - 1 ||
@@ -235,9 +233,9 @@ namespace Game {
 	}
 
 	static u32 get_hex_color(const Color& color) {
-		return (cast<u32>(hm::round(color.red   * 255.0f)) << 16)
-			 | (cast<u32>(hm::round(color.green * 255.0f)) << 8)
-			 | (cast<u32>(hm::round(color.blue  * 255.0f)));
+		return (hm::round<u32>(color.red   * UINT8_MAX) << 16) |
+			   (hm::round<u32>(color.green * UINT8_MAX) << 8)  |
+			   (hm::round<u32>(color.blue  * UINT8_MAX));
 	}
 
 	static f32 get_pixels_per_unit(const Screen& screen) {

@@ -17,7 +17,7 @@ namespace Tiles {
 		}
 	}
 
-	static Tile get_tile(Map& map, u32 abs_x, u32 abs_y, u32 abs_z) {
+	static Tile get_tile(Map& map, i32 abs_x, i32 abs_y, i32 abs_z) {
 		auto* chunk_ptr = get_chunk(map, abs_x, abs_y, abs_z);
 		if (!chunk_ptr || !chunk_ptr->tiles.base) return {};
 		
@@ -25,7 +25,7 @@ namespace Tiles {
 		return chunk_ptr->tiles.get(chunk_rel_pos.x, chunk_rel_pos.y);
 	};
 
-	static void set_tile(Arena& world_arena, Map& map, u32 abs_x, u32 abs_y, u32 abs_z, Tile value) {
+	static void set_tile(Arena& world_arena, Map& map, i32 abs_x, i32 abs_y, i32 abs_z, Tile value) {
 		auto* chunk_ptr = get_chunk(map, abs_x, abs_y, abs_z);
 		if (!chunk_ptr) {
 			assert(false);
@@ -43,7 +43,7 @@ namespace Tiles {
 		chunk.tiles.get(chunk_rel_pos.x, chunk_rel_pos.y) = value;
 	}
 
-	static Chunk* get_chunk(Map& map, u32 abs_x, u32 abs_y, u32 abs_z) {
+	static Chunk* get_chunk(Map& map, i32 abs_x, i32 abs_y, i32 abs_z) {
 		auto lookup_key = get_chunk_lookup_key(abs_x, abs_y, abs_z);
 
 		if (lookup_key.x < 0 || lookup_key.x >= map.chunks.count_x ||
@@ -55,15 +55,15 @@ namespace Tiles {
 		return &map.chunks.get(lookup_key.x, lookup_key.y, lookup_key.z);
 	};
 
-	static Chunk_Lookup_Key get_chunk_lookup_key(u32 abs_x, u32 abs_y, u32 abs_z) {
+	static Chunk_Lookup_Key get_chunk_lookup_key(i32 abs_x, i32 abs_y, i32 abs_z) {
 		Chunk_Lookup_Key result = {};
-		result.x = cast<i32>(abs_x >> CHUNK_LOOKUP_KEY_SHIFT);
-		result.y = cast<i32>(abs_y >> CHUNK_LOOKUP_KEY_SHIFT);
-		result.z = cast<i32>(abs_z); // shift не нужен
+		result.x = cast<i32>(cast<u32, IGNORE_SIGN>(abs_x) >> CHUNK_LOOKUP_KEY_SHIFT);
+		result.y = cast<i32>(cast<u32, IGNORE_SIGN>(abs_y) >> CHUNK_LOOKUP_KEY_SHIFT);
+		result.z = abs_z; // сдвиг не нужен
 		return result;
 	}
 	
-	static Chunk_Rel_Position get_chunk_rel_position(u32 abs_x, u32 abs_y) {
+	static Chunk_Rel_Position get_chunk_rel_position(i32 abs_x, i32 abs_y) {
 		Chunk_Rel_Position result = {};
 		result.x = cast<i32>(abs_x & CHUNK_REL_POSITION_MASK);
 		result.y = cast<i32>(abs_y & CHUNK_REL_POSITION_MASK);

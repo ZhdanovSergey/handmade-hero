@@ -30,8 +30,8 @@ namespace Tiles {
 
 	// LATER: сделать сеттеры и конструктор с нормализацией после введения векторов
 	struct Position {
-		u32 abs_x, abs_y; // нижние CHUNK_LOOKUP_KEY_SHIFT бит это координаты ячейки внутри чанка, верхние биты это координаты чанка в мире
-		u32 abs_z;        // просто координата чанка в мире
+		i32 abs_x, abs_y; // нижние CHUNK_LOOKUP_KEY_SHIFT бит это координаты ячейки внутри чанка, верхние биты это координаты чанка в мире
+		i32 abs_z;        // просто координата чанка в мире
 		f32 tile_rel_x, tile_rel_y;
 	};
 
@@ -46,12 +46,12 @@ namespace Tiles {
 	static bool check_same_tile(const Position& pos1, const Position& pos2);
 	static bool check_walkable_tile(Map& map, const Position& pos);
 
-	static Tile get_tile(Map& map, u32 abs_x, u32 abs_y, u32 abs_z);
-	static void set_tile(Arena& world_arena, Map& map, u32 abs_x, u32 abs_y, u32 abs_z, Tile value);
+	static Tile get_tile(Map& map, i32 abs_x, i32 abs_y, i32 abs_z);
+	static void set_tile(Arena& world_arena, Map& map, i32 abs_x, i32 abs_y, i32 abs_z, Tile value);
 
-	static Chunk* get_chunk(Map& map, u32 abs_x, u32 abs_y, u32 abs_z);
-	static Chunk_Lookup_Key get_chunk_lookup_key(u32 abs_x, u32 abs_y, u32 abs_z);
-	static Chunk_Rel_Position get_chunk_rel_position(u32 abs_x, u32 abs_y);
+	static Chunk* get_chunk(Map& map, i32 abs_x, i32 abs_y, i32 abs_z);
+	static Chunk_Lookup_Key get_chunk_lookup_key(i32 abs_x, i32 abs_y, i32 abs_z);
+	static Chunk_Rel_Position get_chunk_rel_position(i32 abs_x, i32 abs_y);
 	
 	static void normalize_position(Position& pos);
 }

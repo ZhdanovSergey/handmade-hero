@@ -72,10 +72,6 @@ static constexpr Out cast(In value) {
     return (Out)value;
 }
 
-#define CONCAT_INTERNAL(a, b) a##b
-#define CONCAT(a, b) CONCAT_INTERNAL(a, b)
-#define size_of(value) cast<i64>(sizeof(value))
-
 static constexpr f64 PI64 = 3.14159265358979323846;
 static constexpr f32 PI32 = cast<f32>(PI64);
 static constexpr f32 DOUBLE_PI32 = 2.0f * PI32;
@@ -84,14 +80,13 @@ static constexpr i64 operator ""_KB(u64 value) { return cast<i64>(value << 10); 
 static constexpr i64 operator ""_MB(u64 value) { return cast<i64>(value << 20); }
 static constexpr i64 operator ""_GB(u64 value) { return cast<i64>(value << 30); }
 
-template <typename F>
-struct Deferrer {
-    F f;
-    ~Deferrer() { f(); }
-};
-template <typename F>
-Deferrer(F) -> Deferrer<F>;
+template <typename F> struct Deferrer { F f; ~Deferrer() { f(); } };
+template <typename F> Deferrer(F) -> Deferrer<F>;
+#define CONCAT_INTERNAL(a, b) a##b
+#define CONCAT(a, b) CONCAT_INTERNAL(a, b)
 #define defer(code) Deferrer CONCAT(defer_, __LINE__){[&](){ code; }}
+
+#define size_of(value) cast<i64>(sizeof(value))
 
 template <typename T, i32 Count_X, i32 Count_Y = 1, i32 Count_Z = 1>
 struct static_slice {
@@ -243,7 +238,8 @@ namespace hm {
     template <typename T>
     static constexpr T   sign  (T x)   { return cast<T>((x > 0) - (x < 0)); }
     static constexpr i32 abs   (i32 x) { return sign(x) * x; }
-    static constexpr i32 round (f32 x) { return cast<i32>(x + 0.5f * sign(x)); }
+    template <typename Out = i32>
+    static constexpr Out round (f32 x) { return cast<Out>(cast<i32>(x + 0.5 * sign(x))); }
     static constexpr i32 ceil  (f32 x) { i32 x_trunc = cast<i32>(x); return x_trunc + (x_trunc < x); }
     static constexpr i32 floor (f32 x) { i32 x_trunc = cast<i32>(x); return x_trunc - (x_trunc > x); }
 
