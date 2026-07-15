@@ -9,7 +9,7 @@ namespace Tiles {
 
 	static const i32 CHUNK_LOOKUP_KEY_SHIFT = 4;
 	static const i32 CHUNK_DIM_TILES = 1 << CHUNK_LOOKUP_KEY_SHIFT;
-	static const u32 CHUNK_REL_POSITION_MASK = CHUNK_DIM_TILES - 1;
+	static const i32 CHUNK_REL_POSITION_MASK = CHUNK_DIM_TILES - 1;
 	static const f32 TILE_DIM = 1.4f;
 
 	enum struct Tile {

@@ -47,16 +47,16 @@ namespace Game {
 		i32 samples_per_second;
 	};
 
-	using Screen = slice2<u32>;
-
 	struct Memory {
 		bool is_initialized;
 		slice1<u8> permanent;
 		slice1<u8> transient;
-    	Platform::Read_File_Sync* read_file_sync;
-    	Platform::Write_File_Sync* write_file_sync;
+    	Platform::Read_Entire_File* read_entire_file;
+    	Platform::Write_Entire_File* write_entire_file;
     	Platform::Free_File_Memory* free_file_memory;
 	};
+
+	using Screen = slice2<u32>;
 
 	struct Color {
 		f32 red, green, blue;
@@ -70,15 +70,35 @@ namespace Game {
 		World world;
 		Arena world_arena;
 		Tiles::Position player_pos;
+		slice1<u32> test_pixels;
 		f32 pixels_per_unit;
 		f32 sound_t_sin;
 	};
 
-	extern "C" void update_and_render(const Input& input, Memory& memory, Screen& screen_buffer);
+	#pragma pack(push, 1)
+	struct Bmp_Header {
+		u16 file_type;      /* File type, always 4D42h ("BM") */
+		u32 file_size;      /* Size of the file in bytes */
+		u16 reserved1;      /* Always 0 */
+		u16 reserved2;      /* Always 0 */
+		u32 bitmap_offset;  /* Starting position of image data in bytes */
+
+		u32 size;           /* Size of this header in bytes */
+		i16 width;          /* Image width in pixels */
+		i16 height;         /* Image height in pixels */
+		u16 planes;         /* Number of color planes */
+		u16 bits_per_pixel; /* Number of bits per pixel */
+	};
+	#pragma pack(pop)
+
+	extern "C" void update_and_render(const Platform::Thread_Context& thread, const Input& input, Memory& memory, Screen& screen_buffer);
 	using Update_And_Render = decltype(update_and_render);
 	// get_sound_samples должен быть быстрым, не больше 1ms
-	extern "C" void get_sound_samples(Memory& memory, Sound& sound_buffer);
+	extern "C" void get_sound_samples(const Platform::Thread_Context& thread, Memory& memory, Sound& sound_buffer);
 	using Get_Sound_Samples = decltype(get_sound_samples);
+
+	// LATER: подумать имеет ли смысл передавать функции по проекту как ссылки
+	static slice1<u32> load_bmp(Platform::Read_Entire_File* read_entire_file, const Platform::Thread_Context& thread, const char* file_name);
 
 	static void draw_rectangle(Screen& screen, const Color& color, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32);
 	static f32 get_pixels_per_unit(const Screen& screen);

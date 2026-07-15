@@ -2,9 +2,30 @@
 #include "tiles.cpp"
 
 namespace Game {
-	extern "C" void update_and_render(const Input& input, Memory& memory, Screen& screen) {
+	extern "C" void get_sound_samples(const Platform::Thread_Context& thread, Memory& memory, Sound& sound) {
+		auto& game_state = get_game_state(memory);
+		auto& sound_t_sin = game_state.sound_t_sin;
+
+		// f32 volume = 5000.0f;
+		f32 volume = 0;
+		i32 frequency = 261;
+		f32 samples_per_wave_period = cast<f32>(sound.samples_per_second / frequency);
+
+		for (auto& sample : sound.samples) {
+			i16 value = cast<i16>(std::sinf(sound_t_sin) * volume);
+			sample.left  = value;
+			sample.right = value;
+			sound_t_sin += DOUBLE_PI32 / samples_per_wave_period;
+			if (sound_t_sin >= DOUBLE_PI32) sound_t_sin -= DOUBLE_PI32;
+		}
+	}
+	extern "C" void update_and_render(const Platform::Thread_Context& thread, const Input& input, Memory& memory, Screen& screen) {
 		assert(input.frame_dt > 0);
-		if (!memory.is_initialized) init_memory(memory);
+		if (!memory.is_initialized) {
+			init_memory(memory);
+			auto& game_state = get_game_state(memory);
+			game_state.test_pixels = load_bmp(memory.read_entire_file, thread, "test/test_background.bmp");
+		}
 
 		auto& game_state = get_game_state(memory);
 		auto& player_pos = game_state.player_pos;
@@ -86,53 +107,6 @@ namespace Game {
 		f32 player_max_x = player_min_x + player_width;
 		f32 player_max_y = player_min_y - player_height;
 		draw_rectangle(screen, Color{ 1.0f, 1.0f, 0.0f }, player_min_x, player_max_x, player_min_y, player_max_y);
-	};
-
-	extern "C" void get_sound_samples(Memory& memory, Sound& sound) {
-		auto& game_state = get_game_state(memory);
-		auto& sound_t_sin = game_state.sound_t_sin;
-
-		// f32 volume = 5000.0f;
-		f32 volume = 0;
-		i32 frequency = 261;
-		f32 samples_per_wave_period = cast<f32>(sound.samples_per_second / frequency);
-
-		for (auto& sample : sound.samples) {
-			i16 value = cast<i16>(std::sinf(sound_t_sin) * volume);
-			sample.left  = value;
-			sample.right = value;
-			sound_t_sin += DOUBLE_PI32 / samples_per_wave_period;
-			if (sound_t_sin >= DOUBLE_PI32) sound_t_sin -= DOUBLE_PI32;
-		}
-	}
-
-	static void draw_rectangle(Screen& screen, const Color& color, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32) {
-		hm::swap(min_y_f32, max_y_f32); // screen.base инвертирован по вертикали относительно координат игры
-
-		f32 pixels_per_unit = get_pixels_per_unit(screen);
-		// f32 offset_x = - Tiles::TILE_DIM / 2;
-		f32 offset_x = 0;
-		f32 offset_y = 0;
-
-		i32 min_x = hm::round((min_x_f32 + offset_x) * pixels_per_unit);
-		i32 max_x = hm::round((max_x_f32 + offset_x) * pixels_per_unit);
-		i32 min_y = hm::round((min_y_f32 + offset_y) * pixels_per_unit);
-		i32 max_y = hm::round((max_y_f32 + offset_y) * pixels_per_unit);
-
-		min_x = hm::max(min_x, 0);
-		max_x = hm::min(max_x, screen.count_x);
-		min_y = hm::max(min_y, 0);
-		max_y = hm::min(max_y, screen.count_y);
-
-		u32 hex_color = get_hex_color(color);
-		u32* row = screen.base + min_y * screen.count_x + min_x;
-		for (i32 y = min_y; y < max_y; ++y) {
-			u32* pixel = row;
-			for (i32 x = min_x; x < max_x; ++x) {
-				*pixel++ = hex_color;
-			}
-			row += screen.count_x;
-		}
 	};
 
 	static void init_memory(Memory& memory) {
@@ -230,6 +204,46 @@ namespace Game {
 		assert(size_of(Game_State) <= memory.permanent.get_size());
 		assert(Tiles::check_walkable_tile(tile_map, player_pos));
 		memory.is_initialized = true;
+	}
+
+	static void draw_rectangle(Screen& screen, const Color& color, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32) {
+		hm::swap(min_y_f32, max_y_f32); // screen.base инвертирован по вертикали относительно координат игры
+
+		f32 pixels_per_unit = get_pixels_per_unit(screen);
+		// f32 offset_x = - Tiles::TILE_DIM / 2;
+		f32 offset_x = 0;
+		f32 offset_y = 0;
+
+		i32 min_x = hm::round((min_x_f32 + offset_x) * pixels_per_unit);
+		i32 max_x = hm::round((max_x_f32 + offset_x) * pixels_per_unit);
+		i32 min_y = hm::round((min_y_f32 + offset_y) * pixels_per_unit);
+		i32 max_y = hm::round((max_y_f32 + offset_y) * pixels_per_unit);
+
+		min_x = hm::max(min_x, 0);
+		max_x = hm::min(max_x, screen.count_x);
+		min_y = hm::max(min_y, 0);
+		max_y = hm::min(max_y, screen.count_y);
+
+		u32 hex_color = get_hex_color(color);
+		u32* row = screen.base + min_y * screen.count_x + min_x;
+		for (i32 y = min_y; y < max_y; ++y) {
+			u32* pixel = row;
+			for (i32 x = min_x; x < max_x; ++x) {
+				*pixel++ = hex_color;
+			}
+			row += screen.count_x;
+		}
+	};
+
+	static slice1<u32> load_bmp(Platform::Read_Entire_File* read_entire_file, const Platform::Thread_Context& thread, const char* file_name) {
+		auto read_result = read_entire_file(thread, file_name);
+		if (!read_result.base) return {};
+
+		slice1<u32> pixels = {};
+		auto& header = *cast<Bmp_Header*>(read_result.base);
+		pixels.base = cast<u32*>(read_result.base + header.bitmap_offset);
+		pixels.set_size(read_result.get_size() - header.bitmap_offset);
+		return pixels;
 	}
 
 	static u32 get_hex_color(const Color& color) {

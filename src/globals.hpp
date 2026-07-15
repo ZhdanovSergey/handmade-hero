@@ -203,10 +203,11 @@ struct slice1 {
         assert(index >= 0 && index < count);
         return base[index];
     }
-    i64  get_size() const { return size_of(T) * count; }
+    i64  get_size() const { return count * size_of(T); }
     void set_size(i64 size) {
-        static_assert(is_same_v<T,u8>);
-        this->count = size;
+        count = size / size_of(T);
+        // LATER: сделать эту проверку отключаемой при вызове? IGNORE_MISALIGNMENT
+        assert(size == count * size_of(T));
     }
 };
 template <typename T>
@@ -262,12 +263,14 @@ namespace hm {
 }
 
 namespace Platform {
-    slice1<u8> read_file_sync(const char* file_name);
-    using Read_File_Sync = decltype(read_file_sync);
+    struct Thread_Context {};
 
-    void write_file_sync(const char* file_name, slice1<const u8> file);
-    using Write_File_Sync = decltype(write_file_sync);
+    slice1<u8> read_entire_file(const Thread_Context& thread, const char* file_name);
+    using Read_Entire_File = decltype(read_entire_file);
 
-    void free_file_memory(void*& memory);
+    void write_entire_file(const Thread_Context& thread, const char* file_name, slice1<const u8> file);
+    using Write_Entire_File = decltype(write_entire_file);
+
+    void free_file_memory(const Thread_Context& thread, void*& memory);
     using Free_File_Memory = decltype(free_file_memory);
 }

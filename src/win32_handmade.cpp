@@ -7,6 +7,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
 
 	HWND window = create_window(hInstance);
+	Platform::Thread_Context thread = {};
 	auto input = create_input();
 	auto sound = create_sound(window);
 	auto game_code = create_game_code();
@@ -61,9 +62,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 			replayer_record_or_replace(replayer, game_memory, input.game_input);
 		}
 
-		game_code.update_and_render(input.game_input, game_memory, global_screen.game_screen);
+		game_code.update_and_render(thread, input.game_input, game_memory, global_screen.game_screen);
 		calc_sound_samples_to_write(sound, flip_timestamp);
-		game_code.get_sound_samples(game_memory, sound.game_sound);
+		game_code.get_sound_samples(thread, game_memory, sound.game_sound);
 		submit_sound(sound);
 		
 		wait_until_end_of_frame(flip_timestamp);
@@ -196,11 +197,11 @@ static Game::Memory create_game_memory() {
 	u8* game_storage = cast<u8*>(VirtualAlloc(base_address, cast<SIZE_T>(permanent_size + transient_size), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
 
 	Game::Memory game_memory = {};
-	game_memory.permanent        = { game_storage,                  permanent_size };
-	game_memory.transient        = { game_storage + permanent_size, transient_size };
-	game_memory.read_file_sync   = Platform::read_file_sync;
-	game_memory.write_file_sync  = Platform::write_file_sync;
-	game_memory.free_file_memory = Platform::free_file_memory;
+	game_memory.permanent         = { game_storage,                  permanent_size };
+	game_memory.transient         = { game_storage + permanent_size, transient_size };
+	game_memory.read_entire_file  = Platform::read_entire_file;
+	game_memory.write_entire_file = Platform::write_entire_file;
+	game_memory.free_file_memory  = Platform::free_file_memory;
 	return game_memory;
 }
 
@@ -586,6 +587,8 @@ static void calc_sound_samples_to_write(Sound& sound, i64 flip_timestamp) {
 	DWORD target_cursor = target_cursor_unwrapped % sound.buffer_size;
 	DWORD output_byte_count = target_cursor - sound.output_location;
 	if (target_cursor < sound.output_location) output_byte_count += sound.buffer_size;
+
+	// output_byte_count не кратен sizeof(Game::Sound_Sample)
 	sound.game_sound.samples.count = cast<i64>(output_byte_count / sizeof(Game::Sound_Sample));
 
 	if constexpr (DEV_MODE) {
@@ -663,7 +666,7 @@ static void draw_sound_sync(Screen& screen, Sound& sound) {
 }
 
 namespace Platform {
-	slice1<u8> read_file_sync(const char* file_name) {
+	slice1<u8> read_entire_file(const Thread_Context& thread, const char* file_name) {
 		slice1<u8> result = {};
 
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
@@ -686,14 +689,14 @@ namespace Platform {
 		return result;
 	}
 
-	void write_file_sync(const char* file_name, slice1<const u8> file) {
+	void write_entire_file(const Thread_Context& thread, const char* file_name, slice1<const u8> file) {
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
 		defer(CloseHandle(file_handle));
 		DWORD bytes_written;
 		WriteFile(file_handle, file.base, cast<DWORD>(file.get_size()), &bytes_written, nullptr);
 	}
 	
-	void free_file_memory(void*& memory) {
+	void free_file_memory(const Thread_Context& thread, void*& memory) {
 		HANDLE heap_handle = GetProcessHeap();
 		HeapFree(heap_handle, 0, memory);
 		memory = nullptr;

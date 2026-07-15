@@ -65,21 +65,21 @@ namespace Tiles {
 	
 	static Chunk_Rel_Position get_chunk_rel_position(i32 abs_x, i32 abs_y) {
 		Chunk_Rel_Position result = {};
-		result.x = cast<i32>(abs_x & CHUNK_REL_POSITION_MASK);
-		result.y = cast<i32>(abs_y & CHUNK_REL_POSITION_MASK);
+		result.x = abs_x & CHUNK_REL_POSITION_MASK;
+		result.y = abs_y & CHUNK_REL_POSITION_MASK;
 		return result;
 	}
 
 	static void normalize_position(Position& pos) {
 		if (pos.tile_rel_x < 0 || pos.tile_rel_x >= TILE_DIM) {
 			i32 tiles_diff = hm::floor(pos.tile_rel_x / TILE_DIM);
-			pos.abs_x += cast<u32, IGNORE_SIGN>(tiles_diff);
+			pos.abs_x += tiles_diff;
 			pos.tile_rel_x  -= tiles_diff * TILE_DIM;
 		}
 
 		if (pos.tile_rel_y < 0 || pos.tile_rel_y >= TILE_DIM) {
 			i32 tiles_diff = hm::floor(pos.tile_rel_y / TILE_DIM);
-			pos.abs_y += cast<u32, IGNORE_SIGN>(tiles_diff);
+			pos.abs_y += tiles_diff;
 			pos.tile_rel_y  -= tiles_diff * TILE_DIM;
 		}
 
