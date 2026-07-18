@@ -112,7 +112,7 @@ struct static_slice {
 
     T* begin() { return base; }
     T* end()   { return base + Count_X * Count_Y * Count_Z; }
-    T& get(i32 x, i32 y = 0, i32 z = 0) {
+    T& operator()(i32 x, i32 y = 0, i32 z = 0) {
         assert(x >= 0 && x < Count_X);
         assert(y >= 0 && y < Count_Y);
         assert(z >= 0 && z < Count_Z);
@@ -143,7 +143,7 @@ struct slice3 {
 
     T* begin() { return base; }
     T* end()   { return base + count_x * count_y * count_z; }
-    T& get(i32 x, i32 y, i32 z) {
+    T& operator()(i32 x, i32 y, i32 z) {
         assert(x >= 0 && x < count_x);
         assert(y >= 0 && y < count_y);
         assert(z >= 0 && z < count_z);
@@ -166,7 +166,7 @@ struct slice2 {
 
     T* begin() { return base; }
     T* end()   { return base + count_x * count_y; }
-    T& get(i32 x, i32 y) {
+    T& operator()(i32 x, i32 y) {
         assert(x >= 0 && x < count_x);
         assert(y >= 0 && y < count_y);
         return base[y * count_x + x];
@@ -199,14 +199,13 @@ struct slice1 {
 
     T* begin() { return base; }
     T* end()   { return base + count; }
-    T& get(i64 index) {
+    T& operator()(i64 index) {
         assert(index >= 0 && index < count);
         return base[index];
     }
     i64  get_size() const { return count * size_of(T); }
     void set_size(i64 size) {
         count = size / size_of(T);
-        // LATER: сделать эту проверку отключаемой при вызове? IGNORE_MISALIGNMENT
         assert(size == count * size_of(T));
     }
 };
@@ -251,13 +250,13 @@ namespace hm {
     static void swap(T& a, T& b) { T temp = a; a = b; b = temp; }
 
     static void memzero(slice1<u8> slice) {
-        for (auto& byte : slice) byte = 0;
+        for (u8& byte : slice) byte = 0;
     }
 
     static void memcpy(slice1<const u8> src, slice1<u8> dest) {
         assert(src.count <= dest.count);
         for (i64 i = 0; i < min(src.count, dest.count); ++i) {
-            dest.get(i) = src.get(i);
+            dest(i) = src(i);
         }
     }
 }

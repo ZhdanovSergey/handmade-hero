@@ -22,7 +22,7 @@ namespace Tiles {
 		if (!chunk_ptr || !chunk_ptr->tiles.base) return {};
 		
 		auto chunk_rel_pos = get_chunk_rel_position(abs_x, abs_y);
-		return chunk_ptr->tiles.get(chunk_rel_pos.x, chunk_rel_pos.y);
+		return chunk_ptr->tiles(chunk_rel_pos.x, chunk_rel_pos.y);
 	};
 
 	static void set_tile(Arena& world_arena, Map& map, i32 abs_x, i32 abs_y, i32 abs_z, Tile value) {
@@ -40,7 +40,7 @@ namespace Tiles {
 			}
 		}
 		auto chunk_rel_pos = get_chunk_rel_position(abs_x, abs_y);
-		chunk.tiles.get(chunk_rel_pos.x, chunk_rel_pos.y) = value;
+		chunk.tiles(chunk_rel_pos.x, chunk_rel_pos.y) = value;
 	}
 
 	static Chunk* get_chunk(Map& map, i32 abs_x, i32 abs_y, i32 abs_z) {
@@ -52,7 +52,7 @@ namespace Tiles {
 			return nullptr;
 		}
 
-		return &map.chunks.get(lookup_key.x, lookup_key.y, lookup_key.z);
+		return &map.chunks(lookup_key.x, lookup_key.y, lookup_key.z);
 	};
 
 	static Chunk_Lookup_Key get_chunk_lookup_key(i32 abs_x, i32 abs_y, i32 abs_z) {

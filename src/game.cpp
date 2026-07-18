@@ -3,7 +3,7 @@
 
 namespace Game {
 	extern "C" void get_sound_samples(const Platform::Thread_Context& thread, Memory& memory, Sound& sound) {
-		auto& game_state = get_game_state(memory);
+		auto& game_state  = get_game_state(memory);
 		auto& sound_t_sin = game_state.sound_t_sin;
 
 		// f32 volume = 5000.0f;
@@ -19,17 +19,20 @@ namespace Game {
 			if (sound_t_sin >= DOUBLE_PI32) sound_t_sin -= DOUBLE_PI32;
 		}
 	}
-	extern "C" void update_and_render(const Platform::Thread_Context& thread, const Input& input, Memory& memory, Screen& screen) {
+	extern "C" void update_and_render(const Platform::Thread_Context& thread, const Input& input, Memory& memory, slice2<u32> screen) {
 		assert(input.frame_dt > 0);
 		if (!memory.is_initialized) {
 			init_memory(memory);
 			auto& game_state = get_game_state(memory);
-			game_state.test_pixels = load_bmp(memory.read_entire_file, thread, "test/test_background.bmp");
+			game_state.test_background       = load_bmp(thread, memory.read_entire_file, "test/test_background.bmp");
+			game_state.test_hero_front_head  = load_bmp(thread, memory.read_entire_file, "test/test_hero_front_head.bmp");
+			game_state.test_hero_front_cape  = load_bmp(thread, memory.read_entire_file, "test/test_hero_front_cape.bmp");
+			game_state.test_hero_front_torso = load_bmp(thread, memory.read_entire_file, "test/test_hero_front_torso.bmp");
 		}
 
 		auto& game_state = get_game_state(memory);
 		auto& player_pos = game_state.player_pos;
-		auto& tile_map = game_state.world.tile_map;
+		auto& tile_map   = game_state.world.tile_map;
 
 		auto new_player_pos = player_pos;
 		for (auto& controller : input.controllers) {
@@ -69,10 +72,14 @@ namespace Game {
 			player_pos = new_player_pos;
 		}
 
-		draw_rectangle(screen, Color{ 1.0f, 0.0f, 1.0f }, 0.0f,
-			SCENES_PER_SCREEN * SCENE_WIDTH_TILES  * Tiles::TILE_DIM,
-			SCENES_PER_SCREEN * SCENE_HEIGHT_TILES * Tiles::TILE_DIM, 0.0f
+		draw_rectangle(
+			screen, Color{ 1.0f, 0.0f, 1.0f },
+			// TODO: как-то странно передавать max_y == 0
+			0.0f, SCENES_PER_SCREEN * SCENE_HEIGHT_TILES * Tiles::TILE_DIM,
+			SCENES_PER_SCREEN * SCENE_WIDTH_TILES  * Tiles::TILE_DIM, 0.0f
 		);
+		
+		draw_pixels(screen, game_state.test_background, 0, 0);
 
 		i32 half_screen_width_tiles  = SCENES_PER_SCREEN * SCENE_WIDTH_TILES  / 2;
 		i32 half_screen_height_tiles = SCENES_PER_SCREEN * SCENE_HEIGHT_TILES / 2;
@@ -94,26 +101,97 @@ namespace Game {
 					color = Color{ 0.0f, 0.0f, 0.0f };
 				}
 
-				f32 min_x =   (x - player_pos.abs_x + half_screen_width_tiles)  * Tiles::TILE_DIM - player_pos.tile_rel_x;
-				f32 min_y = - (y - player_pos.abs_y - half_screen_height_tiles) * Tiles::TILE_DIM + player_pos.tile_rel_y;
-				f32 max_x = min_x + Tiles::TILE_DIM;
-				f32 max_y = min_y - Tiles::TILE_DIM;
-				draw_rectangle(screen, color, min_x, max_x, min_y, max_y);
+				if ((tile != Tiles::Tile::Not_Initialized && tile != Tiles::Tile::Floor) ||
+				    (x == player_pos.abs_x && y == player_pos.abs_y)) {
+					f32 min_x =   (x - player_pos.abs_x + half_screen_width_tiles)  * Tiles::TILE_DIM - player_pos.tile_rel_x;
+					f32 min_y = - (y - player_pos.abs_y - half_screen_height_tiles) * Tiles::TILE_DIM + player_pos.tile_rel_y;
+					f32 max_x = min_x + Tiles::TILE_DIM;
+					f32 max_y = min_y - Tiles::TILE_DIM;
+					draw_rectangle(screen, color, min_x, min_y, max_x, max_y);
+				}
+
 			}
 		}
 
 		f32 player_min_x = half_screen_width_tiles  * Tiles::TILE_DIM - player_width / 2;
 		f32 player_min_y = half_screen_height_tiles * Tiles::TILE_DIM;
-		f32 player_max_x = player_min_x + player_width;
-		f32 player_max_y = player_min_y - player_height;
-		draw_rectangle(screen, Color{ 1.0f, 1.0f, 0.0f }, player_min_x, player_max_x, player_min_y, player_max_y);
+		// f32 player_max_x = player_min_x + player_width;
+		// f32 player_max_y = player_min_y - player_height;
+		// draw_rectangle(screen, Color{ 1.0f, 1.0f, 0.0f }, player_min_x, player_min_y, player_max_x, player_max_y);
+		draw_pixels(screen, game_state.test_hero_front_head, player_min_x, player_min_y);
 	};
 
+	static void draw_rectangle(slice2<u32> screen, const Color& color, f32 min_x_f32, f32 min_y_f32, f32 max_x_f32, f32 max_y_f32) {
+		hm::swap(min_y_f32, max_y_f32); // screen.base инвертирован по вертикали относительно координат игры
+
+		f32 pixels_per_unit = get_pixels_per_unit(screen);
+		// f32 offset_x = - Tiles::TILE_DIM / 2;
+		f32 offset_x = 0;
+		f32 offset_y = 0;
+
+		i32 min_x = hm::round((min_x_f32 + offset_x) * pixels_per_unit);
+		i32 min_y = hm::round((min_y_f32 + offset_y) * pixels_per_unit);
+		i32 max_x = hm::round((max_x_f32 + offset_x) * pixels_per_unit);
+		i32 max_y = hm::round((max_y_f32 + offset_y) * pixels_per_unit);
+
+		min_x = hm::max(min_x, 0);
+		min_y = hm::max(min_y, 0);
+		max_x = hm::min(max_x, screen.count_x);
+		max_y = hm::min(max_y, screen.count_y);
+
+		u32 hex_color = get_hex_color(color);
+		for (i32 y = min_y; y < max_y; ++y) {
+			for (i32 x = min_x; x < max_x; ++x) {
+				screen(x, y) = hex_color;
+			}
+		}
+	};
+
+	static void draw_pixels(slice2<u32> screen, slice2<const u32> pixels, f32 min_x_f32, f32 min_y_f32) {
+		f32 pixels_per_unit = get_pixels_per_unit(screen);
+
+		i32 min_x = hm::round(min_x_f32 * pixels_per_unit);
+		i32 min_y = hm::round(min_y_f32 * pixels_per_unit);
+		i32 max_x = min_x + pixels.count_x;
+		i32 max_y = min_y + pixels.count_y;
+
+		min_x = hm::max(min_x, 0);
+		min_y = hm::max(min_y, 0);
+		max_x = hm::min(max_x, screen.count_x);
+		max_y = hm::min(max_y, screen.count_y);
+
+		for (    i32 y = min_y; y < max_y; ++y) {
+			for (i32 x = min_x; x < max_x; ++x) {
+				// bmp загружается bottom-up
+				screen(x, y) = pixels(x - min_x, max_y - 1 - y);
+			}
+		}
+	}
+
+	static slice2<u32> load_bmp(const Platform::Thread_Context& thread, Platform::Read_Entire_File* read_entire_file, const char* file_name) {
+		slice1<u8> read_result = read_entire_file(thread, file_name);
+		if (!read_result.base) return {};
+
+		slice2<u32> pixels = {};
+		auto& header = *cast<Bmp_Header*>(read_result.base);
+		pixels.count_x = header.width;
+		pixels.count_y = header.height;
+		pixels.base = cast<u32*>(read_result.base + header.bitmap_offset); // RRGGBBAA, bottom-up
+
+		for (u32& pixel : pixels) {
+			// RRGGBBAA -> AARRGGBB
+			pixel = (pixel << 24) | (pixel >> 8);
+		}
+
+		assert(pixels.get_size() == read_result.get_size() - header.bitmap_offset);
+		return pixels;
+	}
+
 	static void init_memory(Memory& memory) {
-		auto& game_state = get_game_state(memory);
-		auto& player_pos = game_state.player_pos;
-		auto& tile_map = game_state.world.tile_map;
-		auto& chunks = game_state.world.tile_map.chunks;
+		auto& game_state  = get_game_state(memory);
+		auto& player_pos  = game_state.player_pos;
+		auto& tile_map    = game_state.world.tile_map;
+		auto& chunks      = game_state.world.tile_map.chunks;
 		auto& world_arena = game_state.world_arena;
 
 		world_arena.base = memory.permanent.base + size_of(Game_State);
@@ -133,8 +211,8 @@ namespace Game {
 		const i32 SCENES_COUNT = 100;
 		for (i32 scene_index = 0; scene_index < SCENES_COUNT; ++scene_index) {
 			i32 random_choice_3 = is_stairs_up || is_stairs_down
-				? RANDOM_NUMBERS_TABLE.get(scene_index) % 2
-				: RANDOM_NUMBERS_TABLE.get(scene_index) % 3;
+				? RANDOM_NUMBERS_TABLE(scene_index) % 2
+				: RANDOM_NUMBERS_TABLE(scene_index) % 3;
 
 			switch (random_choice_3) {
 				case 0: is_door_right = true; break;
@@ -206,53 +284,13 @@ namespace Game {
 		memory.is_initialized = true;
 	}
 
-	static void draw_rectangle(Screen& screen, const Color& color, f32 min_x_f32, f32 max_x_f32, f32 min_y_f32, f32 max_y_f32) {
-		hm::swap(min_y_f32, max_y_f32); // screen.base инвертирован по вертикали относительно координат игры
-
-		f32 pixels_per_unit = get_pixels_per_unit(screen);
-		// f32 offset_x = - Tiles::TILE_DIM / 2;
-		f32 offset_x = 0;
-		f32 offset_y = 0;
-
-		i32 min_x = hm::round((min_x_f32 + offset_x) * pixels_per_unit);
-		i32 max_x = hm::round((max_x_f32 + offset_x) * pixels_per_unit);
-		i32 min_y = hm::round((min_y_f32 + offset_y) * pixels_per_unit);
-		i32 max_y = hm::round((max_y_f32 + offset_y) * pixels_per_unit);
-
-		min_x = hm::max(min_x, 0);
-		max_x = hm::min(max_x, screen.count_x);
-		min_y = hm::max(min_y, 0);
-		max_y = hm::min(max_y, screen.count_y);
-
-		u32 hex_color = get_hex_color(color);
-		u32* row = screen.base + min_y * screen.count_x + min_x;
-		for (i32 y = min_y; y < max_y; ++y) {
-			u32* pixel = row;
-			for (i32 x = min_x; x < max_x; ++x) {
-				*pixel++ = hex_color;
-			}
-			row += screen.count_x;
-		}
-	};
-
-	static slice1<u32> load_bmp(Platform::Read_Entire_File* read_entire_file, const Platform::Thread_Context& thread, const char* file_name) {
-		auto read_result = read_entire_file(thread, file_name);
-		if (!read_result.base) return {};
-
-		slice1<u32> pixels = {};
-		auto& header = *cast<Bmp_Header*>(read_result.base);
-		pixels.base = cast<u32*>(read_result.base + header.bitmap_offset);
-		pixels.set_size(read_result.get_size() - header.bitmap_offset);
-		return pixels;
-	}
-
 	static u32 get_hex_color(const Color& color) {
 		return (hm::round<u32>(color.red   * UINT8_MAX) << 16) |
 			   (hm::round<u32>(color.green * UINT8_MAX) << 8)  |
 			   (hm::round<u32>(color.blue  * UINT8_MAX));
 	}
 
-	static f32 get_pixels_per_unit(const Screen& screen) {
+	static f32 get_pixels_per_unit(slice2<const u32> screen) {
 		return cast<f32>(screen.count_y) / (SCENES_PER_SCREEN * SCENE_HEIGHT_TILES * Tiles::TILE_DIM);
 	}
 

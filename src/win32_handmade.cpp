@@ -587,9 +587,7 @@ static void calc_sound_samples_to_write(Sound& sound, i64 flip_timestamp) {
 	DWORD target_cursor = target_cursor_unwrapped % sound.buffer_size;
 	DWORD output_byte_count = target_cursor - sound.output_location;
 	if (target_cursor < sound.output_location) output_byte_count += sound.buffer_size;
-
-	// output_byte_count не кратен sizeof(Game::Sound_Sample)
-	sound.game_sound.samples.count = cast<i64>(output_byte_count / sizeof(Game::Sound_Sample));
+	sound.game_sound.samples.count = cast<i64>(output_byte_count / sizeof(Game::Sound_Sample)); // делится с остатком
 
 	if constexpr (DEV_MODE) {
 		sound.dev_markers[sound.dev_markers_index] = {};

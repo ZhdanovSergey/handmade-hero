@@ -14,8 +14,8 @@ using Xinput_Set_State = DWORD(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration);
 
 static i64 get_perf_frequency();
 static f32 get_target_seconds_per_frame();
-static const i32 INITIAL_WINDOW_WIDTH = 1280;
-static const i32 INITIAL_WINDOW_HEIGHT = 720;
+static const i32 INITIAL_WINDOW_WIDTH = 960;
+static const i32 INITIAL_WINDOW_HEIGHT = 540;
 static const i64 PERF_FREQUENCY = get_perf_frequency();
 static const f32 SLEEP_GRANULARITY_SECONDS = (f32)(timeBeginPeriod(1) == TIMERR_NOERROR) / 1000.0f;
 static const f32 TARGET_SECONDS_PER_FRAME = get_target_seconds_per_frame();
@@ -50,7 +50,8 @@ struct Replayer {
 };
 
 struct Screen {
-	Game::Screen game_screen;
+	// AARRGGBB
+	slice2<u32> game_screen;
 	BITMAPINFO bitmap_info;
 };
 
