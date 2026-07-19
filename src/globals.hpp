@@ -52,15 +52,19 @@ enum Cast_Flags : u32 {
     DEFAULT         = 0,
     IGNORE_SIGN     = 1 << 0,
     IGNORE_OVERFLOW = 1 << 1,
+    IGNORE_ALL      = UINT32_MAX,
 };
 
+// TODO: force inline каст
 template <typename Out, Cast_Flags Flags = DEFAULT, typename In>
 static constexpr Out cast(In value) {
+    // TODO: включать проверку только когда unsigned есть только на одной стороне каста
     if constexpr (!(Flags & IGNORE_SIGN) && is_number_v<In> && is_number_v<Out>) {
         assert((value == 0 && (Out)value == 0) ||
                (value >  0 && (Out)value >= 0) ||
                (value <  0 && (Out)value <= 0));
     }
+    // TODO: включать проверку только когда size_of(Out) < size_of(In)
     if constexpr (!(Flags & IGNORE_OVERFLOW) && is_number_v<In> && is_number_v<Out>) {
         if constexpr (is_same_v<In, f32> || is_same_v<In, f64>) {
             assert(value - (In)(Out)value > -1 &&
@@ -221,55 +225,22 @@ struct Arena {
     
     template <typename T>
     T* push(i64 new_size) {
-        auto& arena = *this;
-        T* new_ptr = cast<T*>(arena.base + arena.used);
-        arena.used += new_size;
+        T* new_ptr = cast<T*>(base + used);
+        used += new_size;
         assert(new_size % size_of(T) == 0);
-        assert(arena.used <= arena.size);
+        assert(used <= size);
         return new_ptr;
     }
 };
 
-// LATER: вынести hm и Platform в отдельные файлы?
-namespace hm {
-    template <typename T>
-    static constexpr T   min(T a,   T b)   { return a < b ? a : b; }
-    static constexpr i32 max(i32 a, i32 b) { return a > b ? a : b; }
-    template <typename T>
-    static constexpr T   sign  (T x)   { return cast<T>((x > 0) - (x < 0)); }
-    static constexpr i32 abs   (i32 x) { return sign(x) * x; }
-    template <typename Out = i32>
-    static constexpr Out round (f32 x) { return cast<Out>(cast<i32>(x + 0.5 * sign(x))); }
-    static constexpr i32 ceil  (f32 x) { i32 x_trunc = cast<i32>(x); return x_trunc + (x_trunc < x); }
-    static constexpr i32 floor (f32 x) { i32 x_trunc = cast<i32>(x); return x_trunc - (x_trunc > x); }
+template <typename T>
+struct result {
+    bool ok;
+    T value;
+};
 
-    template <typename T, i32 N>
-    static constexpr i32 array_count(const T (&)[N]) { return N; }
-    
-    template <typename T>
-    static void swap(T& a, T& b) { T temp = a; a = b; b = temp; }
+template <typename T, i32 N>
+static constexpr i32 array_count(const T (&)[N]) { return N; }
 
-    static void memzero(slice1<u8> slice) {
-        for (u8& byte : slice) byte = 0;
-    }
-
-    static void memcpy(slice1<const u8> src, slice1<u8> dest) {
-        assert(src.count <= dest.count);
-        for (i64 i = 0; i < min(src.count, dest.count); ++i) {
-            dest(i) = src(i);
-        }
-    }
-}
-
-namespace Platform {
-    struct Thread_Context {};
-
-    slice1<u8> read_entire_file(const Thread_Context& thread, const char* file_name);
-    using Read_Entire_File = decltype(read_entire_file);
-
-    void write_entire_file(const Thread_Context& thread, const char* file_name, slice1<const u8> file);
-    using Write_Entire_File = decltype(write_entire_file);
-
-    void free_file_memory(const Thread_Context& thread, void*& memory);
-    using Free_File_Memory = decltype(free_file_memory);
-}
+template <typename T>
+static void swap(T& a, T& b) { T temp = a; a = b; b = temp; }

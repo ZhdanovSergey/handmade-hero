@@ -1,8 +1,9 @@
 #include "game.hpp"
+#include "intrinsics.hpp"
 #include "tiles.cpp"
 
 namespace Game {
-	extern "C" void get_sound_samples(const Platform::Thread_Context& thread, Memory& memory, Sound& sound) {
+	extern "C" void get_sound_samples(const Thread_Context& thread, Memory& memory, Sound& sound) {
 		auto& game_state  = get_game_state(memory);
 		auto& sound_t_sin = game_state.sound_t_sin;
 
@@ -19,7 +20,7 @@ namespace Game {
 			if (sound_t_sin >= DOUBLE_PI32) sound_t_sin -= DOUBLE_PI32;
 		}
 	}
-	extern "C" void update_and_render(const Platform::Thread_Context& thread, const Input& input, Memory& memory, slice2<u32> screen) {
+	extern "C" void update_and_render(const Thread_Context& thread, const Input& input, Memory& memory, slice2<u32> screen) {
 		assert(input.frame_dt > 0);
 		if (!memory.is_initialized) {
 			init_memory(memory);
@@ -51,7 +52,7 @@ namespace Game {
 		}
 
 		f32 player_width  = 1.0f;
-		f32 player_height = 1.4f;
+		// f32 player_height = 1.4f;
 
 		auto new_player_pos_left = new_player_pos;
 		new_player_pos_left.tile_rel_x -= player_width / 2;
@@ -122,7 +123,7 @@ namespace Game {
 	};
 
 	static void draw_rectangle(slice2<u32> screen, const Color& color, f32 min_x_f32, f32 min_y_f32, f32 max_x_f32, f32 max_y_f32) {
-		hm::swap(min_y_f32, max_y_f32); // screen.base инвертирован по вертикали относительно координат игры
+		swap(min_y_f32, max_y_f32); // screen.base инвертирован по вертикали относительно координат игры
 
 		f32 pixels_per_unit = get_pixels_per_unit(screen);
 		// f32 offset_x = - Tiles::TILE_DIM / 2;
@@ -147,6 +148,7 @@ namespace Game {
 		}
 	};
 
+	// LATER: подумать над тем, чтобы сделать структуру для пикселей с f32 после написания рендерера
 	static void draw_pixels(slice2<u32> screen, slice2<const u32> pixels, f32 min_x_f32, f32 min_y_f32) {
 		f32 pixels_per_unit = get_pixels_per_unit(screen);
 
@@ -162,45 +164,85 @@ namespace Game {
 
 		for (    i32 y = min_y; y < max_y; ++y) {
 			for (i32 x = min_x; x < max_x; ++x) {
-				// bmp загружается bottom-up
-				screen(x, y) = pixels(x - min_x, max_y - 1 - y);
+				u32 src_pixel = pixels(x - min_x, max_y - 1 - y); // bmp загружается bottom-up
+
+				// alpha clamp
+				// if ((src_pixel >> 24) > (UINT8_MAX / 2)) {
+				// 	screen(x, y) = src_pixel;
+				// }
+
+				// linear alpha blend
+				{
+					f32 alpha      = cast<f32, IGNORE_ALL>((src_pixel >> 24)  & UINT8_MAX) / UINT8_MAX;
+					f32 src_red    = cast<f32, IGNORE_ALL>((src_pixel >> 16)  & UINT8_MAX);
+					f32 src_green  = cast<f32, IGNORE_ALL>((src_pixel >> 8)   & UINT8_MAX);
+					f32 src_blue   = cast<f32, IGNORE_ALL>((src_pixel >> 0)   & UINT8_MAX);
+
+					u32 dest_pixel = screen(x, y);
+					f32 dest_red   = cast<f32, IGNORE_ALL>((dest_pixel >> 16) & UINT8_MAX);
+					f32 dest_green = cast<f32, IGNORE_ALL>((dest_pixel >> 8)  & UINT8_MAX);
+					f32 dest_blue  = cast<f32, IGNORE_ALL>((dest_pixel >> 0)  & UINT8_MAX);
+
+					f32 result_red   = (1 - alpha) * dest_red   + alpha * src_red;
+					f32 result_green = (1 - alpha) * dest_green + alpha * src_green;
+					f32 result_blue  = (1 - alpha) * dest_blue  + alpha * src_blue;
+					
+					screen(x, y) = (hm::round_positive<u32>(result_red)   << 16) |
+								   (hm::round_positive<u32>(result_green) << 8)  |
+								   (hm::round_positive<u32>(result_blue)  << 0);
+
+					// assert(result_red   >= 0 && result_red   <= UINT8_MAX);
+					// assert(result_green >= 0 && result_green <= UINT8_MAX);
+					// assert(result_blue  >= 0 && result_blue  <= UINT8_MAX);
+				}
 			}
 		}
 	}
 
-	static slice2<u32> load_bmp(const Platform::Thread_Context& thread, Platform::Read_Entire_File* read_entire_file, const char* file_name) {
+	static slice2<u32> load_bmp(const Thread_Context& thread, Read_Entire_File* read_entire_file, const char* file_name) {
 		slice1<u8> read_result = read_entire_file(thread, file_name);
 		if (!read_result.base) return {};
 
-		slice2<u32> pixels = {};
 		auto& header = *cast<Bmp_Header*>(read_result.base);
+		assert(header.compression == 3);
+
+		slice2<u32> pixels = {};
 		pixels.count_x = header.width;
 		pixels.count_y = header.height;
-		pixels.base = cast<u32*>(read_result.base + header.bitmap_offset); // RRGGBBAA, bottom-up
+		pixels.base = cast<u32*>(read_result.base + header.bitmap_offset);
+		assert(pixels.get_size() == read_result.get_size() - header.bitmap_offset);
+
+		u32 alpha_mask = ~(header.red_mask | header.green_mask | header.blue_mask);
+		result<i32> alpha_shift = hm::bit_scan_forward(alpha_mask);
+		result<i32> red_shift   = hm::bit_scan_forward(header.red_mask);
+		result<i32> green_shift = hm::bit_scan_forward(header.green_mask);
+		result<i32> blue_shift  = hm::bit_scan_forward(header.blue_mask);
+		assert(alpha_shift.ok && red_shift.ok && green_shift.ok && blue_shift.ok);
 
 		for (u32& pixel : pixels) {
-			// RRGGBBAA -> AARRGGBB
-			pixel = (pixel << 24) | (pixel >> 8);
+			pixel = ((pixel & alpha_mask)        >> alpha_shift.value << 24) |
+			        ((pixel & header.red_mask)   >> red_shift.value   << 16) |
+					((pixel & header.green_mask) >> green_shift.value << 8)  |
+					((pixel & header.blue_mask)  >> blue_shift.value  << 0);
 		}
 
-		assert(pixels.get_size() == read_result.get_size() - header.bitmap_offset);
-		return pixels;
+		return pixels; // bottom-up
 	}
 
 	static void init_memory(Memory& memory) {
 		auto& game_state  = get_game_state(memory);
 		auto& player_pos  = game_state.player_pos;
 		auto& tile_map    = game_state.world.tile_map;
-		auto& chunks      = game_state.world.tile_map.chunks;
-		auto& world_arena = game_state.world_arena;
+		auto& tile_chunks = game_state.world.tile_map.chunks;
+		auto& world_arena = game_state.world.arena;
 
 		world_arena.base = memory.permanent.base + size_of(Game_State);
 		world_arena.size = memory.permanent.get_size() - size_of(Game_State);
 
-		chunks.count_x = Tiles::WORLD_X_CHUNKS;
-		chunks.count_y = Tiles::WORLD_Y_CHUNKS;
-		chunks.count_z = Tiles::WORLD_Z_CHUNKS;
-		chunks.base = world_arena.push<Tiles::Chunk>(chunks.get_size());
+		tile_chunks.count_x = Tiles::WORLD_X_CHUNKS;
+		tile_chunks.count_y = Tiles::WORLD_Y_CHUNKS;
+		tile_chunks.count_z = Tiles::WORLD_Z_CHUNKS;
+		tile_chunks.base = world_arena.push<Tiles::Chunk>(tile_chunks.get_size());
 
 		i32 abs_tile_z = 0;
 		i32 scene_x = 0, scene_y = 0;
@@ -277,10 +319,9 @@ namespace Game {
 		player_pos.abs_y = 1;
 		player_pos.tile_rel_x = Tiles::TILE_DIM / 2;
 		player_pos.tile_rel_y = Tiles::TILE_DIM / 2;
-		Tiles::normalize_position(player_pos);
-		
-		assert(size_of(Game_State) <= memory.permanent.get_size());
+		Tiles::normalize_position(player_pos);		
 		assert(Tiles::check_walkable_tile(tile_map, player_pos));
+		
 		memory.is_initialized = true;
 	}
 

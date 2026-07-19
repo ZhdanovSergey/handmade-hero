@@ -7,7 +7,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
 
 	HWND window = create_window(hInstance);
-	Platform::Thread_Context thread = {};
+	Game::Thread_Context thread = {};
 	auto input = create_input();
 	auto sound = create_sound(window);
 	auto game_code = create_game_code();
@@ -190,18 +190,20 @@ static i64 get_timestamp() {
 }
 
 static Game::Memory create_game_memory() {
-	i64 permanent_size = 64_MB;
-	i64 transient_size = 1_GB;
-	void* base_address = DEV_MODE && UINTPTR_MAX == UINT64_MAX ? (void*)1024_GB : nullptr;
+	constexpr i64 PERMANENT_SIZE = 64_MB;
+	constexpr i64 TRANSIENT_SIZE = 1_GB;
+	static_assert(PERMANENT_SIZE >= size_of(Game::Game_State));
+
 	// LATER: проверить эффект использования MEM_LARGE_PAGES и AdjustTokenPrivileges в 64-битном билде
-	u8* game_storage = cast<u8*>(VirtualAlloc(base_address, cast<SIZE_T>(permanent_size + transient_size), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+	void* base_address = DEV_MODE && UINTPTR_MAX == UINT64_MAX ? (void*)1024_GB : nullptr;
+	u8* game_storage = cast<u8*>(VirtualAlloc(base_address, cast<SIZE_T>(PERMANENT_SIZE + TRANSIENT_SIZE), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
 
 	Game::Memory game_memory = {};
-	game_memory.permanent         = { game_storage,                  permanent_size };
-	game_memory.transient         = { game_storage + permanent_size, transient_size };
-	game_memory.read_entire_file  = Platform::read_entire_file;
-	game_memory.write_entire_file = Platform::write_entire_file;
-	game_memory.free_file_memory  = Platform::free_file_memory;
+	game_memory.permanent         = { game_storage,                  PERMANENT_SIZE };
+	game_memory.transient         = { game_storage + PERMANENT_SIZE, TRANSIENT_SIZE };
+	game_memory.read_entire_file  = Game::read_entire_file;
+	game_memory.write_entire_file = Game::write_entire_file;
+	game_memory.free_file_memory  = Game::free_file_memory;
 	return game_memory;
 }
 
@@ -310,9 +312,9 @@ static f32 get_normalized_gamepad_stick_value(SHORT value) {
 	return is_outside_deadzone * value / cast<f32>(- INT16_MIN);
 }
 
-static void process_gamepad_button_input(Game::Controller_Button& state, bool is_pressed) {
-	state.transitions_count += is_pressed != state.is_pressed;
-	state.is_pressed = is_pressed;
+static void process_gamepad_button_input(Game::Controller_Button& button, bool is_pressed) {
+	button.transitions_count += is_pressed != button.is_pressed;
+	button.is_pressed = is_pressed;
 }
 
 static void collect_keyboard_button_input(Input& input, WPARAM key_code, bool is_pressed) {
@@ -627,7 +629,7 @@ static void draw_sound_sync(Screen& screen, Sound& sound) {
 
 	if (!sound.game_sound.samples.count ||
 		sound.buffer->GetCurrentPosition(&sound.dev_markers[sound.dev_markers_index].flip_play_cursor, nullptr) != DS_OK) {
-		sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_count(sound.dev_markers);
+		sound.dev_markers_index = (sound.dev_markers_index + 1) % array_count(sound.dev_markers);
 		return;
 	}
 
@@ -660,11 +662,11 @@ static void draw_sound_sync(Screen& screen, Sound& sound) {
 		draw_vertical_line(screen, (flip_play_cursor_x + safety_bytes_x / 2) % screen.game_screen.count_x, top, bottom, 0xffffff);
 	}
 	
-	sound.dev_markers_index = (sound.dev_markers_index + 1) % hm::array_count(sound.dev_markers);
+	sound.dev_markers_index = (sound.dev_markers_index + 1) % array_count(sound.dev_markers);
 }
 
-namespace Platform {
-	slice1<u8> read_entire_file(const Thread_Context& thread, const char* file_name) {
+namespace Game {
+	static slice1<u8> read_entire_file(const Thread_Context& thread, const char* file_name) {
 		slice1<u8> result = {};
 
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
@@ -687,14 +689,14 @@ namespace Platform {
 		return result;
 	}
 
-	void write_entire_file(const Thread_Context& thread, const char* file_name, slice1<const u8> file) {
+	static void write_entire_file(const Thread_Context& thread, const char* file_name, slice1<const u8> file) {
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
 		defer(CloseHandle(file_handle));
 		DWORD bytes_written;
 		WriteFile(file_handle, file.base, cast<DWORD>(file.get_size()), &bytes_written, nullptr);
 	}
 	
-	void free_file_memory(const Thread_Context& thread, void*& memory) {
+	static void free_file_memory(const Thread_Context& thread, void*& memory) {
 		HANDLE heap_handle = GetProcessHeap();
 		HeapFree(heap_handle, 0, memory);
 		memory = nullptr;

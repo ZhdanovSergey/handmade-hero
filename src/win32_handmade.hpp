@@ -1,6 +1,7 @@
 #pragma once
 
 #include "globals.hpp"
+#include "intrinsics.hpp"
 #include "game.hpp"
 
 #include <cstdio>
@@ -91,7 +92,7 @@ static void reset_input_counters(Input& input);
 static void collect_keyboard_button_input(Input& input, WPARAM key_code, bool is_pressed);
 static void collect_mouse_input(Input& input, HWND window);
 static void collect_gamepad_input(Input& input);
-static void process_gamepad_button_input(Game::Controller_Button& state, bool is_pressed);
+static void process_gamepad_button_input(Game::Controller_Button& button, bool is_pressed);
 static f32 get_normalized_gamepad_stick_value(SHORT value);
 
 static Replayer create_replayer(const Game::Memory& game_memory);
