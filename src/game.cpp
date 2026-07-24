@@ -150,6 +150,7 @@ namespace Game {
 
 	// LATER: подумать над тем, чтобы сделать структуру для пикселей с f32 после написания рендерера
 	static void draw_pixels(slice2<u32> screen, slice2<const u32> pixels, f32 min_x_f32, f32 min_y_f32) {
+		// LATER: масштабирование через pixels_per_unit не работает
 		f32 pixels_per_unit = get_pixels_per_unit(screen);
 
 		i32 min_x = hm::round(min_x_f32 * pixels_per_unit);
@@ -165,6 +166,7 @@ namespace Game {
 		for (    i32 y = min_y; y < max_y; ++y) {
 			for (i32 x = min_x; x < max_x; ++x) {
 				u32 src_pixel = pixels(x - min_x, max_y - 1 - y); // bmp загружается bottom-up
+				u32 dest_pixel = screen(x, y);
 
 				// alpha clamp
 				// if ((src_pixel >> 24) > (UINT8_MAX / 2)) {
@@ -172,29 +174,26 @@ namespace Game {
 				// }
 
 				// linear alpha blend
-				{
-					f32 alpha      = cast<f32, IGNORE_ALL>((src_pixel >> 24)  & UINT8_MAX) / UINT8_MAX;
-					f32 src_red    = cast<f32, IGNORE_ALL>((src_pixel >> 16)  & UINT8_MAX);
-					f32 src_green  = cast<f32, IGNORE_ALL>((src_pixel >> 8)   & UINT8_MAX);
-					f32 src_blue   = cast<f32, IGNORE_ALL>((src_pixel >> 0)   & UINT8_MAX);
+				f32 alpha      = cast<f32>((src_pixel >> 24)  & UINT8_MAX) / UINT8_MAX;
+				f32 src_red    = cast<f32>((src_pixel >> 16)  & UINT8_MAX);
+				f32 src_green  = cast<f32>((src_pixel >> 8)   & UINT8_MAX);
+				f32 src_blue   = cast<f32>((src_pixel >> 0)   & UINT8_MAX);
 
-					u32 dest_pixel = screen(x, y);
-					f32 dest_red   = cast<f32, IGNORE_ALL>((dest_pixel >> 16) & UINT8_MAX);
-					f32 dest_green = cast<f32, IGNORE_ALL>((dest_pixel >> 8)  & UINT8_MAX);
-					f32 dest_blue  = cast<f32, IGNORE_ALL>((dest_pixel >> 0)  & UINT8_MAX);
+				f32 dest_red   = cast<f32>((dest_pixel >> 16) & UINT8_MAX);
+				f32 dest_green = cast<f32>((dest_pixel >> 8)  & UINT8_MAX);
+				f32 dest_blue  = cast<f32>((dest_pixel >> 0)  & UINT8_MAX);
 
-					f32 result_red   = (1 - alpha) * dest_red   + alpha * src_red;
-					f32 result_green = (1 - alpha) * dest_green + alpha * src_green;
-					f32 result_blue  = (1 - alpha) * dest_blue  + alpha * src_blue;
-					
-					screen(x, y) = (hm::round_positive<u32>(result_red)   << 16) |
-								   (hm::round_positive<u32>(result_green) << 8)  |
-								   (hm::round_positive<u32>(result_blue)  << 0);
+				f32 result_red   = (1 - alpha) * dest_red   + alpha * src_red;
+				f32 result_green = (1 - alpha) * dest_green + alpha * src_green;
+				f32 result_blue  = (1 - alpha) * dest_blue  + alpha * src_blue;
 
-					// assert(result_red   >= 0 && result_red   <= UINT8_MAX);
-					// assert(result_green >= 0 && result_green <= UINT8_MAX);
-					// assert(result_blue  >= 0 && result_blue  <= UINT8_MAX);
-				}
+				assert(result_red   >= 0 && result_red   <= UINT8_MAX);
+				assert(result_green >= 0 && result_green <= UINT8_MAX);
+				assert(result_blue  >= 0 && result_blue  <= UINT8_MAX);
+				
+				screen(x, y) = (hm::round<u32>(result_red)   << 16) |
+							   (hm::round<u32>(result_green) << 8)  |
+							   (hm::round<u32>(result_blue)  << 0);
 			}
 		}
 	}
@@ -326,6 +325,10 @@ namespace Game {
 	}
 
 	static u32 get_hex_color(const Color& color) {
+		assert(color.red   >= 0 && color.red   <= 1);
+		assert(color.green >= 0 && color.green <= 1);
+		assert(color.blue  >= 0 && color.blue  <= 1);
+
 		return (hm::round<u32>(color.red   * UINT8_MAX) << 16) |
 			   (hm::round<u32>(color.green * UINT8_MAX) << 8)  |
 			   (hm::round<u32>(color.blue  * UINT8_MAX));

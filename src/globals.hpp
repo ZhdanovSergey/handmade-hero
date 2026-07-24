@@ -1,15 +1,15 @@
 #pragma once
 
-#include <cassert>
-#include <cmath>
-#include <cstdint>
-
-// включаем/выключаем assert
 #if SLOW_MODE
-    #undef NDEBUG
+    #pragma inline_depth(0) // выключаем инлайнинг кроме __forceinline
+    #undef NDEBUG           // включаем assert
 #else
     #define NDEBUG
 #endif
+
+#include <cassert>
+#include <cmath>
+#include <cstdint>
 
 using i8  = int8_t;
 using u8  = uint8_t;
@@ -55,16 +55,16 @@ enum Cast_Flags : u32 {
     IGNORE_ALL      = UINT32_MAX,
 };
 
-// TODO: force inline каст
 template <typename Out, Cast_Flags Flags = DEFAULT, typename In>
+__forceinline
 static constexpr Out cast(In value) {
-    // TODO: включать проверку только когда unsigned есть только на одной стороне каста
+    // LATER: можно включать проверку когда unsigned есть только на одной стороне каста
     if constexpr (!(Flags & IGNORE_SIGN) && is_number_v<In> && is_number_v<Out>) {
         assert((value == 0 && (Out)value == 0) ||
                (value >  0 && (Out)value >= 0) ||
                (value <  0 && (Out)value <= 0));
     }
-    // TODO: включать проверку только когда size_of(Out) < size_of(In)
+    // LATER: можно включать проверку только когда size_of(Out) <= size_of(In) (равенство для float)
     if constexpr (!(Flags & IGNORE_OVERFLOW) && is_number_v<In> && is_number_v<Out>) {
         if constexpr (is_same_v<In, f32> || is_same_v<In, f64>) {
             assert(value - (In)(Out)value > -1 &&
@@ -244,3 +244,10 @@ static constexpr i32 array_count(const T (&)[N]) { return N; }
 
 template <typename T>
 static void swap(T& a, T& b) { T temp = a; a = b; b = temp; }
+
+__forceinline
+static void assert_no_overlap(slice1<const u8> a, slice1<const u8> b) {
+    // LATER: добавить slice1<__restrict T> везде, где используется assert_restricted
+    assert((a.end() <= b.begin()) ||
+           (b.end() <= a.begin()));
+}

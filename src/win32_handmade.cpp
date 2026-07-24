@@ -144,6 +144,7 @@ static void get_build_file_path(const char* file_name, char* result, DWORD resul
 	assert(folder_path_size >= 0 && folder_path_size < result_size);
 	result[folder_path_size] = 0;
 
+	// TODO: написать strcat_s самому для очистки кармы?
 	if (strcat_s(result, result_size, file_name) == ERANGE) {
 		// LATER: обработать пути длиннее MAX_PATH
 		assert(false);
