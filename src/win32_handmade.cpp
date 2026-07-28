@@ -137,19 +137,18 @@ static void get_build_file_path(const char* file_name, char* result, DWORD resul
 	if (GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
 		// LATER: обработать пути длиннее MAX_PATH
 		assert(false);
-		return;
 	}
 
-	i64 folder_path_size = strrchr(result, '\\') + 1 - result;
-	assert(folder_path_size >= 0 && folder_path_size < result_size);
+	i64 folder_path_size = 0;
+	for (i32 i = cast<i32>(result_size - 1); i >= 0; --i) {
+		if (result[i] == '\\') {
+			folder_path_size = i + 1;
+			break;
+		}
+	}
+
 	result[folder_path_size] = 0;
-
-	// TODO: написать strcat_s самому для очистки кармы?
-	if (strcat_s(result, result_size, file_name) == ERANGE) {
-		// LATER: обработать пути длиннее MAX_PATH
-		assert(false);
-		return;
-	}
+	hm::strcat(result, result_size, file_name);
 }
 
 static FILETIME get_file_write_time(const char* file_name) {
@@ -483,17 +482,17 @@ static void submit_screen(const Screen& screen, HWND window, HDC device_context)
 	RECT client_rect = {};
 	GetClientRect(window, &client_rect);
 
-	int src_width   = screen.game_screen.count_x;
-	int src_height  = screen.game_screen.count_y;
-	int dest_width  = client_rect.right  - client_rect.left;
-	int dest_height = client_rect.bottom - client_rect.top;
+	int src_width  = screen.game_screen.count_x;
+	int src_height = screen.game_screen.count_y;
+	int dst_width  = client_rect.right  - client_rect.left;
+	int dst_height = client_rect.bottom - client_rect.top;
 
 	// выводим пиксели 1 к 1 на время разработки рендерера
-	dest_width = src_width;
-	dest_height = src_height;
+	dst_width  = src_width;
+	dst_height = src_height;
 
 	StretchDIBits(device_context,
-		0, 0, dest_width, dest_height,
+		0, 0, dst_width, dst_height,
 		0, 0, src_width, src_height,
 		screen.game_screen.base, &screen.bitmap_info,
 		DIB_RGB_COLORS, SRCCOPY
@@ -609,8 +608,8 @@ static void submit_sound(Sound& sound) {
 	void *region1, *region2; DWORD region1_size, region2_size;
 	if (sound.buffer->Lock(sound.output_location, bytes_to_lock, &region1, &region1_size, &region2, &region2_size, 0) == DS_OK) {
 		sound.output_location = (sound.output_location + region1_size + region2_size) % sound.buffer_size;
-		memcpy(region1, sound.game_sound.samples.base, region1_size);
-		memcpy(region2, cast<u8*>(sound.game_sound.samples.base) + region1_size, region2_size);
+		hm::memcpy(region1, sound.game_sound.samples.base, region1_size);
+		hm::memcpy(region2, cast<u8*>(sound.game_sound.samples.base) + region1_size, region2_size);
 		sound.buffer->Unlock(region1, region1_size, region2, region2_size);
 	}
 }

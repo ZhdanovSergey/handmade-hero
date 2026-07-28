@@ -58,13 +58,11 @@ enum Cast_Flags : u32 {
 template <typename Out, Cast_Flags Flags = DEFAULT, typename In>
 __forceinline
 static constexpr Out cast(In value) {
-    // LATER: можно включать проверку когда unsigned есть только на одной стороне каста
     if constexpr (!(Flags & IGNORE_SIGN) && is_number_v<In> && is_number_v<Out>) {
         assert((value == 0 && (Out)value == 0) ||
                (value >  0 && (Out)value >= 0) ||
                (value <  0 && (Out)value <= 0));
     }
-    // LATER: можно включать проверку только когда size_of(Out) <= size_of(In) (равенство для float)
     if constexpr (!(Flags & IGNORE_OVERFLOW) && is_number_v<In> && is_number_v<Out>) {
         if constexpr (is_same_v<In, f32> || is_same_v<In, f64>) {
             assert(value - (In)(Out)value > -1 &&
@@ -155,8 +153,6 @@ struct slice3 {
     }
     i64 get_size() const { return size_of(T) * count_x * count_y * count_z; }
 };
-template <typename T>
-slice3(T*) -> slice3<T>;
 
 template <typename T>
 struct slice2 {
@@ -177,8 +173,6 @@ struct slice2 {
     }
     i64 get_size() const { return size_of(T) * count_x * count_y; }
 };
-template <typename T>
-slice2(T*) -> slice2<T>;
 
 template <typename T>
 struct slice1 {
@@ -214,7 +208,7 @@ struct slice1 {
     }
 };
 template <typename T>
-slice1(T*) -> slice1<T>;
+slice1(T*, i64) -> slice1<T>;
 
 struct Arena {
     u8* base;
@@ -247,7 +241,6 @@ static void swap(T& a, T& b) { T temp = a; a = b; b = temp; }
 
 __forceinline
 static void assert_no_overlap(slice1<const u8> a, slice1<const u8> b) {
-    // LATER: добавить slice1<__restrict T> везде, где используется assert_restricted
     assert((a.end() <= b.begin()) ||
            (b.end() <= a.begin()));
 }

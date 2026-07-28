@@ -52,7 +52,7 @@ namespace Game {
 		}
 
 		f32 player_width  = 1.0f;
-		// f32 player_height = 1.4f;
+		f32 player_height = 1.4f;
 
 		auto new_player_pos_left = new_player_pos;
 		new_player_pos_left.tile_rel_x -= player_width / 2;
@@ -75,9 +75,9 @@ namespace Game {
 
 		draw_rectangle(
 			screen, Color{ 1.0f, 0.0f, 1.0f },
-			// TODO: как-то странно передавать max_y == 0
-			0.0f, SCENES_PER_SCREEN * SCENE_HEIGHT_TILES * Tiles::TILE_DIM,
-			SCENES_PER_SCREEN * SCENE_WIDTH_TILES  * Tiles::TILE_DIM, 0.0f
+			0.0f, 0.0f,
+			SCENES_PER_SCREEN * SCENE_WIDTH_TILES  * Tiles::TILE_DIM,
+			SCENES_PER_SCREEN * SCENE_HEIGHT_TILES * Tiles::TILE_DIM
 		);
 		
 		draw_pixels(screen, game_state.test_background, 0, 0);
@@ -105,9 +105,9 @@ namespace Game {
 				if ((tile != Tiles::Tile::Not_Initialized && tile != Tiles::Tile::Floor) ||
 				    (x == player_pos.abs_x && y == player_pos.abs_y)) {
 					f32 min_x =   (x - player_pos.abs_x + half_screen_width_tiles)  * Tiles::TILE_DIM - player_pos.tile_rel_x;
-					f32 min_y = - (y - player_pos.abs_y - half_screen_height_tiles) * Tiles::TILE_DIM + player_pos.tile_rel_y;
+					f32 min_y = - (y - player_pos.abs_y - half_screen_height_tiles) * Tiles::TILE_DIM + player_pos.tile_rel_y - Tiles::TILE_DIM;
 					f32 max_x = min_x + Tiles::TILE_DIM;
-					f32 max_y = min_y - Tiles::TILE_DIM;
+					f32 max_y = min_y + Tiles::TILE_DIM;
 					draw_rectangle(screen, color, min_x, min_y, max_x, max_y);
 				}
 
@@ -115,16 +115,14 @@ namespace Game {
 		}
 
 		f32 player_min_x = half_screen_width_tiles  * Tiles::TILE_DIM - player_width / 2;
-		f32 player_min_y = half_screen_height_tiles * Tiles::TILE_DIM;
+		f32 player_min_y = half_screen_height_tiles * Tiles::TILE_DIM - player_height;
 		// f32 player_max_x = player_min_x + player_width;
-		// f32 player_max_y = player_min_y - player_height;
+		// f32 player_max_y = player_min_y + player_height;
 		// draw_rectangle(screen, Color{ 1.0f, 1.0f, 0.0f }, player_min_x, player_min_y, player_max_x, player_max_y);
 		draw_pixels(screen, game_state.test_hero_front_head, player_min_x, player_min_y);
 	};
 
 	static void draw_rectangle(slice2<u32> screen, const Color& color, f32 min_x_f32, f32 min_y_f32, f32 max_x_f32, f32 max_y_f32) {
-		swap(min_y_f32, max_y_f32); // screen.base инвертирован по вертикали относительно координат игры
-
 		f32 pixels_per_unit = get_pixels_per_unit(screen);
 		// f32 offset_x = - Tiles::TILE_DIM / 2;
 		f32 offset_x = 0;
@@ -148,7 +146,6 @@ namespace Game {
 		}
 	};
 
-	// LATER: подумать над тем, чтобы сделать структуру для пикселей с f32 после написания рендерера
 	static void draw_pixels(slice2<u32> screen, slice2<const u32> pixels, f32 min_x_f32, f32 min_y_f32) {
 		// LATER: масштабирование через pixels_per_unit не работает
 		f32 pixels_per_unit = get_pixels_per_unit(screen);
@@ -166,7 +163,7 @@ namespace Game {
 		for (    i32 y = min_y; y < max_y; ++y) {
 			for (i32 x = min_x; x < max_x; ++x) {
 				u32 src_pixel = pixels(x - min_x, max_y - 1 - y); // bmp загружается bottom-up
-				u32 dest_pixel = screen(x, y);
+				u32 dst_pixel = screen(x, y);
 
 				// alpha clamp
 				// if ((src_pixel >> 24) > (UINT8_MAX / 2)) {
@@ -174,26 +171,26 @@ namespace Game {
 				// }
 
 				// linear alpha blend
-				f32 alpha      = cast<f32>((src_pixel >> 24)  & UINT8_MAX) / UINT8_MAX;
-				f32 src_red    = cast<f32>((src_pixel >> 16)  & UINT8_MAX);
-				f32 src_green  = cast<f32>((src_pixel >> 8)   & UINT8_MAX);
-				f32 src_blue   = cast<f32>((src_pixel >> 0)   & UINT8_MAX);
+				f32 alpha     = cast<f32>((src_pixel >> 24)  & UINT8_MAX) / UINT8_MAX;
+				f32 src_red   = cast<f32>((src_pixel >> 16)  & UINT8_MAX);
+				f32 src_green = cast<f32>((src_pixel >> 8)   & UINT8_MAX);
+				f32 src_blue  = cast<f32>((src_pixel >> 0)   & UINT8_MAX);
 
-				f32 dest_red   = cast<f32>((dest_pixel >> 16) & UINT8_MAX);
-				f32 dest_green = cast<f32>((dest_pixel >> 8)  & UINT8_MAX);
-				f32 dest_blue  = cast<f32>((dest_pixel >> 0)  & UINT8_MAX);
+				f32 dst_red   = cast<f32>((dst_pixel >> 16) & UINT8_MAX);
+				f32 dst_green = cast<f32>((dst_pixel >> 8)  & UINT8_MAX);
+				f32 dst_blue  = cast<f32>((dst_pixel >> 0)  & UINT8_MAX);
 
-				f32 result_red   = (1 - alpha) * dest_red   + alpha * src_red;
-				f32 result_green = (1 - alpha) * dest_green + alpha * src_green;
-				f32 result_blue  = (1 - alpha) * dest_blue  + alpha * src_blue;
+				f32 result_red   = (1 - alpha) * dst_red   + alpha * src_red;
+				f32 result_green = (1 - alpha) * dst_green + alpha * src_green;
+				f32 result_blue  = (1 - alpha) * dst_blue  + alpha * src_blue;
 
 				assert(result_red   >= 0 && result_red   <= UINT8_MAX);
 				assert(result_green >= 0 && result_green <= UINT8_MAX);
 				assert(result_blue  >= 0 && result_blue  <= UINT8_MAX);
 				
-				screen(x, y) = (hm::round<u32>(result_red)   << 16) |
-							   (hm::round<u32>(result_green) << 8)  |
-							   (hm::round<u32>(result_blue)  << 0);
+				screen(x, y) = (hm::round_positive<u32>(result_red)   << 16) |
+							   (hm::round_positive<u32>(result_green) << 8)  |
+							   (hm::round_positive<u32>(result_blue)  << 0);
 			}
 		}
 	}
@@ -329,9 +326,9 @@ namespace Game {
 		assert(color.green >= 0 && color.green <= 1);
 		assert(color.blue  >= 0 && color.blue  <= 1);
 
-		return (hm::round<u32>(color.red   * UINT8_MAX) << 16) |
-			   (hm::round<u32>(color.green * UINT8_MAX) << 8)  |
-			   (hm::round<u32>(color.blue  * UINT8_MAX));
+		return (hm::round_positive<u32>(color.red   * UINT8_MAX) << 16) |
+			   (hm::round_positive<u32>(color.green * UINT8_MAX) << 8)  |
+			   (hm::round_positive<u32>(color.blue  * UINT8_MAX));
 	}
 
 	static f32 get_pixels_per_unit(slice2<const u32> screen) {
