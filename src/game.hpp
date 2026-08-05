@@ -4,9 +4,9 @@
 #include "tiles.hpp"
 
 namespace Game {
-	static const i32 SCENE_WIDTH_TILES = 17;
-	static const i32 SCENE_HEIGHT_TILES = 9;
-	static const i32 SCENES_PER_SCREEN = 1;
+	static constexpr i32 SCENE_WIDTH_TILES = 17;
+	static constexpr i32 SCENE_HEIGHT_TILES = 9;
+	static constexpr i32 SCENES_PER_SCREEN = 1;
 
 	struct Controller_Button {
 		i32 transitions_count;
@@ -33,7 +33,7 @@ namespace Game {
 	};
 
 	struct Input {
-		Controller controllers[2];
+		Array<Controller, 2> controllers;
 		Mouse mouse;
 		f32 frame_dt;
 	};
@@ -43,17 +43,17 @@ namespace Game {
 	};
 
 	struct Sound {
-		slice1<Sound_Sample> samples;
+		slice<Sound_Sample> samples;
 		i32 samples_per_second;
 	};
 
 	
     struct Thread_Context {};
 
-    static slice1<u8> read_entire_file(const Thread_Context& thread, const char* file_name);
+    static slice<u8> read_entire_file(const Thread_Context& thread, const char* file_name);
     using Read_Entire_File = decltype(read_entire_file);
 
-    static void write_entire_file(const Thread_Context& thread, const char* file_name, slice1<const u8> file);
+    static void write_entire_file(const Thread_Context& thread, const char* file_name, slice<const u8> file);
     using Write_Entire_File = decltype(write_entire_file);
 
     static void free_file_memory(const Thread_Context& thread, void*& memory);
@@ -61,8 +61,8 @@ namespace Game {
 
 	struct Memory {
 		bool is_initialized;
-		slice1<u8> permanent;
-		slice1<u8> transient;
+		slice<u8> permanent;
+		slice<u8> transient;
     	Read_Entire_File* read_entire_file;
     	Write_Entire_File* write_entire_file;
     	Free_File_Memory* free_file_memory;
@@ -77,13 +77,28 @@ namespace Game {
 		Tiles::Map tile_map;
 	};
 
+	struct Hero_Side_Bitmap {
+		slice2<u32> head, cape, torso;
+		i32 align_x, align_y;
+	};
+
+	namespace Hero_Direction {
+		enum Type {
+			Front,
+			Back,
+			Left,
+			Right,
+			Count
+		};
+	}
+
 	struct Game_State {
 		World world;
-		Tiles::Position player_pos;
-		slice2<u32> test_background;
-		slice2<u32> test_hero_front_head;
-		slice2<u32> test_hero_front_cape;
-		slice2<u32> test_hero_front_torso;
+		slice2<u32> background_bitmap;
+		Array<Hero_Side_Bitmap, Hero_Direction::Count> hero_bitmaps;
+		Hero_Direction::Type hero_direction;
+		Tiles::Position hero_position;
+		Tiles::Position camera_position;
 		f32 pixels_per_unit;
 		f32 sound_t_sin;
 	};
@@ -124,11 +139,11 @@ namespace Game {
 	using Get_Sound_Samples = decltype(get_sound_samples);
 
 	static slice2<u32> load_bmp(const Thread_Context& thread, Read_Entire_File* read_entire_file, const char* file_name);
-	static void draw_pixels(slice2<u32> screen, slice2<const u32> pixels, f32 min_x_f32, f32 min_y_f32);
-	static void draw_rectangle(slice2<u32> screen, const Color& color, f32 min_x_f32, f32 min_y_f32, f32 max_x_f32, f32 max_y_f32);
+	static void draw_pixels(slice2<u32> dst, slice2<const u32> src, f32 min_x_f32, f32 min_y_f32, i32 align_x = 0, i32 align_y = 0);
+	static void draw_rectangle(slice2<u32> dst, const Color& color, f32 min_x_f32, f32 min_y_f32, f32 max_x_f32, f32 max_y_f32);
 	static f32 get_pixels_per_unit(slice2<const u32> screen);
 	static u32 get_hex_color(const Color& color);
 	
-	static void init_memory(Memory& memory);
+	static void init_memory(const Thread_Context& thread, Memory& memory);
 	static Game_State& get_game_state(Memory& memory);
 }

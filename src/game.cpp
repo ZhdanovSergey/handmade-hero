@@ -20,57 +20,78 @@ namespace Game {
 			if (sound_t_sin >= DOUBLE_PI32) sound_t_sin -= DOUBLE_PI32;
 		}
 	}
+
 	extern "C" void update_and_render(const Thread_Context& thread, const Input& input, Memory& memory, slice2<u32> screen) {
 		assert(input.frame_dt > 0);
 		if (!memory.is_initialized) {
-			init_memory(memory);
-			auto& game_state = get_game_state(memory);
-			game_state.test_background       = load_bmp(thread, memory.read_entire_file, "test/test_background.bmp");
-			game_state.test_hero_front_head  = load_bmp(thread, memory.read_entire_file, "test/test_hero_front_head.bmp");
-			game_state.test_hero_front_cape  = load_bmp(thread, memory.read_entire_file, "test/test_hero_front_cape.bmp");
-			game_state.test_hero_front_torso = load_bmp(thread, memory.read_entire_file, "test/test_hero_front_torso.bmp");
+			init_memory(thread, memory);
 		}
 
 		auto& game_state = get_game_state(memory);
-		auto& player_pos = game_state.player_pos;
+		auto& hero_pos = game_state.hero_position;
+		auto& camera_pos = game_state.camera_position;
 		auto& tile_map   = game_state.world.tile_map;
 
-		auto new_player_pos = player_pos;
+		auto new_hero_pos = hero_pos;
 		for (auto& controller : input.controllers) {
 			f32 player_dx = 0;
 			f32 player_dy = 0;
 			f32 player_speed = controller.action_down.is_pressed ? 20.0f : 5.0f;
 
-			if (controller.move_left.is_pressed)  player_dx = - player_speed;
-			if (controller.move_right.is_pressed) player_dx =   player_speed;
-			if (controller.move_up.is_pressed)    player_dy =   player_speed;
-			if (controller.move_down.is_pressed)  player_dy = - player_speed;
+			if (controller.move_left.is_pressed) {
+				game_state.hero_direction = Hero_Direction::Left;
+				player_dx = - player_speed;
+			}
+			if (controller.move_right.is_pressed) {
+				game_state.hero_direction = Hero_Direction::Right;
+				player_dx = player_speed;
+			}
+			if (controller.move_up.is_pressed) {
+				game_state.hero_direction = Hero_Direction::Back;
+				player_dy = player_speed;
+			}
+			if (controller.move_down.is_pressed) {
+				game_state.hero_direction = Hero_Direction::Front;
+				player_dy = - player_speed;
+			}
 			
-			new_player_pos.tile_rel_x += player_dx * input.frame_dt;
-			new_player_pos.tile_rel_y += player_dy * input.frame_dt;
-			Tiles::normalize_position(new_player_pos);
+			new_hero_pos.tile_rel_x += player_dx * input.frame_dt;
+			new_hero_pos.tile_rel_y += player_dy * input.frame_dt;
+			Tiles::normalize_position(new_hero_pos);
 		}
 
 		f32 player_width  = 1.0f;
-		f32 player_height = 1.4f;
 
-		auto new_player_pos_left = new_player_pos;
-		new_player_pos_left.tile_rel_x -= player_width / 2;
-		Tiles::normalize_position(new_player_pos_left);
+		auto new_hero_pos_left = new_hero_pos;
+		new_hero_pos_left.tile_rel_x -= player_width / 2;
+		Tiles::normalize_position(new_hero_pos_left);
 
-		auto new_player_pos_right = new_player_pos;
-		new_player_pos_right.tile_rel_x += player_width / 2;
-		Tiles::normalize_position(new_player_pos_right);
+		auto new_hero_pos_right = new_hero_pos;
+		new_hero_pos_right.tile_rel_x += player_width / 2;
+		Tiles::normalize_position(new_hero_pos_right);
 
-		if (Tiles::check_walkable_tile(tile_map, new_player_pos_left) &&
-		    Tiles::check_walkable_tile(tile_map, new_player_pos)      &&
-		    Tiles::check_walkable_tile(tile_map, new_player_pos_right)) {
-			if (!Tiles::check_same_tile(player_pos, new_player_pos)) {
-				auto new_tile = Tiles::get_tile(tile_map, new_player_pos.abs_x, new_player_pos.abs_y, new_player_pos.abs_z);
-				if (new_tile == Tiles::Tile::Stairs_Up)   new_player_pos.abs_z += 1;
-				if (new_tile == Tiles::Tile::Stairs_Down) new_player_pos.abs_z -= 1;
+		i32 half_screen_width_tiles  = SCENES_PER_SCREEN * SCENE_WIDTH_TILES  / 2;
+		i32 half_screen_height_tiles = SCENES_PER_SCREEN * SCENE_HEIGHT_TILES / 2;
+
+		if (Tiles::check_walkable_tile(tile_map, new_hero_pos_left) &&
+		    Tiles::check_walkable_tile(tile_map, new_hero_pos)      &&
+		    Tiles::check_walkable_tile(tile_map, new_hero_pos_right)) {
+			if (!Tiles::check_same_tile(hero_pos, new_hero_pos)) {
+				auto new_tile = Tiles::get_tile(tile_map, new_hero_pos.abs_x, new_hero_pos.abs_y, new_hero_pos.abs_z);
+				if (new_tile == Tiles::Tile::Stairs_Up)   new_hero_pos.abs_z += 1;
+				if (new_tile == Tiles::Tile::Stairs_Down) new_hero_pos.abs_z -= 1;
 			}
-			player_pos = new_player_pos;
+			hero_pos = new_hero_pos;
+			camera_pos.abs_z = hero_pos.abs_z;
+
+			// TODO: камера всегда должна следовать за черным квадратом игрока, сейчас это не так
+			auto hero_camera_diff = Tiles::subtract_positions(hero_pos, camera_pos);
+			if (hm::abs(hero_camera_diff.dx) > (half_screen_width_tiles  + 1) * Tiles::TILE_DIM) {
+				camera_pos.abs_x += SCENE_WIDTH_TILES  * hm::sign<i32>(hero_camera_diff.dx);
+			}
+			if (hm::abs(hero_camera_diff.dy) > (half_screen_height_tiles + 1) * Tiles::TILE_DIM) {
+				camera_pos.abs_y += SCENE_HEIGHT_TILES * hm::sign<i32>(hero_camera_diff.dy);
+			}
 		}
 
 		draw_rectangle(
@@ -78,16 +99,12 @@ namespace Game {
 			0.0f, 0.0f,
 			SCENES_PER_SCREEN * SCENE_WIDTH_TILES  * Tiles::TILE_DIM,
 			SCENES_PER_SCREEN * SCENE_HEIGHT_TILES * Tiles::TILE_DIM
-		);
-		
-		draw_pixels(screen, game_state.test_background, 0, 0);
+		);		
+		draw_pixels(screen, game_state.background_bitmap, 0, 0);
 
-		i32 half_screen_width_tiles  = SCENES_PER_SCREEN * SCENE_WIDTH_TILES  / 2;
-		i32 half_screen_height_tiles = SCENES_PER_SCREEN * SCENE_HEIGHT_TILES / 2;
-
-		for (    i32 y = player_pos.abs_y - half_screen_height_tiles - 1; y <= player_pos.abs_y + half_screen_height_tiles + 1; ++y) {
-			for (i32 x = player_pos.abs_x - half_screen_width_tiles  - 1; x <= player_pos.abs_x + half_screen_width_tiles  + 1; ++x) {
-				auto tile = Tiles::get_tile(tile_map, x, y, player_pos.abs_z);
+		for (    i32 y = camera_pos.abs_y - half_screen_height_tiles - 1; y <= camera_pos.abs_y + half_screen_height_tiles + 1; ++y) {
+			for (i32 x = camera_pos.abs_x - half_screen_width_tiles  - 1; x <= camera_pos.abs_x + half_screen_width_tiles  + 1; ++x) {
+				auto tile = Tiles::get_tile(tile_map, x, y, camera_pos.abs_z);
 
 				Color color = {};
 				switch (tile) {
@@ -98,14 +115,15 @@ namespace Game {
 					case Tiles::Tile::Stairs_Down:     color = { 0.25f, 0.25f, 0.25f }; break;
 				}
 
-				if (x == player_pos.abs_x && y == player_pos.abs_y) {
+				if (x == hero_pos.abs_x && y == hero_pos.abs_y) {
 					color = Color{ 0.0f, 0.0f, 0.0f };
 				}
 
 				if ((tile != Tiles::Tile::Not_Initialized && tile != Tiles::Tile::Floor) ||
-				    (x == player_pos.abs_x && y == player_pos.abs_y)) {
-					f32 min_x =   (x - player_pos.abs_x + half_screen_width_tiles)  * Tiles::TILE_DIM - player_pos.tile_rel_x;
-					f32 min_y = - (y - player_pos.abs_y - half_screen_height_tiles) * Tiles::TILE_DIM + player_pos.tile_rel_y - Tiles::TILE_DIM;
+				    (x == hero_pos.abs_x && y == hero_pos.abs_y)) {
+					// LATER: обработка оси Y не очевидна, разобраться почему код написан именно так
+					f32 min_x =   (x - camera_pos.abs_x + half_screen_width_tiles)  * Tiles::TILE_DIM - camera_pos.tile_rel_x;
+					f32 min_y = - (y - camera_pos.abs_y - half_screen_height_tiles) * Tiles::TILE_DIM + camera_pos.tile_rel_y;
 					f32 max_x = min_x + Tiles::TILE_DIM;
 					f32 max_y = min_y + Tiles::TILE_DIM;
 					draw_rectangle(screen, color, min_x, min_y, max_x, max_y);
@@ -114,61 +132,56 @@ namespace Game {
 			}
 		}
 
-		f32 player_min_x = half_screen_width_tiles  * Tiles::TILE_DIM - player_width / 2;
-		f32 player_min_y = half_screen_height_tiles * Tiles::TILE_DIM - player_height;
-		// f32 player_max_x = player_min_x + player_width;
-		// f32 player_max_y = player_min_y + player_height;
-		// draw_rectangle(screen, Color{ 1.0f, 1.0f, 0.0f }, player_min_x, player_min_y, player_max_x, player_max_y);
-		draw_pixels(screen, game_state.test_hero_front_head, player_min_x, player_min_y);
+		auto hero_camera_diff = Tiles::subtract_positions(hero_pos, camera_pos);
+		// LATER: обработка оси Y не очевидна, разобраться почему код написан именно так
+		f32 player_ground_x = half_screen_width_tiles  * Tiles::TILE_DIM + hero_camera_diff.dx;
+		f32 player_ground_y = half_screen_height_tiles * Tiles::TILE_DIM - hero_camera_diff.dy + Tiles::TILE_DIM;
+
+		auto hero_bitmap = game_state.hero_bitmaps(game_state.hero_direction);
+		draw_pixels(screen, hero_bitmap.torso, player_ground_x, player_ground_y, hero_bitmap.align_x, hero_bitmap.align_y);
+		draw_pixels(screen, hero_bitmap.cape,  player_ground_x, player_ground_y, hero_bitmap.align_x, hero_bitmap.align_y);
+		draw_pixels(screen, hero_bitmap.head,  player_ground_x, player_ground_y, hero_bitmap.align_x, hero_bitmap.align_y);
 	};
 
-	static void draw_rectangle(slice2<u32> screen, const Color& color, f32 min_x_f32, f32 min_y_f32, f32 max_x_f32, f32 max_y_f32) {
-		f32 pixels_per_unit = get_pixels_per_unit(screen);
-		// f32 offset_x = - Tiles::TILE_DIM / 2;
-		f32 offset_x = 0;
-		f32 offset_y = 0;
+	static void draw_rectangle(slice2<u32> dst, const Color& color, f32 min_x_f32, f32 min_y_f32, f32 max_x_f32, f32 max_y_f32) {
+		f32 pixels_per_unit = get_pixels_per_unit(dst);
 
-		i32 min_x = hm::round((min_x_f32 + offset_x) * pixels_per_unit);
-		i32 min_y = hm::round((min_y_f32 + offset_y) * pixels_per_unit);
-		i32 max_x = hm::round((max_x_f32 + offset_x) * pixels_per_unit);
-		i32 max_y = hm::round((max_y_f32 + offset_y) * pixels_per_unit);
+		i32 min_x = hm::round(min_x_f32 * pixels_per_unit);
+		i32 min_y = hm::round(min_y_f32 * pixels_per_unit);
+		i32 max_x = hm::round(max_x_f32 * pixels_per_unit);
+		i32 max_y = hm::round(max_y_f32 * pixels_per_unit);
 
 		min_x = hm::max(min_x, 0);
 		min_y = hm::max(min_y, 0);
-		max_x = hm::min(max_x, screen.count_x);
-		max_y = hm::min(max_y, screen.count_y);
+		max_x = hm::min(max_x, dst.count_x);
+		max_y = hm::min(max_y, dst.count_y);
 
 		u32 hex_color = get_hex_color(color);
 		for (i32 y = min_y; y < max_y; ++y) {
 			for (i32 x = min_x; x < max_x; ++x) {
-				screen(x, y) = hex_color;
+				dst(x, y) = hex_color;
 			}
 		}
 	};
 
-	static void draw_pixels(slice2<u32> screen, slice2<const u32> pixels, f32 min_x_f32, f32 min_y_f32) {
+	static void draw_pixels(slice2<u32> dst, slice2<const u32> src, f32 min_x_f32, f32 min_y_f32, i32 align_x, i32 align_y) {
 		// LATER: масштабирование через pixels_per_unit не работает
-		f32 pixels_per_unit = get_pixels_per_unit(screen);
+		f32 pixels_per_unit = get_pixels_per_unit(dst);
 
-		i32 min_x = hm::round(min_x_f32 * pixels_per_unit);
-		i32 min_y = hm::round(min_y_f32 * pixels_per_unit);
-		i32 max_x = min_x + pixels.count_x;
-		i32 max_y = min_y + pixels.count_y;
+		i32 src_min_x = hm::round(min_x_f32 * pixels_per_unit - align_x);
+		i32 src_min_y = hm::round(min_y_f32 * pixels_per_unit - align_y);
+		i32 src_max_x = src_min_x + src.count_x;
+		i32 src_max_y = src_min_y + src.count_y;
 
-		min_x = hm::max(min_x, 0);
-		min_y = hm::max(min_y, 0);
-		max_x = hm::min(max_x, screen.count_x);
-		max_y = hm::min(max_y, screen.count_y);
+		i32 dst_min_x = hm::max(src_min_x, 0);
+		i32 dst_min_y = hm::max(src_min_y, 0);
+		i32 dst_max_x = hm::min(src_max_x, dst.count_x);
+		i32 dst_max_y = hm::min(src_max_y, dst.count_y);
 
-		for (    i32 y = min_y; y < max_y; ++y) {
-			for (i32 x = min_x; x < max_x; ++x) {
-				u32 src_pixel = pixels(x - min_x, max_y - 1 - y); // bmp загружается bottom-up
-				u32 dst_pixel = screen(x, y);
-
-				// alpha clamp
-				// if ((src_pixel >> 24) > (UINT8_MAX / 2)) {
-				// 	screen(x, y) = src_pixel;
-				// }
+		for (    i32 dst_y = dst_min_y; dst_y < dst_max_y; ++dst_y) {
+			for (i32 dst_x = dst_min_x; dst_x < dst_max_x; ++dst_x) {
+				u32 src_pixel = src(dst_x - src_min_x, src_max_y - 1 - dst_y); // bmp загружается bottom-up
+				u32 dst_pixel = dst(dst_x, dst_y);
 
 				// linear alpha blend
 				f32 alpha     = cast<f32>((src_pixel >> 24)  & UINT8_MAX) / UINT8_MAX;
@@ -188,18 +201,18 @@ namespace Game {
 				assert(result_green >= 0 && result_green <= UINT8_MAX);
 				assert(result_blue  >= 0 && result_blue  <= UINT8_MAX);
 				
-				screen(x, y) = (hm::round_positive<u32>(result_red)   << 16) |
-							   (hm::round_positive<u32>(result_green) << 8)  |
-							   (hm::round_positive<u32>(result_blue)  << 0);
+				dst(dst_x, dst_y) = (hm::round_positive<u32>(result_red)   << 16) |
+							        (hm::round_positive<u32>(result_green) << 8)  |
+							        (hm::round_positive<u32>(result_blue)  << 0);
 			}
 		}
 	}
 
 	static slice2<u32> load_bmp(const Thread_Context& thread, Read_Entire_File* read_entire_file, const char* file_name) {
-		slice1<u8> read_result = read_entire_file(thread, file_name);
+		slice<u8> read_result = read_entire_file(thread, file_name);
 		if (!read_result.base) return {};
 
-		auto& header = *cast<Bmp_Header*>(read_result.base);
+		auto& header = cast<Bmp_Header&>(*read_result.base);
 		assert(header.compression == 3);
 
 		slice2<u32> pixels = {};
@@ -209,10 +222,10 @@ namespace Game {
 		assert(pixels.get_size() == read_result.get_size() - header.bitmap_offset);
 
 		u32 alpha_mask = ~(header.red_mask | header.green_mask | header.blue_mask);
-		result<i32> alpha_shift = hm::bit_scan_forward(alpha_mask);
-		result<i32> red_shift   = hm::bit_scan_forward(header.red_mask);
-		result<i32> green_shift = hm::bit_scan_forward(header.green_mask);
-		result<i32> blue_shift  = hm::bit_scan_forward(header.blue_mask);
+		result<i32> alpha_shift = hm::find_set_bit_right(alpha_mask);
+		result<i32> red_shift   = hm::find_set_bit_right(header.red_mask);
+		result<i32> green_shift = hm::find_set_bit_right(header.green_mask);
+		result<i32> blue_shift  = hm::find_set_bit_right(header.blue_mask);
 		assert(alpha_shift.ok && red_shift.ok && green_shift.ok && blue_shift.ok);
 
 		for (u32& pixel : pixels) {
@@ -225,9 +238,10 @@ namespace Game {
 		return pixels; // bottom-up
 	}
 
-	static void init_memory(Memory& memory) {
+	static void init_memory(const Thread_Context& thread, Memory& memory) {
 		auto& game_state  = get_game_state(memory);
-		auto& player_pos  = game_state.player_pos;
+		auto& hero_pos    = game_state.hero_position;
+		auto& camera_pos  = game_state.camera_position;
 		auto& tile_map    = game_state.world.tile_map;
 		auto& tile_chunks = game_state.world.tile_map.chunks;
 		auto& world_arena = game_state.world.arena;
@@ -311,12 +325,44 @@ namespace Game {
 			is_door_top = false;
 		}
 
-		player_pos.abs_x = 1;
-		player_pos.abs_y = 1;
-		player_pos.tile_rel_x = Tiles::TILE_DIM / 2;
-		player_pos.tile_rel_y = Tiles::TILE_DIM / 2;
-		Tiles::normalize_position(player_pos);		
-		assert(Tiles::check_walkable_tile(tile_map, player_pos));
+		hero_pos.abs_x = 1;
+		hero_pos.abs_y = 1;
+		hero_pos.tile_rel_x = Tiles::TILE_DIM / 2;
+		hero_pos.tile_rel_y = Tiles::TILE_DIM / 2;
+		Tiles::normalize_position(hero_pos);		
+		assert(Tiles::check_walkable_tile(tile_map, hero_pos));
+
+		// TODO: сейчас увеличение camera_pos.abs_y сдвигает камеру вниз, по идее должен быть сдвиг вверх
+		camera_pos.abs_x = SCENE_WIDTH_TILES  / 2;
+		camera_pos.abs_y = SCENE_HEIGHT_TILES / 2;
+		camera_pos.abs_z = hero_pos.abs_z;
+		camera_pos.tile_rel_x = Tiles::TILE_DIM / 2;
+
+		game_state.background_bitmap = load_bmp(thread, memory.read_entire_file, "test/test_background.bmp");
+
+		game_state.hero_bitmaps(Hero_Direction::Front).head    = load_bmp(thread, memory.read_entire_file, "test/test_hero_front_head.bmp");
+		game_state.hero_bitmaps(Hero_Direction::Front).cape    = load_bmp(thread, memory.read_entire_file, "test/test_hero_front_cape.bmp");
+		game_state.hero_bitmaps(Hero_Direction::Front).torso   = load_bmp(thread, memory.read_entire_file, "test/test_hero_front_torso.bmp");
+		game_state.hero_bitmaps(Hero_Direction::Front).align_x = 72;
+		game_state.hero_bitmaps(Hero_Direction::Front).align_y = 182;
+
+		game_state.hero_bitmaps(Hero_Direction::Back).head     = load_bmp(thread, memory.read_entire_file, "test/test_hero_back_head.bmp");
+		game_state.hero_bitmaps(Hero_Direction::Back).cape     = load_bmp(thread, memory.read_entire_file, "test/test_hero_back_cape.bmp");
+		game_state.hero_bitmaps(Hero_Direction::Back).torso    = load_bmp(thread, memory.read_entire_file, "test/test_hero_back_torso.bmp");
+		game_state.hero_bitmaps(Hero_Direction::Back).align_x  = 72;
+		game_state.hero_bitmaps(Hero_Direction::Back).align_y  = 182;
+
+		game_state.hero_bitmaps(Hero_Direction::Left).head     = load_bmp(thread, memory.read_entire_file, "test/test_hero_left_head.bmp");
+		game_state.hero_bitmaps(Hero_Direction::Left).cape     = load_bmp(thread, memory.read_entire_file, "test/test_hero_left_cape.bmp");
+		game_state.hero_bitmaps(Hero_Direction::Left).torso    = load_bmp(thread, memory.read_entire_file, "test/test_hero_left_torso.bmp");
+		game_state.hero_bitmaps(Hero_Direction::Left).align_x  = 72;
+		game_state.hero_bitmaps(Hero_Direction::Left).align_y  = 182;
+
+		game_state.hero_bitmaps(Hero_Direction::Right).head    = load_bmp(thread, memory.read_entire_file, "test/test_hero_right_head.bmp");
+		game_state.hero_bitmaps(Hero_Direction::Right).cape    = load_bmp(thread, memory.read_entire_file, "test/test_hero_right_cape.bmp");
+		game_state.hero_bitmaps(Hero_Direction::Right).torso   = load_bmp(thread, memory.read_entire_file, "test/test_hero_right_torso.bmp");
+		game_state.hero_bitmaps(Hero_Direction::Right).align_x = 72;
+		game_state.hero_bitmaps(Hero_Direction::Right).align_y = 182;
 		
 		memory.is_initialized = true;
 	}
@@ -336,6 +382,6 @@ namespace Game {
 	}
 
 	static Game_State& get_game_state(Memory& memory) {
-		return *cast<Game_State*>(memory.permanent.base);
+		return cast<Game_State&>(*memory.permanent.base);
 	}
 }

@@ -3,14 +3,14 @@
 #include "globals.hpp"
 
 namespace Tiles {
-	static const i32 WORLD_X_CHUNKS = 128;
-	static const i32 WORLD_Y_CHUNKS = 128;
-	static const i32 WORLD_Z_CHUNKS = 2;
+	static constexpr i32 WORLD_X_CHUNKS = 128;
+	static constexpr i32 WORLD_Y_CHUNKS = 128;
+	static constexpr i32 WORLD_Z_CHUNKS = 2;
 
-	static const i32 CHUNK_LOOKUP_KEY_SHIFT = 4;
-	static const i32 CHUNK_DIM_TILES = 1 << CHUNK_LOOKUP_KEY_SHIFT;
-	static const i32 CHUNK_REL_POSITION_MASK = CHUNK_DIM_TILES - 1;
-	static const f32 TILE_DIM = 1.4f;
+	static constexpr i32 CHUNK_LOOKUP_KEY_SHIFT = 4;
+	static constexpr i32 CHUNK_DIM_TILES = 1 << CHUNK_LOOKUP_KEY_SHIFT;
+	static constexpr i32 CHUNK_REL_POSITION_MASK = CHUNK_DIM_TILES - 1;
+	static constexpr f32 TILE_DIM = 1.4f;
 
 	enum struct Tile {
 		Not_Initialized,
@@ -35,6 +35,10 @@ namespace Tiles {
 		f32 tile_rel_x, tile_rel_y;
 	};
 
+	struct Positions_Diff {
+		f32 dx, dy;
+	};
+
 	struct Chunk_Lookup_Key {
 		i32 x, y, z;
 	};
@@ -54,4 +58,5 @@ namespace Tiles {
 	static Chunk_Rel_Position get_chunk_rel_position(i32 abs_x, i32 abs_y);
 	
 	static void normalize_position(Position& pos);
+	static Positions_Diff subtract_positions(const Position& a, const Position& b);
 }

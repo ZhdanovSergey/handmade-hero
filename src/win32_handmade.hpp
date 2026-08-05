@@ -15,15 +15,16 @@ using Xinput_Set_State = DWORD(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration);
 
 static i64 get_perf_frequency();
 static f32 get_target_seconds_per_frame();
-static const i32 INITIAL_WINDOW_WIDTH = 960;
-static const i32 INITIAL_WINDOW_HEIGHT = 540;
+static constexpr i32 INITIAL_WINDOW_WIDTH = 960;
+static constexpr i32 INITIAL_WINDOW_HEIGHT = 540;
 static const i64 PERF_FREQUENCY = get_perf_frequency();
 static const f32 SLEEP_GRANULARITY_SECONDS = (f32)(timeBeginPeriod(1) == TIMERR_NOERROR) / 1000.0f;
 static const f32 TARGET_SECONDS_PER_FRAME = get_target_seconds_per_frame();
 
 struct Game_Code {
 	char dll_path[MAX_PATH];
-	char temp_dll_path[MAX_PATH];
+	char copy_dll_path[MAX_PATH];
+	char lock_path[MAX_PATH];
 	HMODULE dll;
 	FILETIME write_time;
 	Game::Update_And_Render* update_and_render;
@@ -74,7 +75,7 @@ struct Sound {
 	DWORD bytes_per_frame;
 	DWORD safety_bytes;
 	bool is_valid;
-	Sound_Time_Marker dev_markers[32]; // ожидаемый фреймрейт - 1
+	Array<Sound_Time_Marker, 32> dev_markers; // ожидаемый фреймрейт - 1
 	i32 dev_markers_index;
 };
 
@@ -113,9 +114,9 @@ static Sound create_sound(HWND window);
 static void calc_sound_samples_to_write(Sound& sound, i64 flip_timestamp);
 static void submit_sound(Sound& sound);
 
-static void wait_until_end_of_frame(i64 flip_timestamp);
+static void wait_until_end_of_frame(i64& flip_timestamp);
 static f32 get_seconds_elapsed(i64 start);
 static i64 get_timestamp();
 
-static void get_build_file_path(const char* file_name, char* result, DWORD result_size);
+static void get_build_file_path(slice<char> result, const char* file_name);
 static FILETIME get_file_write_time(const char* file_name);

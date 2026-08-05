@@ -9,6 +9,10 @@ set common_flags=-DDEV_MODE=1 -DSLOW_MODE=1^
 IF NOT EXIST build mkdir build
 pushd build
 del *.pdb
+
+echo WAITING FOR PDB > lock.tmp
 cl %common_flags% -LD ..\src\game.cpp -link -opt:ref -INCREMENTAL:NO %subsystem% -EXPORT:update_and_render -EXPORT:get_sound_samples
+del lock.tmp
+
 cl %common_flags% ..\src\win32_handmade.cpp gdi32.lib user32.lib winmm.lib -link -opt:ref -INCREMENTAL:NO %subsystem%
 popd

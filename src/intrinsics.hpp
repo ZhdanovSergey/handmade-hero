@@ -5,9 +5,7 @@
 #include <intrin.h>
 
 #if defined(_MSC_VER)
-    // round недоступна в качестве подставляемой функции,
-    // ceil и floor доступны, но не заменяются интринсиками (not true intrinsic form)
-    #pragma intrinsic(abs, memcpy, memset, strcat, strlen)
+    #pragma intrinsic(abs, memcpy, memset, strcat, strlen) // ceil и floor доступны, но не заменяются интринсиками (not true intrinsic form)
     static constexpr bool MSVC_COMPILER = true;
 #else
     static constexpr bool MSVC_COMPILER = false;
@@ -18,8 +16,11 @@ namespace hm {
     static constexpr T min(T a, T b) { return a < b ? a : b; }
     template <typename T>
     static constexpr T max(T a, T b) { return a > b ? a : b; }
-    template <typename T>
-    static constexpr T sign(T x)     { return cast<T>((x > 0) - (x < 0)); }
+
+    // TODO: исследовать такой вариант для значения по умолчанию Out
+    // template <typename Out = void, typename In, typename RealOut = std::conditional_t<std::is_same_v<Out, void>, In, Out>>
+    template <typename Out, typename In>
+    static constexpr Out sign(In x) { return cast<Out>((x > 0) - (x < 0)); }
 
     static constexpr i32 ceil(f32 x) {
         i32 x_trunc = cast<i32>(x);
@@ -33,7 +34,7 @@ namespace hm {
 
     template <typename Out = i32>
     static constexpr Out round(f32 x) {
-        return cast<Out>(cast<i32>(x + 0.5f * sign(x)));
+        return cast<Out>(cast<i32>(x + 0.5f * sign<f32>(x)));
     }
     
     template <typename Out = i32>
@@ -64,8 +65,9 @@ namespace hm {
         }
     }
 
-    static void strcat(char* dst, i64 dst_size, const char* src) {
-        assert(strlen(dst) + strlen(src) + 1 <= dst_size);
+    static void strcat(slice<char> dst_slice, const char* src) {
+        char* dst = dst_slice.base;
+        assert(strlen(dst) + strlen(src) + 1 <= dst_slice.count);
 
         if constexpr (MSVC_COMPILER) {
             std::strcat(dst, src);
@@ -82,7 +84,7 @@ namespace hm {
         }
     }
 
-    static void memzero(slice1<u8> dst) {
+    static void memzero(slice<u8> dst) {
         if constexpr (MSVC_COMPILER) {
             size_t size = cast<size_t>(dst.get_size());
             std::memset(dst.base, 0, size);
@@ -101,7 +103,7 @@ namespace hm {
         }
     }
 
-    // static void memcpy(slice1<u8> dst, slice1<const u8> src) {
+    // static void memcpy(slice<u8> dst, slice<const u8> src) {
     //     assert_no_overlap(dst, src);
     //     assert(dst.count >= src.count);
 
@@ -115,7 +117,7 @@ namespace hm {
     //     }
     // }
 
-    static result<i32> bit_scan_forward(u32 value) {
+    static result<i32> find_set_bit_right(u32 value) {
         if constexpr (MSVC_COMPILER) {
             result<i32> result = {};
             result.ok = _BitScanForward(cast<unsigned long *>(&result.value), value);

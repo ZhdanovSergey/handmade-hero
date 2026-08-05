@@ -87,4 +87,11 @@ namespace Tiles {
 		assert(pos.tile_rel_x >= 0 && pos.tile_rel_x <= TILE_DIM);
 		assert(pos.tile_rel_y >= 0 && pos.tile_rel_y <= TILE_DIM);
 	}
+
+	static Positions_Diff subtract_positions(const Position& a, const Position& b) {
+		Positions_Diff diff = {};
+		diff.dx = TILE_DIM * (a.abs_x - b.abs_x) + (a.tile_rel_x - b.tile_rel_x);
+		diff.dy = TILE_DIM * (a.abs_y - b.abs_y) + (a.tile_rel_y - b.tile_rel_y);
+		return diff;
+	}
 }

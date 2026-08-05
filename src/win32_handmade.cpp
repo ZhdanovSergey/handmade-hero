@@ -6,8 +6,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	static_assert(DEV_MODE || !SLOW_MODE);
     SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
 
-	HWND window = create_window(hInstance);
 	Game::Thread_Context thread = {};
+	HWND window = create_window(hInstance);
 	auto input = create_input();
 	auto sound = create_sound(window);
 	auto game_code = create_game_code();
@@ -56,7 +56,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 			reload_game_code_if_recompiled(game_code);
 			if (is_pause) {
 				wait_until_end_of_frame(flip_timestamp);
-				flip_timestamp = get_timestamp();
 				continue;
 			};
 			replayer_record_or_replace(replayer, game_memory, input.game_input);
@@ -66,12 +65,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		calc_sound_samples_to_write(sound, flip_timestamp);
 		game_code.get_sound_samples(thread, game_memory, sound.game_sound);
 		submit_sound(sound);
-		
 		wait_until_end_of_frame(flip_timestamp);
-		// char output_buffer[256];
-		// sprintf_s(output_buffer, "frame ms: %.2f\n", get_seconds_elapsed(flip_timestamp) * 1000);
-		// OutputDebugStringA(output_buffer);
-		flip_timestamp = get_timestamp();
+
+		char output_buffer[256];
+		sprintf_s(output_buffer, "frame ms: %.2f\n", get_seconds_elapsed(flip_timestamp) * 1000);
+		OutputDebugStringA(output_buffer);
 
 		// if constexpr (DEV_MODE) draw_sound_sync(global_screen, sound);
 		HDC device_context = GetDC(window);
@@ -118,7 +116,7 @@ static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
 	return 0;
 }
 
-static void wait_until_end_of_frame(i64 flip_timestamp) {
+static void wait_until_end_of_frame(i64& flip_timestamp) {
 	f32 flip_seconds_elapsed = get_seconds_elapsed(flip_timestamp);
 	if (SLEEP_GRANULARITY_SECONDS) {
 		f32 sleep_ms = 1000.0f * (TARGET_SECONDS_PER_FRAME - SLEEP_GRANULARITY_SECONDS - flip_seconds_elapsed);
@@ -129,26 +127,27 @@ static void wait_until_end_of_frame(i64 flip_timestamp) {
 		YieldProcessor();
 		flip_seconds_elapsed = get_seconds_elapsed(flip_timestamp);
 	}
+	flip_timestamp = get_timestamp();
 }
 
-static void get_build_file_path(const char* file_name, char* result, DWORD result_size) {
+static void get_build_file_path(slice<char> result, const char* file_name) {
 	SetLastError(0);
-	GetModuleFileNameA(nullptr, result, result_size);
+	GetModuleFileNameA(nullptr, result.base, cast<DWORD>(result.get_size()));
 	if (GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
 		// LATER: обработать пути длиннее MAX_PATH
 		assert(false);
 	}
 
 	i64 folder_path_size = 0;
-	for (i32 i = cast<i32>(result_size - 1); i >= 0; --i) {
-		if (result[i] == '\\') {
+	for (i64 i = result.count - 1; i >= 0; --i) {
+		if (result(i) == '\\') {
 			folder_path_size = i + 1;
 			break;
 		}
 	}
 
-	result[folder_path_size] = 0;
-	hm::strcat(result, result_size, file_name);
+	result(folder_path_size) = 0;
+	hm::strcat(result, file_name);
 }
 
 static FILETIME get_file_write_time(const char* file_name) {
@@ -209,8 +208,9 @@ static Game::Memory create_game_memory() {
 
 static Game_Code create_game_code() {
 	Game_Code game_code = {};
-	get_build_file_path("game.dll",      game_code.dll_path,      sizeof(game_code.dll_path));
-	get_build_file_path("game_temp.dll", game_code.temp_dll_path, sizeof(game_code.temp_dll_path));
+	get_build_file_path(game_code.dll_path, "game.dll");
+	get_build_file_path(game_code.copy_dll_path, "game_copy.dll");
+	get_build_file_path(game_code.lock_path, "lock.tmp");
 	load_game_code(game_code);
 	return game_code;
 }
@@ -225,20 +225,23 @@ static void reload_game_code_if_recompiled(Game_Code& game_code) {
 }
 
 static void load_game_code(Game_Code& game_code) {
-	char* dll_path = game_code.dll_path;
+	char* path_to_load = game_code.dll_path;
+
 	if constexpr (DEV_MODE) {
-		// загружаем копию чтобы компилятор мог писать в оригинальный файл
-		// и если dll занят ждем в цикле когда Visual Studio его освободит
-		BOOL is_copy_success = FALSE;
-		do {
-			SetLastError(0);
-			is_copy_success = CopyFileA(game_code.dll_path, game_code.temp_dll_path, FALSE);
-		} while (!is_copy_success && GetLastError() == ERROR_SHARING_VIOLATION && (Sleep(1), true));
-		assert(is_copy_success);
-		dll_path = game_code.temp_dll_path;
+		WIN32_FILE_ATTRIBUTE_DATA ignored;
+		while (true) {
+			if (GetFileAttributesExA(game_code.lock_path, GetFileExInfoStandard, &ignored)) {
+				Sleep(1);
+			} else {
+				// загружаем копию чтобы компилятор мог писать в оригинальный файл
+				CopyFileA(game_code.dll_path, game_code.copy_dll_path, FALSE);
+				path_to_load = game_code.copy_dll_path;
+				break;
+			}
+		}
 	}
 
-	HMODULE loaded_dll = LoadLibraryA(dll_path);
+	HMODULE loaded_dll = LoadLibraryA(path_to_load);
 	if (loaded_dll) {
 		game_code.dll = loaded_dll;
 		game_code.write_time = get_file_write_time(game_code.dll_path);
@@ -265,7 +268,7 @@ static Input create_input() {
 }
 
 static void collect_gamepad_input(Input& input) {
-	auto& controller = input.game_input.controllers[1];
+	auto& controller = input.game_input.controllers(1);
 
 	XINPUT_STATE xinput_state;
 	controller.is_connected = !input.XInputGetState(0, &xinput_state);
@@ -318,7 +321,7 @@ static void process_gamepad_button_input(Game::Controller_Button& button, bool i
 }
 
 static void collect_keyboard_button_input(Input& input, WPARAM key_code, bool is_pressed) {
-	auto& controller = input.game_input.controllers[0];
+	auto& controller = input.game_input.controllers(1);
 	controller.is_connected = true;
 
 	Game::Controller_Button* button = nullptr;
@@ -365,8 +368,8 @@ static Replayer create_replayer(const Game::Memory& game_memory) {
 	if constexpr (!DEV_MODE) return {};
 
 	Replayer replayer = {};
-	get_build_file_path("replay_state.hms", replayer.state_path, sizeof(replayer.state_path));
-	get_build_file_path("replay_input.hmi", replayer.input_path, sizeof(replayer.input_path));
+	get_build_file_path(replayer.state_path, "replay_state.hms");
+	get_build_file_path(replayer.input_path, "replay_input.hmi");
 	replayer.state_handle = CreateFileA(replayer.state_path, GENERIC_READ | GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_FLAG_NO_BUFFERING, nullptr);
 	replayer.input_handle = CreateFileA(replayer.input_path, GENERIC_READ | GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
 	return replayer;
@@ -570,7 +573,7 @@ static void calc_sound_samples_to_write(Sound& sound, i64 flip_timestamp) {
 	DWORD play_cursor = 0, write_cursor = 0;
 	if (!sound.is_valid || sound.buffer->GetCurrentPosition(&play_cursor, &write_cursor) != DS_OK) {
 		sound.game_sound.samples.count = 0;
-		sound.dev_markers[sound.dev_markers_index] = {};
+		sound.dev_markers(sound.dev_markers_index) = {};
 		return;
 	}
 
@@ -592,12 +595,12 @@ static void calc_sound_samples_to_write(Sound& sound, i64 flip_timestamp) {
 	sound.game_sound.samples.count = cast<i64>(output_byte_count / sizeof(Game::Sound_Sample)); // делится с остатком
 
 	if constexpr (DEV_MODE) {
-		sound.dev_markers[sound.dev_markers_index] = {};
-		sound.dev_markers[sound.dev_markers_index].output_play_cursor = play_cursor;
-		sound.dev_markers[sound.dev_markers_index].output_write_cursor = write_cursor;
-		sound.dev_markers[sound.dev_markers_index].output_location = sound.output_location;
-		sound.dev_markers[sound.dev_markers_index].output_byte_count = output_byte_count;
-		sound.dev_markers[sound.dev_markers_index].expected_flip_play_cursor = expected_flip_play_cursor_unwrapped % sound.buffer_size;
+		sound.dev_markers(sound.dev_markers_index) = {};
+		sound.dev_markers(sound.dev_markers_index).output_play_cursor = play_cursor;
+		sound.dev_markers(sound.dev_markers_index).output_write_cursor = write_cursor;
+		sound.dev_markers(sound.dev_markers_index).output_location = sound.output_location;
+		sound.dev_markers(sound.dev_markers_index).output_byte_count = output_byte_count;
+		sound.dev_markers(sound.dev_markers_index).expected_flip_play_cursor = expected_flip_play_cursor_unwrapped % sound.buffer_size;
 	}
 }
 
@@ -628,12 +631,12 @@ static void draw_sound_sync(Screen& screen, Sound& sound) {
 	}
 
 	if (!sound.game_sound.samples.count ||
-		sound.buffer->GetCurrentPosition(&sound.dev_markers[sound.dev_markers_index].flip_play_cursor, nullptr) != DS_OK) {
-		sound.dev_markers_index = (sound.dev_markers_index + 1) % array_count(sound.dev_markers);
+		sound.buffer->GetCurrentPosition(&sound.dev_markers(sound.dev_markers_index).flip_play_cursor, nullptr) != DS_OK) {
+		sound.dev_markers_index = (sound.dev_markers_index + 1) % sound.dev_markers.get_count();
 		return;
 	}
 
-	auto current_marker = sound.dev_markers[sound.dev_markers_index];
+	auto current_marker = sound.dev_markers(sound.dev_markers_index);
 	i32 expected_flip_play_cursor_x = cast<i32>(cast<f32>(current_marker.expected_flip_play_cursor) * horizontal_scaling);
 	draw_vertical_line(screen, expected_flip_play_cursor_x, 0, screen.game_screen.count_y, 0xffff00);
 
@@ -662,12 +665,12 @@ static void draw_sound_sync(Screen& screen, Sound& sound) {
 		draw_vertical_line(screen, (flip_play_cursor_x + safety_bytes_x / 2) % screen.game_screen.count_x, top, bottom, 0xffffff);
 	}
 	
-	sound.dev_markers_index = (sound.dev_markers_index + 1) % array_count(sound.dev_markers);
+	sound.dev_markers_index = (sound.dev_markers_index + 1) % sound.dev_markers.get_count();
 }
 
 namespace Game {
-	static slice1<u8> read_entire_file(const Thread_Context& thread, const char* file_name) {
-		slice1<u8> result = {};
+	static slice<u8> read_entire_file(const Thread_Context& thread, const char* file_name) {
+		slice<u8> result = {};
 
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
 		defer(CloseHandle(file_handle));
@@ -682,6 +685,7 @@ namespace Game {
 
 		DWORD bytes_read;
 		if (!ReadFile(file_handle, result.base, file_size_casted, &bytes_read, nullptr)) {
+			// TODO: разобраться почему не работает на XP
 			assert(false);
 			HeapFree(heap_handle, 0, result.base);
 			return {};
@@ -689,7 +693,7 @@ namespace Game {
 		return result;
 	}
 
-	static void write_entire_file(const Thread_Context& thread, const char* file_name, slice1<const u8> file) {
+	static void write_entire_file(const Thread_Context& thread, const char* file_name, slice<const u8> file) {
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
 		defer(CloseHandle(file_handle));
 		DWORD bytes_written;
