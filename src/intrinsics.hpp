@@ -17,9 +17,8 @@ namespace hm {
     template <typename T>
     static constexpr T max(T a, T b) { return a > b ? a : b; }
 
-    // TODO: исследовать такой вариант для значения по умолчанию Out
-    // template <typename Out = void, typename In, typename RealOut = std::conditional_t<std::is_same_v<Out, void>, In, Out>>
-    template <typename Out, typename In>
+    template <typename Out_Provider = void, typename In,
+              typename Out = conditional_t< is_same_v<Out_Provider, void>, In, Out_Provider>>
     static constexpr Out sign(In x) { return cast<Out>((x > 0) - (x < 0)); }
 
     static constexpr i32 ceil(f32 x) {
@@ -32,13 +31,13 @@ namespace hm {
         return x_trunc - (x_trunc > x);
     }
 
-    template <typename Out = i32>
+    template <typename Out = f32>
     static constexpr Out round(f32 x) {
-        return cast<Out>(cast<i32>(x + 0.5f * sign<f32>(x)));
+        return cast<Out>(cast<i32>(x + 0.5f * sign(x)));
     }
     
-    template <typename Out = i32>
-    __forceinline // draw_pixels
+    template <typename Out = f32>
+    __forceinline // because of draw_pixels
     static constexpr Out round_positive(f32 x) {
         assert(x >= 0);
         return cast<Out>(cast<i32>(x + 0.5f));

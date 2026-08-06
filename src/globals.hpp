@@ -33,9 +33,9 @@ template <typename T> struct remove_cv<volatile T>       { using type = T; };
 template <typename T> struct remove_cv<const volatile T> { using type = T; };
 template <typename T> using remove_cv_t = typename remove_cv<T>::type;
 
-template <typename T, typename U> struct is_same_qualified      { static constexpr bool value = false; };
-template <typename T>             struct is_same_qualified<T,T> { static constexpr bool value = true; };
-template <typename T, typename U> constexpr bool is_same_v = is_same_qualified< remove_cv_t<T>, remove_cv_t<U> >::value;
+template <typename T, typename U> struct is_same_exact      { static constexpr bool value = false; };
+template <typename T>             struct is_same_exact<T,T> { static constexpr bool value = true; };
+template <typename T, typename U> constexpr bool is_same_v = is_same_exact< remove_cv_t<T>, remove_cv_t<U> >::value;
 
 template <typename T> struct is_number_unqualified           { static constexpr bool value = false; };
 template <> struct is_number_unqualified<char>               { static constexpr bool value = true; };
@@ -52,6 +52,10 @@ template <> struct is_number_unqualified<unsigned long long> { static constexpr 
 template <> struct is_number_unqualified<float>              { static constexpr bool value = true; };
 template <> struct is_number_unqualified<double>             { static constexpr bool value = true; };
 template <typename T> constexpr bool is_number_v = is_number_unqualified<remove_cv_t<T>>::value;
+
+template <bool C, typename T, typename F> struct conditional           { using type = F; };
+template <typename T, typename F>         struct conditional<true,T,F> { using type = T; };
+template <bool C, typename T, typename F> using conditional_t = typename conditional<C,T,F>::type;
 
 enum Cast_Flags : u32 {
     DEFAULT         = 0,

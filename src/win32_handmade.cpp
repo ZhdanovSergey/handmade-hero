@@ -56,6 +56,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 			reload_game_code_if_recompiled(game_code);
 			if (is_pause) {
 				wait_until_end_of_frame(flip_timestamp);
+				flip_timestamp = get_timestamp();
 				continue;
 			};
 			replayer_record_or_replace(replayer, game_memory, input.game_input);
@@ -67,9 +68,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		submit_sound(sound);
 		wait_until_end_of_frame(flip_timestamp);
 
-		char output_buffer[256];
-		sprintf_s(output_buffer, "frame ms: %.2f\n", get_seconds_elapsed(flip_timestamp) * 1000);
-		OutputDebugStringA(output_buffer);
+		// char output_buffer[256];
+		// sprintf_s(output_buffer, "frame ms: %.2f\n", get_seconds_elapsed(flip_timestamp) * 1000);
+		// OutputDebugStringA(output_buffer);
+		// MessageBoxA(nullptr, output_buffer, nullptr, MB_OK); // для дебага на XP
+		flip_timestamp = get_timestamp();
 
 		// if constexpr (DEV_MODE) draw_sound_sync(global_screen, sound);
 		HDC device_context = GetDC(window);
@@ -116,7 +119,7 @@ static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
 	return 0;
 }
 
-static void wait_until_end_of_frame(i64& flip_timestamp) {
+static void wait_until_end_of_frame(i64 flip_timestamp) {
 	f32 flip_seconds_elapsed = get_seconds_elapsed(flip_timestamp);
 	if (SLEEP_GRANULARITY_SECONDS) {
 		f32 sleep_ms = 1000.0f * (TARGET_SECONDS_PER_FRAME - SLEEP_GRANULARITY_SECONDS - flip_seconds_elapsed);
@@ -127,7 +130,6 @@ static void wait_until_end_of_frame(i64& flip_timestamp) {
 		YieldProcessor();
 		flip_seconds_elapsed = get_seconds_elapsed(flip_timestamp);
 	}
-	flip_timestamp = get_timestamp();
 }
 
 static void get_build_file_path(slice<char> result, const char* file_name) {
@@ -685,7 +687,6 @@ namespace Game {
 
 		DWORD bytes_read;
 		if (!ReadFile(file_handle, result.base, file_size_casted, &bytes_read, nullptr)) {
-			// TODO: разобраться почему не работает на XP
 			assert(false);
 			HeapFree(heap_handle, 0, result.base);
 			return {};

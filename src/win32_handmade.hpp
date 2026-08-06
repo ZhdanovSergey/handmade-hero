@@ -114,7 +114,7 @@ static Sound create_sound(HWND window);
 static void calc_sound_samples_to_write(Sound& sound, i64 flip_timestamp);
 static void submit_sound(Sound& sound);
 
-static void wait_until_end_of_frame(i64& flip_timestamp);
+static void wait_until_end_of_frame(i64 flip_timestamp);
 static f32 get_seconds_elapsed(i64 start);
 static i64 get_timestamp();
 

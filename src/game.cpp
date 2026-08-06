@@ -70,9 +70,6 @@ namespace Game {
 		new_hero_pos_right.tile_rel_x += player_width / 2;
 		Tiles::normalize_position(new_hero_pos_right);
 
-		i32 half_screen_width_tiles  = SCENES_PER_SCREEN * SCENE_WIDTH_TILES  / 2;
-		i32 half_screen_height_tiles = SCENES_PER_SCREEN * SCENE_HEIGHT_TILES / 2;
-
 		if (Tiles::check_walkable_tile(tile_map, new_hero_pos_left) &&
 		    Tiles::check_walkable_tile(tile_map, new_hero_pos)      &&
 		    Tiles::check_walkable_tile(tile_map, new_hero_pos_right)) {
@@ -84,13 +81,13 @@ namespace Game {
 			hero_pos = new_hero_pos;
 			camera_pos.abs_z = hero_pos.abs_z;
 
-			// TODO: камера всегда должна следовать за черным квадратом игрока, сейчас это не так
-			auto hero_camera_diff = Tiles::subtract_positions(hero_pos, camera_pos);
-			if (hm::abs(hero_camera_diff.dx) > (half_screen_width_tiles  + 1) * Tiles::TILE_DIM) {
-				camera_pos.abs_x += SCENE_WIDTH_TILES  * hm::sign<i32>(hero_camera_diff.dx);
+			i32 abs_x_diff = hero_pos.abs_x - camera_pos.abs_x;
+			i32 abs_y_diff = hero_pos.abs_y - camera_pos.abs_y;
+			if (hm::abs(abs_x_diff) > SCENE_WIDTH_TILES  / 2) {
+				camera_pos.abs_x += SCENE_WIDTH_TILES  * hm::sign<i32>(abs_x_diff);
 			}
-			if (hm::abs(hero_camera_diff.dy) > (half_screen_height_tiles + 1) * Tiles::TILE_DIM) {
-				camera_pos.abs_y += SCENE_HEIGHT_TILES * hm::sign<i32>(hero_camera_diff.dy);
+			if (hm::abs(abs_y_diff) > SCENE_HEIGHT_TILES / 2) {
+				camera_pos.abs_y += SCENE_HEIGHT_TILES * hm::sign<i32>(abs_y_diff);
 			}
 		}
 
@@ -102,6 +99,8 @@ namespace Game {
 		);		
 		draw_pixels(screen, game_state.background_bitmap, 0, 0);
 
+		i32 half_screen_width_tiles  = SCENES_PER_SCREEN * SCENE_WIDTH_TILES  / 2;
+		i32 half_screen_height_tiles = SCENES_PER_SCREEN * SCENE_HEIGHT_TILES / 2;
 		for (    i32 y = camera_pos.abs_y - half_screen_height_tiles - 1; y <= camera_pos.abs_y + half_screen_height_tiles + 1; ++y) {
 			for (i32 x = camera_pos.abs_x - half_screen_width_tiles  - 1; x <= camera_pos.abs_x + half_screen_width_tiles  + 1; ++x) {
 				auto tile = Tiles::get_tile(tile_map, x, y, camera_pos.abs_z);
@@ -146,10 +145,10 @@ namespace Game {
 	static void draw_rectangle(slice2<u32> dst, const Color& color, f32 min_x_f32, f32 min_y_f32, f32 max_x_f32, f32 max_y_f32) {
 		f32 pixels_per_unit = get_pixels_per_unit(dst);
 
-		i32 min_x = hm::round(min_x_f32 * pixels_per_unit);
-		i32 min_y = hm::round(min_y_f32 * pixels_per_unit);
-		i32 max_x = hm::round(max_x_f32 * pixels_per_unit);
-		i32 max_y = hm::round(max_y_f32 * pixels_per_unit);
+		i32 min_x = hm::round<i32>(min_x_f32 * pixels_per_unit);
+		i32 min_y = hm::round<i32>(min_y_f32 * pixels_per_unit);
+		i32 max_x = hm::round<i32>(max_x_f32 * pixels_per_unit);
+		i32 max_y = hm::round<i32>(max_y_f32 * pixels_per_unit);
 
 		min_x = hm::max(min_x, 0);
 		min_y = hm::max(min_y, 0);
@@ -168,8 +167,8 @@ namespace Game {
 		// LATER: масштабирование через pixels_per_unit не работает
 		f32 pixels_per_unit = get_pixels_per_unit(dst);
 
-		i32 src_min_x = hm::round(min_x_f32 * pixels_per_unit - align_x);
-		i32 src_min_y = hm::round(min_y_f32 * pixels_per_unit - align_y);
+		i32 src_min_x = hm::round<i32>(min_x_f32 * pixels_per_unit - align_x);
+		i32 src_min_y = hm::round<i32>(min_y_f32 * pixels_per_unit - align_y);
 		i32 src_max_x = src_min_x + src.count_x;
 		i32 src_max_y = src_min_y + src.count_y;
 
@@ -332,7 +331,6 @@ namespace Game {
 		Tiles::normalize_position(hero_pos);		
 		assert(Tiles::check_walkable_tile(tile_map, hero_pos));
 
-		// TODO: сейчас увеличение camera_pos.abs_y сдвигает камеру вниз, по идее должен быть сдвиг вверх
 		camera_pos.abs_x = SCENE_WIDTH_TILES  / 2;
 		camera_pos.abs_y = SCENE_HEIGHT_TILES / 2;
 		camera_pos.abs_z = hero_pos.abs_z;
