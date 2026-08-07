@@ -65,7 +65,7 @@ namespace hm {
     }
 
     static void strcat(slice<char> dst_slice, const char* src) {
-        char* dst = dst_slice.base;
+        char* dst = dst_slice.ptr;
         assert(strlen(dst) + strlen(src) + 1 <= dst_slice.count);
 
         if constexpr (MSVC_COMPILER) {
@@ -86,7 +86,7 @@ namespace hm {
     static void memzero(slice<u8> dst) {
         if constexpr (MSVC_COMPILER) {
             size_t size = cast<size_t>(dst.get_size());
-            std::memset(dst.base, 0, size);
+            std::memset(dst.ptr, 0, size);
         } else {
             for (u8& byte : dst) byte = 0;
         }
@@ -108,7 +108,7 @@ namespace hm {
 
     //     if constexpr (MSVC_COMPILER) {
     //         size_t size = cast<size_t>(src.get_size());
-    //         std::memcpy(dst.base, src.base, size);
+    //         std::memcpy(dst.ptr, src.ptr, size);
     //     } else {
     //         for (i64 i = 0; i < src.count; ++i) {
     //             dst(i) = src(i);

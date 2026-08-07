@@ -19,7 +19,7 @@ namespace Tiles {
 
 	static Tile get_tile(Map& map, i32 abs_x, i32 abs_y, i32 abs_z) {
 		auto* chunk_ptr = get_chunk(map, abs_x, abs_y, abs_z);
-		if (!chunk_ptr || !chunk_ptr->tiles.base) return {};
+		if (!chunk_ptr || !chunk_ptr->tiles.ptr) return {};
 		
 		auto chunk_rel_pos = get_chunk_rel_position(abs_x, abs_y);
 		return chunk_ptr->tiles(chunk_rel_pos.x, chunk_rel_pos.y);
@@ -33,8 +33,8 @@ namespace Tiles {
 		}
 
 		auto& chunk = *chunk_ptr;
-		if (!chunk.tiles.base) {
-			chunk.tiles.base = world_arena.push<Tiles::Tile>(chunk.tiles.get_size());
+		if (!chunk.tiles.ptr) {
+			chunk.tiles.ptr = world_arena.push<Tiles::Tile>(chunk.tiles.get_size());
 			for (auto& tile : chunk.tiles) {
 				tile = Tiles::Tile::Floor;
 			}

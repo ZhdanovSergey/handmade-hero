@@ -149,7 +149,7 @@ static void wait_until_end_of_frame(i64 flip_timestamp) {
 
 static void get_build_file_path(slice<char> result, const char* file_name) {
 	SetLastError(0);
-	GetModuleFileNameA(nullptr, result.base, cast<DWORD>(result.get_size()));
+	GetModuleFileNameA(nullptr, result.ptr, cast<DWORD>(result.get_size()));
 	// LATER: обработать пути длиннее MAX_PATH
 	assert(GetLastError() != ERROR_INSUFFICIENT_BUFFER);
 
@@ -445,7 +445,7 @@ static void replayer_start_record(Replayer& replayer, const Game::Memory& game_m
 
 	DWORD game_memory_size = cast<DWORD>(game_memory.permanent.get_size() + game_memory.transient.get_size());
 	DWORD bytes_written = 0;
-	BOOL ok_write = WriteFile(replayer.state_handle, game_memory.permanent.base, game_memory_size, &bytes_written, nullptr);
+	BOOL ok_write = WriteFile(replayer.state_handle, game_memory.permanent.ptr, game_memory_size, &bytes_written, nullptr);
 	assert(ok_write && bytes_written == game_memory_size);
 }
 
@@ -463,7 +463,7 @@ static void replayer_start_play(Replayer& replayer, Game::Memory& game_memory) {
 
 	DWORD game_memory_size = cast<DWORD>(game_memory.permanent.get_size() + game_memory.transient.get_size());
 	DWORD bytes_read = 0;
-	BOOL ok_read = ReadFile(replayer.state_handle, game_memory.permanent.base, game_memory_size, &bytes_read, nullptr);
+	BOOL ok_read = ReadFile(replayer.state_handle, game_memory.permanent.ptr, game_memory_size, &bytes_read, nullptr);
 	assert(ok_read && bytes_read == game_memory_size);
 }
 
@@ -484,7 +484,7 @@ static Screen create_screen() {
 	Screen screen = {};
 	screen.bitmap_info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
 	screen.bitmap_info.bmiHeader.biPlanes = 1;
-	screen.bitmap_info.bmiHeader.biBitCount = sizeof(*screen.game_screen.base) * 8;
+	screen.bitmap_info.bmiHeader.biBitCount = sizeof(*screen.game_screen.ptr) * 8;
 	screen.bitmap_info.bmiHeader.biCompression = BI_RGB;	
 	resize_screen(screen, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT);
 	return screen;
@@ -513,8 +513,8 @@ static void reset_input_counters(Input& input) {
 }
 
 static void resize_screen(Screen& screen, i32 width, i32 height) {
-	if (screen.game_screen.base) {
-		BOOL ok_free = VirtualFree(screen.game_screen.base, 0, MEM_RELEASE);
+	if (screen.game_screen.ptr) {
+		BOOL ok_free = VirtualFree(screen.game_screen.ptr, 0, MEM_RELEASE);
 		assert(ok_free);
 	}
 
@@ -524,8 +524,8 @@ static void resize_screen(Screen& screen, i32 width, i32 height) {
 	screen.game_screen.count_x = width;
 	screen.game_screen.count_y = height;
 	SIZE_T memory_size = cast<SIZE_T>(screen.game_screen.get_size());
-	screen.game_screen.base = cast<u32*>(VirtualAlloc(nullptr, memory_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
-	assert(screen.game_screen.base);
+	screen.game_screen.ptr = cast<u32*>(VirtualAlloc(nullptr, memory_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+	assert(screen.game_screen.ptr);
 }
 
 static void submit_screen(const Screen& screen, HWND window, HDC device_context) {
@@ -545,14 +545,14 @@ static void submit_screen(const Screen& screen, HWND window, HDC device_context)
 	int ok_stretch = StretchDIBits(device_context,
 		0, 0, dst_width, dst_height,
 		0, 0, src_width, src_height,
-		screen.game_screen.base, &screen.bitmap_info,
+		screen.game_screen.ptr, &screen.bitmap_info,
 		DIB_RGB_COLORS, SRCCOPY
 	);
 	assert(ok_stretch);
 }
 
 static void draw_vertical_line(Screen& screen, i32 x, i32 top, i32 bottom, u32 color) {
-	u32* pixel = screen.game_screen.base + top * screen.game_screen.count_x + x;
+	u32* pixel = screen.game_screen.ptr + top * screen.game_screen.count_x + x;
 	for (i32 y = top; y < bottom; ++y) {
 		*pixel = color;
 		pixel += screen.game_screen.count_x;
@@ -574,8 +574,8 @@ static Sound create_sound(HWND window) {
 	sound.safety_bytes = sound.bytes_per_frame / 3;
 
 	sound.game_sound.samples_per_second = cast<i32>(sound.wave_format.nSamplesPerSec);
-	sound.game_sound.samples.base = cast<Game::Sound_Sample*>(VirtualAlloc(nullptr, sound.buffer_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
-	if (!sound.game_sound.samples.base) {
+	sound.game_sound.samples.ptr = cast<Game::Sound_Sample*>(VirtualAlloc(nullptr, sound.buffer_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+	if (!sound.game_sound.samples.ptr) {
 		assert(false);
 		return {};
 	}
@@ -703,8 +703,8 @@ static void submit_sound(Sound& sound) {
 	BOOL ok_unlock = false;
 	if (ok_lock) {
 		defer(ok_unlock = sound.buffer->Unlock(region1, region1_size, region2, region2_size) == DS_OK);
-		hm::memcpy(region1, sound.game_sound.samples.base, region1_size);
-		hm::memcpy(region2, cast<u8*>(sound.game_sound.samples.base) + region1_size, region2_size);
+		hm::memcpy(region1, sound.game_sound.samples.ptr, region1_size);
+		hm::memcpy(region2, cast<u8*>(sound.game_sound.samples.ptr) + region1_size, region2_size);
 		sound.output_location = (sound.output_location + region1_size + region2_size) % sound.buffer_size;
 	}
 	assert(ok_lock && ok_unlock);
@@ -778,14 +778,14 @@ namespace Game {
 		HANDLE heap_handle = GetProcessHeap();
 		assert(heap_handle);
 
-		result.base = cast<u8*>(HeapAlloc(heap_handle, 0, file_size_casted));
-		assert(result.base);
+		result.ptr = cast<u8*>(HeapAlloc(heap_handle, 0, file_size_casted));
+		assert(result.ptr);
 
 		DWORD bytes_read = 0;
-		if (!ReadFile(file_handle, result.base, file_size_casted, &bytes_read, nullptr) ||
+		if (!ReadFile(file_handle, result.ptr, file_size_casted, &bytes_read, nullptr) ||
 		   (bytes_read != file_size_casted)) {
 			assert(false);
-			HeapFree(heap_handle, 0, result.base);
+			HeapFree(heap_handle, 0, result.ptr);
 			return {};
 		}
 
@@ -803,7 +803,7 @@ namespace Game {
 		);
 
 		DWORD bytes_written = 0;
-		BOOL ok_write = WriteFile(file_handle, file.base, file_size_casted, &bytes_written, nullptr);
+		BOOL ok_write = WriteFile(file_handle, file.ptr, file_size_casted, &bytes_written, nullptr);
 		assert(ok_write && bytes_written == file_size_casted);
 	}
 	

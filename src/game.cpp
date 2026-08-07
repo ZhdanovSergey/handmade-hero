@@ -209,15 +209,15 @@ namespace Game {
 
 	static slice2<u32> load_bmp(const Thread_Context& thread, Read_Entire_File* read_entire_file, const char* file_name) {
 		slice<u8> read_result = read_entire_file(thread, file_name);
-		if (!read_result.base) return {};
+		if (!read_result.ptr) return {};
 
-		auto& header = cast<Bmp_Header&>(*read_result.base);
+		auto& header = cast<Bmp_Header&>(*read_result.ptr);
 		assert(header.compression == 3);
 
 		slice2<u32> pixels = {};
 		pixels.count_x = header.width;
 		pixels.count_y = header.height;
-		pixels.base = cast<u32*>(read_result.base + header.bitmap_offset);
+		pixels.ptr = cast<u32*>(read_result.ptr + header.bitmap_offset);
 		assert(pixels.get_size() == read_result.get_size() - header.bitmap_offset);
 
 		u32 alpha_mask = ~(header.red_mask | header.green_mask | header.blue_mask);
@@ -245,13 +245,13 @@ namespace Game {
 		auto& tile_chunks = game_state.world.tile_map.chunks;
 		auto& world_arena = game_state.world.arena;
 
-		world_arena.base = memory.permanent.base + size_of(Game_State);
+		world_arena.ptr  = memory.permanent.ptr + size_of(Game_State);
 		world_arena.size = memory.permanent.get_size() - size_of(Game_State);
 
 		tile_chunks.count_x = Tiles::WORLD_X_CHUNKS;
 		tile_chunks.count_y = Tiles::WORLD_Y_CHUNKS;
 		tile_chunks.count_z = Tiles::WORLD_Z_CHUNKS;
-		tile_chunks.base = world_arena.push<Tiles::Chunk>(tile_chunks.get_size());
+		tile_chunks.ptr = world_arena.push<Tiles::Chunk>(tile_chunks.get_size());
 
 		i32 abs_tile_z = 0;
 		i32 scene_x = 0, scene_y = 0;
@@ -380,6 +380,6 @@ namespace Game {
 	}
 
 	static Game_State& get_game_state(Memory& memory) {
-		return cast<Game_State&>(*memory.permanent.base);
+		return cast<Game_State&>(*memory.permanent.ptr);
 	}
 }
