@@ -74,7 +74,7 @@ struct Sound {
 	DWORD buffer_size;
 	DWORD bytes_per_frame;
 	DWORD safety_bytes;
-	bool is_valid;
+	bool is_playing;
 	Array<Sound_Time_Marker, 32> dev_markers; // ожидаемый фреймрейт - 1
 	i32 dev_markers_index;
 };
