@@ -70,9 +70,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		submit_sound(sound);
 		wait_until_end_of_frame(flip_timestamp);
 
-		// char output_buffer[256];
-		// sprintf_s(output_buffer, "frame ms: %.2f\n", get_seconds_elapsed(flip_timestamp) * 1000);
-		// OutputDebugStringA(output_buffer);
+		char output_buffer[256];
+		sprintf_s(output_buffer, "frame ms: %.2f\n", get_seconds_elapsed(flip_timestamp) * 1000);
+		OutputDebugStringA(output_buffer);
 		// MessageBoxA(nullptr, output_buffer, nullptr, MB_OK); // для дебага на XP
 		flip_timestamp = get_timestamp();
 
@@ -322,9 +322,9 @@ static void collect_gamepad_input(Input& input) {
 		process_gamepad_button_input(controller.move_down,  controller.average_y < 0);
 		process_gamepad_button_input(controller.move_up,    controller.average_y > 0);
 	} else {
-		process_gamepad_button_input(controller.move_left, 	xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_LEFT);
+		process_gamepad_button_input(controller.move_left,  xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_LEFT);
 		process_gamepad_button_input(controller.move_right, xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT);
-		process_gamepad_button_input(controller.move_down, 	xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_DOWN);
+		process_gamepad_button_input(controller.move_down,  xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_DOWN);
 		process_gamepad_button_input(controller.move_up, 	xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_UP);
 	}
 
@@ -649,7 +649,6 @@ static Sound create_sound(HWND window) {
 	return sound;
 }
 
-// TODO: передавать мутируемые объекты как указатели, не немутируемые как константные ссылки
 static void calc_sound_samples_to_write(Sound& sound, i64 flip_timestamp) {
 	if (!sound.is_playing) return;
 

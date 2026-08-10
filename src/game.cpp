@@ -328,7 +328,7 @@ namespace Game {
 		hero_pos.abs_y = 1;
 		hero_pos.tile_rel_x = Tiles::TILE_DIM / 2;
 		hero_pos.tile_rel_y = Tiles::TILE_DIM / 2;
-		Tiles::normalize_position(hero_pos);		
+		Tiles::normalize_position(hero_pos);
 		assert(Tiles::check_walkable_tile(tile_map, hero_pos));
 
 		camera_pos.abs_x = SCENE_WIDTH_TILES  / 2;

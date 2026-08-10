@@ -135,7 +135,7 @@ namespace Game {
 	extern "C" void update_and_render(const Thread_Context& thread, const Input& input, Memory& memory, slice2<u32> screen);
 	using Update_And_Render = decltype(update_and_render);
 	// get_sound_samples должен быть быстрым, не больше 1ms
-	extern "C" void get_sound_samples(const Thread_Context& thread, Memory& memory, Sound& sound_buffer);
+	extern "C" void get_sound_samples(const Thread_Context& thread, Memory& memory, Sound& sound);
 	using Get_Sound_Samples = decltype(get_sound_samples);
 
 	static slice2<u32> load_bmp(const Thread_Context& thread, Read_Entire_File* read_entire_file, const char* file_name);

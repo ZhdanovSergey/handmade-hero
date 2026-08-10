@@ -103,16 +103,19 @@ template <typename T, i32 N>
 struct Array {
     T ptr[N];
 
+    constexpr i32 get_count() const { return N; }
+
     const T* begin() const { return ptr; }
     const T* end()   const { return ptr + N; }
+    __forceinline
     const T& operator()(i32 index) const {
         assert(index >= 0 && index < N);
         return ptr[index];
     }
-    constexpr i32 get_count() const { return N; }
 
     T* begin()               { return cast<T*>(cast<const Array&>(*this).begin()); }
     T* end()                 { return cast<T*>(cast<const Array&>(*this).end()); }
+    __forceinline
     T& operator()(i32 index) { return cast<T&>(cast<const Array&>(*this)(index)); }
 };
 
@@ -138,18 +141,25 @@ struct static_slice {
         static_assert(X == Count_X && Y == Count_Y && Z == Count_Z);
     }
 
-    T* begin() { return ptr; }
-    T* end()   { return ptr + Count_X * Count_Y * Count_Z; }
-    T& operator()(i32 x, i32 y = 0, i32 z = 0) {
+    constexpr i64 get_size()    const { return size_of(T) * Count_X * Count_Y * Count_Z; }
+    constexpr i32 get_count_x() const { return Count_X; }
+    constexpr i32 get_count_y() const { return Count_Y; }
+    constexpr i32 get_count_z() const { return Count_Z; }
+
+    const T* begin() const { return ptr; }
+    const T* end()   const { return ptr + Count_X * Count_Y * Count_Z; }
+    __forceinline
+    const T& operator()(i32 x, i32 y = 0, i32 z = 0) const {
         assert(x >= 0 && x < Count_X);
         assert(y >= 0 && y < Count_Y);
         assert(z >= 0 && z < Count_Z);
         return ptr[ z * Count_Y * Count_X + y * Count_X + x];
     }
-    constexpr i64 get_size()    { return size_of(T) * Count_X * Count_Y * Count_Z; }
-    constexpr i32 get_count_x() { return Count_X; }
-    constexpr i32 get_count_y() { return Count_Y; }
-    constexpr i32 get_count_z() { return Count_Z; }
+
+    T* begin()                                 { return cast<T*>(cast<const static_slice&>(*this).begin()); }
+    T* end()                                   { return cast<T*>(cast<const static_slice&>(*this).end()); }
+    __forceinline
+    T& operator()(i32 x, i32 y = 0, i32 z = 0) { return cast<T&>(cast<const static_slice&>(*this)(x, y, z)); }
 };
 template <typename T, i32 X>
 static_slice(T (&)[X])       -> static_slice<T, X>;
@@ -169,15 +179,22 @@ struct slice3 {
     template <typename U>
     slice3(const slice3<U>& other) : ptr{other.ptr}, count_x{other.count_x}, count_y{other.count_y}, count_z{other.count_z} {}
 
-    T* begin() { return ptr; }
-    T* end()   { return ptr + count_x * count_y * count_z; }
-    T& operator()(i32 x, i32 y, i32 z) {
+    i64 get_size() const { return size_of(T) * count_x * count_y * count_z; }
+
+    const T* begin() const { return ptr; }
+    const T* end()   const { return ptr + count_x * count_y * count_z; }
+    __forceinline
+    const T& operator()(i32 x, i32 y, i32 z) const {
         assert(x >= 0 && x < count_x);
         assert(y >= 0 && y < count_y);
         assert(z >= 0 && z < count_z);
         return ptr[ z * count_y * count_x + y * count_x + x];
     }
-    i64 get_size() const { return size_of(T) * count_x * count_y * count_z; }
+
+    T* begin()                         { return cast<T*>(cast<const slice3&>(*this).begin()); }
+    T* end()                           { return cast<T*>(cast<const slice3&>(*this).end()); }
+    __forceinline
+    T& operator()(i32 x, i32 y, i32 z) { return cast<T&>(cast<const slice3&>(*this)(x, y, z)); }
 };
 
 template <typename T>
@@ -190,14 +207,21 @@ struct slice2 {
     template <typename U>
     slice2(const slice2<U>& other) : ptr{other.ptr}, count_x{other.count_x}, count_y{other.count_y} {}
 
-    T* begin() { return ptr; }
-    T* end()   { return ptr + count_x * count_y; }
-    T& operator()(i32 x, i32 y) {
+    i64 get_size() const { return size_of(T) * count_x * count_y; }
+
+    const T* begin() const { return ptr; }
+    const T* end()   const { return ptr + count_x * count_y; }
+    __forceinline
+    const T& operator()(i32 x, i32 y) const {
         assert(x >= 0 && x < count_x);
         assert(y >= 0 && y < count_y);
         return ptr[y * count_x + x];
     }
-    i64 get_size() const { return size_of(T) * count_x * count_y; }
+
+    T* begin()                  { return cast<T*>(cast<const slice2&>(*this).begin()); }
+    T* end()                    { return cast<T*>(cast<const slice2&>(*this).end()); }
+    __forceinline
+    T& operator()(i32 x, i32 y) { return cast<T&>(cast<const slice2&>(*this)(x, y)); }
 };
 
 template <typename T>
@@ -223,17 +247,24 @@ struct slice {
         }
     }
 
-    T* begin() { return ptr; }
-    T* end()   { return ptr + count; }
-    T& operator()(i64 index) {
-        assert(index >= 0 && index < count);
-        return ptr[index];
-    }
     i64  get_size() const { return count * size_of(T); }
     void set_size(i64 size) {
         count = size / size_of(T);
         assert(size == count * size_of(T));
     }
+
+    const T* begin() const { return ptr; }
+    const T* end()   const { return ptr + count; }
+    __forceinline
+    const T& operator()(i64 index) const {
+        assert(index >= 0 && index < count);
+        return ptr[index];
+    }
+    
+    T* begin()               { return cast<T*>(cast<const slice&>(*this).begin()); }
+    T* end()                 { return cast<T*>(cast<const slice&>(*this).end()); }
+    __forceinline
+    T& operator()(i64 index) { return cast<T&>(cast<const slice&>(*this)(index)); }
 };
 template <typename T>
 slice(T*, i64) -> slice<T>;
