@@ -92,7 +92,7 @@ namespace hm {
         }
     }
 
-    static void memcpy(void* dst, const void* src, size_t size) {
+    static void memcpy(void* dst, void* src, size_t size) {
         if constexpr (MSVC_COMPILER) {
             std::memcpy(dst, src, size);
         } else {
@@ -102,7 +102,7 @@ namespace hm {
         }
     }
 
-    // static void memcpy(slice<u8> dst, slice<const u8> src) {
+    // static void memcpy(slice<u8> dst, slice<u8> src) {
     //     assert_no_overlap(dst, src);
     //     assert(dst.count >= src.count);
 

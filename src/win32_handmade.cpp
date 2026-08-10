@@ -8,7 +8,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     BOOL ok_priority = SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
 	assert(ok_priority);
 
-	Game::Thread_Context thread = {};
+	Game::Thread thread = {};
 	HWND window = create_window(hInstance);
 	auto input = create_input();
 	auto sound = create_sound(window);
@@ -177,7 +177,7 @@ static f32 get_seconds_elapsed(i64 start) {
 }
 
 static f32 get_target_seconds_per_frame() {
-	f32 target_fps = 30.0f;
+	f32 target_fps = 60.0f;
 
 	// синхронизация с частотой монитора
 	// f32 min_fps = 30.0f;
@@ -396,7 +396,7 @@ static void collect_mouse_input(Input& input, HWND window) {
 	}
 }
 
-static Replayer create_replayer(const Game::Memory& game_memory) {
+static Replayer create_replayer(Game::Memory& game_memory) {
 	if constexpr (!DEV_MODE) return {};
 
 	Replayer replayer = {};
@@ -437,7 +437,7 @@ static void replayer_record_or_replace(Replayer& replayer, Game::Memory& game_me
 	}
 }
 
-static void replayer_start_record(Replayer& replayer, const Game::Memory& game_memory) {
+static void replayer_start_record(Replayer& replayer, Game::Memory& game_memory) {
 	DWORD state_handle_ptr = SetFilePointer(replayer.state_handle, 0, 0, FILE_BEGIN);
 	DWORD input_handle_ptr = SetFilePointer(replayer.input_handle, 0, 0, FILE_BEGIN);
 	assert(state_handle_ptr != INVALID_SET_FILE_POINTER);
@@ -449,7 +449,7 @@ static void replayer_start_record(Replayer& replayer, const Game::Memory& game_m
 	assert(ok_write && bytes_written == game_memory_size);
 }
 
-static void replayer_record(Replayer& replayer, const Game::Input& game_input) {
+static void replayer_record(Replayer& replayer, Game::Input& game_input) {
 	DWORD bytes_written = 0;
 	BOOL ok_write = WriteFile(replayer.input_handle, &game_input, sizeof(game_input), &bytes_written, nullptr);
 	assert(ok_write && bytes_written == sizeof(game_input));
@@ -528,7 +528,7 @@ static void resize_screen(Screen& screen, i32 width, i32 height) {
 	assert(screen.game_screen.ptr);
 }
 
-static void submit_screen(const Screen& screen, HWND window, HDC device_context) {
+static void submit_screen(Screen& screen, HWND window, HDC device_context) {
 	RECT client_rect = {};
 	BOOL ok_rect = GetClientRect(window, &client_rect);
 	assert(ok_rect);
@@ -758,7 +758,7 @@ static void draw_sound_sync(Screen& screen, Sound& sound) {
 }
 
 namespace Game {
-	static slice<u8> read_entire_file(const Thread_Context& thread, const char* file_name) {
+	static slice<u8> read_entire_file(Thread& thread, const char* file_name) {
 		slice<u8> result = {};
 
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
@@ -791,7 +791,7 @@ namespace Game {
 		return result;
 	}
 
-	static void write_entire_file(const Thread_Context& thread, const char* file_name, slice<const u8> file) {
+	static void write_entire_file(Thread& thread, const char* file_name, slice<u8> file) {
 		DWORD file_size_casted = cast<DWORD>(file.get_size());
 
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
@@ -806,7 +806,7 @@ namespace Game {
 		assert(ok_write && bytes_written == file_size_casted);
 	}
 	
-	static void free_file_memory(const Thread_Context& thread, void*& memory) {
+	static void free_file_memory(Thread& thread, void*& memory) {
 		HANDLE heap_handle = GetProcessHeap();
 		assert(heap_handle);
 

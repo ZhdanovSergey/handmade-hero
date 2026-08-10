@@ -48,15 +48,15 @@ namespace Game {
 	};
 
 	
-    struct Thread_Context {};
+    struct Thread {};
 
-    static slice<u8> read_entire_file(const Thread_Context& thread, const char* file_name);
+    static slice<u8> read_entire_file(Thread& thread, const char* file_name);
     using Read_Entire_File = decltype(read_entire_file);
 
-    static void write_entire_file(const Thread_Context& thread, const char* file_name, slice<const u8> file);
+    static void write_entire_file(Thread& thread, const char* file_name, slice<u8> file);
     using Write_Entire_File = decltype(write_entire_file);
 
-    static void free_file_memory(const Thread_Context& thread, void*& memory);
+    static void free_file_memory(Thread& thread, void*& memory);
     using Free_File_Memory = decltype(free_file_memory);
 
 	struct Memory {
@@ -68,7 +68,7 @@ namespace Game {
     	Free_File_Memory* free_file_memory;
 	};
 
-	struct Color {
+	struct color {
 		f32 red, green, blue;
 	};
 
@@ -132,18 +132,18 @@ namespace Game {
 	};
 	#pragma pack(pop)
 
-	extern "C" void update_and_render(const Thread_Context& thread, const Input& input, Memory& memory, slice2<u32> screen);
+	extern "C" void update_and_render(Thread& thread, Input& input, Memory& memory, slice2<u32> screen);
 	using Update_And_Render = decltype(update_and_render);
 	// get_sound_samples должен быть быстрым, не больше 1ms
-	extern "C" void get_sound_samples(const Thread_Context& thread, Memory& memory, Sound& sound);
+	extern "C" void get_sound_samples(Thread& thread, Memory& memory, Sound& sound);
 	using Get_Sound_Samples = decltype(get_sound_samples);
 
-	static slice2<u32> load_bmp(const Thread_Context& thread, Read_Entire_File* read_entire_file, const char* file_name);
-	static void draw_pixels(slice2<u32> dst, slice2<const u32> src, f32 min_x_f32, f32 min_y_f32, i32 align_x = 0, i32 align_y = 0);
-	static void draw_rectangle(slice2<u32> dst, const Color& color, f32 min_x_f32, f32 min_y_f32, f32 max_x_f32, f32 max_y_f32);
-	static f32 get_pixels_per_unit(slice2<const u32> screen);
-	static u32 get_hex_color(const Color& color);
+	static slice2<u32> load_bmp(Thread& thread, Read_Entire_File* read_entire_file, const char* file_name);
+	static void draw_pixels(slice2<u32> dst, slice2<u32> src, f32 min_x_f32, f32 min_y_f32, i32 align_x = 0, i32 align_y = 0);
+	static void draw_rectangle(slice2<u32> dst, color color, f32 min_x_f32, f32 min_y_f32, f32 max_x_f32, f32 max_y_f32);
+	static f32 get_pixels_per_unit(slice2<u32> screen);
+	static u32 get_hex_color(color color);
 	
-	static void init_memory(const Thread_Context& thread, Memory& memory);
+	static void init_memory(Thread& thread, Memory& memory);
 	static Game_State& get_game_state(Memory& memory);
 }

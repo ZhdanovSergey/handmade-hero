@@ -2,13 +2,13 @@
 #include "random.hpp"
 
 namespace Tiles {
-	static bool check_same_tile(const Position& pos1, const Position& pos2) {
+	static bool check_same_tile(Position& pos1, Position& pos2) {
 		return pos1.abs_x == pos2.abs_x &&
 		       pos1.abs_y == pos2.abs_y &&
 			   pos1.abs_z == pos2.abs_z;
 	}
 
-	static bool check_walkable_tile(const Map& map, const Position& pos) {
+	static bool check_walkable_tile(Map& map, Position& pos) {
 		switch (get_tile(map, pos.abs_x, pos.abs_y, pos.abs_z)) {
 			case Tile::Floor:
 			case Tile::Stairs_Up:
@@ -17,7 +17,7 @@ namespace Tiles {
 		}
 	}
 
-	static Tile get_tile(const Map& map, i32 abs_x, i32 abs_y, i32 abs_z) {
+	static Tile get_tile(Map& map, i32 abs_x, i32 abs_y, i32 abs_z) {
 		auto* chunk_ptr = get_chunk(map, abs_x, abs_y, abs_z);
 		if (!chunk_ptr || !chunk_ptr->tiles.ptr) return {};
 		
@@ -43,7 +43,7 @@ namespace Tiles {
 		chunk.tiles(chunk_rel_pos.x, chunk_rel_pos.y) = value;
 	}
 
-	static const Chunk* get_chunk(const Map& map, i32 abs_x, i32 abs_y, i32 abs_z) {
+	static Chunk* get_chunk(Map& map, i32 abs_x, i32 abs_y, i32 abs_z) {
 		auto lookup_key = get_chunk_lookup_key(abs_x, abs_y, abs_z);
 
 		if (lookup_key.x < 0 || lookup_key.x >= map.chunks.count_x ||
@@ -54,11 +54,6 @@ namespace Tiles {
 
 		return &map.chunks(lookup_key.x, lookup_key.y, lookup_key.z);
 	};
-
-	static Chunk* get_chunk(Map& map, i32 abs_x, i32 abs_y, i32 abs_z) {
-		const Chunk* const_chunk = get_chunk(cast<const Map&>(map), abs_x, abs_y, abs_z);
-		return cast<Chunk*>(const_chunk);
-	}
 
 	static Chunk_Lookup_Key get_chunk_lookup_key(i32 abs_x, i32 abs_y, i32 abs_z) {
 		Chunk_Lookup_Key result = {};
@@ -93,7 +88,7 @@ namespace Tiles {
 		assert(pos.tile_rel_y >= 0 && pos.tile_rel_y <= TILE_DIM);
 	}
 
-	static Positions_Diff subtract_positions(const Position& a, const Position& b) {
+	static Positions_Diff subtract_positions(Position& a, Position& b) {
 		Positions_Diff diff = {};
 		diff.dx = TILE_DIM * (a.abs_x - b.abs_x) + (a.tile_rel_x - b.tile_rel_x);
 		diff.dy = TILE_DIM * (a.abs_y - b.abs_y) + (a.tile_rel_y - b.tile_rel_y);

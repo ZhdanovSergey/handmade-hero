@@ -103,70 +103,36 @@ template <typename T, i32 N>
 struct Array {
     T ptr[N];
 
-    constexpr i32 get_count() const { return N; }
+    i32 get_count() { return N; }
 
-    const T* begin() const { return ptr; }
-    const T* end()   const { return ptr + N; }
+    T* begin() { return ptr; }
+    T* end()   { return ptr + N; }
     __forceinline
-    const T& operator()(i32 index) const {
+    T& operator()(i32 index) {
         assert(index >= 0 && index < N);
         return ptr[index];
     }
-
-    T* begin()               { return cast<T*>(cast<const Array&>(*this).begin()); }
-    T* end()                 { return cast<T*>(cast<const Array&>(*this).end()); }
-    __forceinline
-    T& operator()(i32 index) { return cast<T&>(cast<const Array&>(*this)(index)); }
 };
 
 template <typename T, i32 Count_X, i32 Count_Y = 1, i32 Count_Z = 1>
 struct static_slice {
     T* ptr;
 
-    static_slice() = default;
-    template <typename U, i32 X>
-    static_slice(U (&arr)[X])       : ptr{reinterpret_cast<U*>(arr)} {
-        static_assert(X == Count_X);
-    }
-    template <typename U, i32 X, i32 Y>
-    static_slice(U (&arr)[Y][X])    : ptr{reinterpret_cast<U*>(arr)} {
-        static_assert(X == Count_X && Y == Count_Y);
-    }    
-    template <typename U, i32 X, i32 Y, i32 Z>
-    static_slice(U (&arr)[Z][Y][X]) : ptr{reinterpret_cast<U*>(arr)} {
-        static_assert(X == Count_X && Y == Count_Y && Z == Count_Z);
-    }
-    template <typename U, i32 X, i32 Y, i32 Z>
-    static_slice(const static_slice<U, X, Y, Z>& other) : ptr{other.ptr} {
-        static_assert(X == Count_X && Y == Count_Y && Z == Count_Z);
-    }
+    i64 get_size()    { return size_of(T) * Count_X * Count_Y * Count_Z; }
+    i32 get_count_x() { return Count_X; }
+    i32 get_count_y() { return Count_Y; }
+    i32 get_count_z() { return Count_Z; }
 
-    constexpr i64 get_size()    const { return size_of(T) * Count_X * Count_Y * Count_Z; }
-    constexpr i32 get_count_x() const { return Count_X; }
-    constexpr i32 get_count_y() const { return Count_Y; }
-    constexpr i32 get_count_z() const { return Count_Z; }
-
-    const T* begin() const { return ptr; }
-    const T* end()   const { return ptr + Count_X * Count_Y * Count_Z; }
+    T* begin() { return ptr; }
+    T* end()   { return ptr + Count_X * Count_Y * Count_Z; }
     __forceinline
-    const T& operator()(i32 x, i32 y = 0, i32 z = 0) const {
+    T& operator()(i32 x, i32 y = 0, i32 z = 0) {
         assert(x >= 0 && x < Count_X);
         assert(y >= 0 && y < Count_Y);
         assert(z >= 0 && z < Count_Z);
         return ptr[ z * Count_Y * Count_X + y * Count_X + x];
     }
-
-    T* begin()                                 { return cast<T*>(cast<const static_slice&>(*this).begin()); }
-    T* end()                                   { return cast<T*>(cast<const static_slice&>(*this).end()); }
-    __forceinline
-    T& operator()(i32 x, i32 y = 0, i32 z = 0) { return cast<T&>(cast<const static_slice&>(*this)(x, y, z)); }
 };
-template <typename T, i32 X>
-static_slice(T (&)[X])       -> static_slice<T, X>;
-template <typename T, i32 X, i32 Y>
-static_slice(T (&)[Y][X])    -> static_slice<T, X, Y>;
-template <typename T, i32 X, i32 Y, i32 Z>
-static_slice(T (&)[Z][Y][X]) -> static_slice<T, X, Y, Z>;
 
 template <typename T>
 struct slice3 {
@@ -175,26 +141,17 @@ struct slice3 {
     i32 count_y;
     i32 count_z;
 
-    slice3() = default;
-    template <typename U>
-    slice3(const slice3<U>& other) : ptr{other.ptr}, count_x{other.count_x}, count_y{other.count_y}, count_z{other.count_z} {}
+    i64 get_size() { return size_of(T) * count_x * count_y * count_z; }
 
-    i64 get_size() const { return size_of(T) * count_x * count_y * count_z; }
-
-    const T* begin() const { return ptr; }
-    const T* end()   const { return ptr + count_x * count_y * count_z; }
+    T* begin() { return ptr; }
+    T* end()   { return ptr + count_x * count_y * count_z; }
     __forceinline
-    const T& operator()(i32 x, i32 y, i32 z) const {
+    T& operator()(i32 x, i32 y, i32 z) {
         assert(x >= 0 && x < count_x);
         assert(y >= 0 && y < count_y);
         assert(z >= 0 && z < count_z);
         return ptr[ z * count_y * count_x + y * count_x + x];
     }
-
-    T* begin()                         { return cast<T*>(cast<const slice3&>(*this).begin()); }
-    T* end()                           { return cast<T*>(cast<const slice3&>(*this).end()); }
-    __forceinline
-    T& operator()(i32 x, i32 y, i32 z) { return cast<T&>(cast<const slice3&>(*this)(x, y, z)); }
 };
 
 template <typename T>
@@ -203,25 +160,16 @@ struct slice2 {
     i32 count_x;
     i32 count_y;
 
-    slice2() = default;
-    template <typename U>
-    slice2(const slice2<U>& other) : ptr{other.ptr}, count_x{other.count_x}, count_y{other.count_y} {}
+    i64 get_size() { return size_of(T) * count_x * count_y; }
 
-    i64 get_size() const { return size_of(T) * count_x * count_y; }
-
-    const T* begin() const { return ptr; }
-    const T* end()   const { return ptr + count_x * count_y; }
+    T* begin() { return ptr; }
+    T* end()   { return ptr + count_x * count_y; }
     __forceinline
-    const T& operator()(i32 x, i32 y) const {
+    T& operator()(i32 x, i32 y) {
         assert(x >= 0 && x < count_x);
         assert(y >= 0 && y < count_y);
         return ptr[y * count_x + x];
     }
-
-    T* begin()                  { return cast<T*>(cast<const slice2&>(*this).begin()); }
-    T* end()                    { return cast<T*>(cast<const slice2&>(*this).end()); }
-    __forceinline
-    T& operator()(i32 x, i32 y) { return cast<T&>(cast<const slice2&>(*this)(x, y)); }
 };
 
 template <typename T>
@@ -230,15 +178,13 @@ struct slice {
     i64 count;
 
     slice() = default;
-    template <typename U, i64 X>
-    slice(U (&arr)[X])    : slice{reinterpret_cast<U*>(arr), X } {}
-    template <typename U>
-    slice(const slice<U>& other) : slice{ other.ptr, other.count } {}
+    template <typename T, i64 X>
+    slice(T (&arr)[X]) : slice{arr, X } {}
     template <typename U>
     slice(U* ptr, i64 count) {
         // финальный конструктор для возможной конвертации в u8
         if constexpr (is_same_v<T,u8>) {
-            this->ptr   = reinterpret_cast<T*>(ptr);
+            this->ptr   = cast<u8*>(ptr);
             this->count = count * size_of(U);
         } else {
             static_assert(is_same_v<T,U>);
@@ -247,27 +193,20 @@ struct slice {
         }
     }
 
-    i64  get_size() const { return count * size_of(T); }
+    i64  get_size() { return count * size_of(T); }
     void set_size(i64 size) {
         count = size / size_of(T);
         assert(size == count * size_of(T));
     }
 
-    const T* begin() const { return ptr; }
-    const T* end()   const { return ptr + count; }
+    T* begin() { return ptr; }
+    T* end()   { return ptr + count; }
     __forceinline
-    const T& operator()(i64 index) const {
+    T& operator()(i64 index) {
         assert(index >= 0 && index < count);
         return ptr[index];
     }
-    
-    T* begin()               { return cast<T*>(cast<const slice&>(*this).begin()); }
-    T* end()                 { return cast<T*>(cast<const slice&>(*this).end()); }
-    __forceinline
-    T& operator()(i64 index) { return cast<T&>(cast<const slice&>(*this)(index)); }
 };
-template <typename T>
-slice(T*, i64) -> slice<T>;
 
 struct Arena {
     u8* ptr;

@@ -3,7 +3,7 @@
 #include "tiles.cpp"
 
 namespace Game {
-	extern "C" void get_sound_samples(const Thread_Context& thread, Memory& memory, Sound& sound) {
+	extern "C" void get_sound_samples(Thread& thread, Memory& memory, Sound& sound) {
 		auto& game_state  = get_game_state(memory);
 		auto& sound_t_sin = game_state.sound_t_sin;
 
@@ -21,7 +21,7 @@ namespace Game {
 		}
 	}
 
-	extern "C" void update_and_render(const Thread_Context& thread, const Input& input, Memory& memory, slice2<u32> screen) {
+	extern "C" void update_and_render(Thread& thread, Input& input, Memory& memory, slice2<u32> screen) {
 		assert(input.frame_dt > 0);
 		if (!memory.is_initialized) {
 			init_memory(thread, memory);
@@ -92,7 +92,7 @@ namespace Game {
 		}
 
 		draw_rectangle(
-			screen, Color{ 1.0f, 0.0f, 1.0f },
+			screen, color{ 1.0f, 0.0f, 1.0f },
 			0.0f, 0.0f,
 			SCENES_PER_SCREEN * SCENE_WIDTH_TILES  * Tiles::TILE_DIM,
 			SCENES_PER_SCREEN * SCENE_HEIGHT_TILES * Tiles::TILE_DIM
@@ -105,7 +105,7 @@ namespace Game {
 			for (i32 x = camera_pos.abs_x - half_screen_width_tiles  - 1; x <= camera_pos.abs_x + half_screen_width_tiles  + 1; ++x) {
 				auto tile = Tiles::get_tile(tile_map, x, y, camera_pos.abs_z);
 
-				Color color = {};
+				color color = {};
 				switch (tile) {
 					case Tiles::Tile::Not_Initialized: color = { 1.0f, 0.0f, 0.0f };    break;
 					case Tiles::Tile::Floor:           color = { 0.5f, 0.5f, 0.5f };    break;
@@ -115,7 +115,7 @@ namespace Game {
 				}
 
 				if (x == hero_pos.abs_x && y == hero_pos.abs_y) {
-					color = Color{ 0.0f, 0.0f, 0.0f };
+					color = { 0.0f, 0.0f, 0.0f };
 				}
 
 				if ((tile != Tiles::Tile::Not_Initialized && tile != Tiles::Tile::Floor) ||
@@ -142,7 +142,7 @@ namespace Game {
 		draw_pixels(screen, hero_bitmap.head,  player_ground_x, player_ground_y, hero_bitmap.align_x, hero_bitmap.align_y);
 	};
 
-	static void draw_rectangle(slice2<u32> dst, const Color& color, f32 min_x_f32, f32 min_y_f32, f32 max_x_f32, f32 max_y_f32) {
+	static void draw_rectangle(slice2<u32> dst, color color, f32 min_x_f32, f32 min_y_f32, f32 max_x_f32, f32 max_y_f32) {
 		f32 pixels_per_unit = get_pixels_per_unit(dst);
 
 		i32 min_x = hm::round<i32>(min_x_f32 * pixels_per_unit);
@@ -163,7 +163,7 @@ namespace Game {
 		}
 	};
 
-	static void draw_pixels(slice2<u32> dst, slice2<const u32> src, f32 min_x_f32, f32 min_y_f32, i32 align_x, i32 align_y) {
+	static void draw_pixels(slice2<u32> dst, slice2<u32> src, f32 min_x_f32, f32 min_y_f32, i32 align_x, i32 align_y) {
 		// LATER: масштабирование через pixels_per_unit не работает
 		f32 pixels_per_unit = get_pixels_per_unit(dst);
 
@@ -207,7 +207,7 @@ namespace Game {
 		}
 	}
 
-	static slice2<u32> load_bmp(const Thread_Context& thread, Read_Entire_File* read_entire_file, const char* file_name) {
+	static slice2<u32> load_bmp(Thread& thread, Read_Entire_File* read_entire_file, const char* file_name) {
 		slice<u8> read_result = read_entire_file(thread, file_name);
 		if (!read_result.ptr) return {};
 
@@ -237,7 +237,7 @@ namespace Game {
 		return pixels; // bottom-up
 	}
 
-	static void init_memory(const Thread_Context& thread, Memory& memory) {
+	static void init_memory(Thread& thread, Memory& memory) {
 		auto& game_state  = get_game_state(memory);
 		auto& hero_pos    = game_state.hero_position;
 		auto& camera_pos  = game_state.camera_position;
@@ -259,8 +259,8 @@ namespace Game {
 		bool is_door_top  = false, is_door_bottom = false;
 		bool is_stairs_up = false, is_stairs_down = false;
 
-		const i32 SCENES_COUNT = 100;
-		for (i32 scene_index = 0; scene_index < SCENES_COUNT; ++scene_index) {
+		i32 scenes_count = 100;
+		for (i32 scene_index = 0; scene_index < scenes_count; ++scene_index) {
 			i32 random_choice_3 = is_stairs_up || is_stairs_down
 				? RANDOM_NUMBERS_TABLE(scene_index) % 2
 				: RANDOM_NUMBERS_TABLE(scene_index) % 3;
@@ -365,7 +365,7 @@ namespace Game {
 		memory.is_initialized = true;
 	}
 
-	static u32 get_hex_color(const Color& color) {
+	static u32 get_hex_color(color color) {
 		assert(color.red   >= 0 && color.red   <= 1);
 		assert(color.green >= 0 && color.green <= 1);
 		assert(color.blue  >= 0 && color.blue  <= 1);
@@ -375,7 +375,7 @@ namespace Game {
 			   (hm::round_positive<u32>(color.blue  * UINT8_MAX));
 	}
 
-	static f32 get_pixels_per_unit(slice2<const u32> screen) {
+	static f32 get_pixels_per_unit(slice2<u32> screen) {
 		return cast<f32>(screen.count_y) / (SCENES_PER_SCREEN * SCENE_HEIGHT_TILES * Tiles::TILE_DIM);
 	}
 

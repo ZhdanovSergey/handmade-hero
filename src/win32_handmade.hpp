@@ -96,17 +96,17 @@ static void collect_gamepad_input(Input& input);
 static void process_gamepad_button_input(Game::Controller_Button& button, bool is_pressed);
 static f32 get_normalized_gamepad_stick_value(SHORT value);
 
-static Replayer create_replayer(const Game::Memory& game_memory);
+static Replayer create_replayer(Game::Memory& game_memory);
 static void replayer_next_state(Replayer& replayer, Game::Memory& game_memory, Game::Input& game_input);
 static void replayer_play(Replayer& replayer, Game::Memory& game_memory, Game::Input& game_input);
-static void replayer_record(Replayer& replayer, const Game::Input& game_input);
+static void replayer_record(Replayer& replayer, Game::Input& game_input);
 static void replayer_record_or_replace(Replayer& replayer, Game::Memory& game_memory, Game::Input& game_input);
 static void replayer_start_play(Replayer& replayer, Game::Memory& game_memory);
-static void replayer_start_record(Replayer& replayer, const Game::Memory& game_memory);
+static void replayer_start_record(Replayer& replayer, Game::Memory& game_memory);
 
 static Screen create_screen();
 static void resize_screen(Screen& screen, i32 width, i32 height);
-static void submit_screen(const Screen& screen, HWND window, HDC device_context);
+static void submit_screen(Screen& screen, HWND window, HDC device_context);
 static void draw_sound_sync(Screen& screen, Sound& sound);
 static void draw_vertical_line(Screen& screen, i32 x, i32 top, i32 bottom, u32 color);
 
