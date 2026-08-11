@@ -147,7 +147,7 @@ static void wait_until_end_of_frame(i64 flip_timestamp) {
 	}
 }
 
-static void get_build_file_path(slice<char> result, const char* file_name) {
+static void get_build_file_path(slice<char> result, cstr file_name) {
 	SetLastError(0);
 	GetModuleFileNameA(nullptr, result.ptr, cast<DWORD>(result.get_size()));
 	// LATER: обработать пути длиннее MAX_PATH
@@ -165,7 +165,7 @@ static void get_build_file_path(slice<char> result, const char* file_name) {
 	hm::strcat(result, file_name);
 }
 
-static FILETIME get_file_write_time(const char* file_name) {
+static FILETIME get_file_write_time(cstr file_name) {
 	WIN32_FILE_ATTRIBUTE_DATA file_data = {};
 	BOOL ok_attributes = GetFileAttributesExA(file_name, GetFileExInfoStandard, &file_data);
 	assert(ok_attributes);
@@ -211,18 +211,18 @@ static i64 get_timestamp() {
 }
 
 static Game::Memory create_game_memory() {
-	constexpr i64 PERMANENT_SIZE = 64_MB;
-	constexpr i64 TRANSIENT_SIZE = 1_GB;
-	static_assert(PERMANENT_SIZE >= size_of(Game::Game_State));
+	constexpr i64 permanent_size = 64_MB;
+	constexpr i64 transient_size = 1_GB;
+	static_assert(permanent_size >= size_of(Game::Game_State));
 
 	// LATER: проверить эффект использования MEM_LARGE_PAGES и AdjustTokenPrivileges в 64-битном билде
 	void* base_address = DEV_MODE && UINTPTR_MAX == UINT64_MAX ? (void*)1024_GB : nullptr;
-	u8* game_storage = cast<u8*>(VirtualAlloc(base_address, cast<SIZE_T>(PERMANENT_SIZE + TRANSIENT_SIZE), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+	u8* game_storage = cast<u8*>(VirtualAlloc(base_address, cast<SIZE_T>(permanent_size + transient_size), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
 	assert(game_storage);
 
 	Game::Memory game_memory = {};
-	game_memory.permanent         = { game_storage,                  PERMANENT_SIZE };
-	game_memory.transient         = { game_storage + PERMANENT_SIZE, TRANSIENT_SIZE };
+	game_memory.permanent         = { game_storage,                  permanent_size };
+	game_memory.transient         = { game_storage + permanent_size, transient_size };
 	game_memory.read_entire_file  = Game::read_entire_file;
 	game_memory.write_entire_file = Game::write_entire_file;
 	game_memory.free_file_memory  = Game::free_file_memory;
@@ -758,7 +758,7 @@ static void draw_sound_sync(Screen& screen, Sound& sound) {
 }
 
 namespace Game {
-	static slice<u8> read_entire_file(Thread& thread, const char* file_name) {
+	static slice<u8> read_entire_file(Thread& thread, cstr file_name) {
 		slice<u8> result = {};
 
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
@@ -791,7 +791,7 @@ namespace Game {
 		return result;
 	}
 
-	static void write_entire_file(Thread& thread, const char* file_name, slice<u8> file) {
+	static void write_entire_file(Thread& thread, cstr file_name, slice<u8> file) {
 		DWORD file_size_casted = cast<DWORD>(file.get_size());
 
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);

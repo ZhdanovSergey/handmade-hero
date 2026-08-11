@@ -207,7 +207,7 @@ namespace Game {
 		}
 	}
 
-	static slice2<u32> load_bmp(Thread& thread, Read_Entire_File* read_entire_file, const char* file_name) {
+	static slice2<u32> load_bmp(Thread& thread, Read_Entire_File* read_entire_file, cstr file_name) {
 		slice<u8> read_result = read_entire_file(thread, file_name);
 		if (!read_result.ptr) return {};
 

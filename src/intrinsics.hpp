@@ -13,38 +13,38 @@
 
 namespace hm {
     template <typename T>
-    static constexpr T min(T a, T b) { return a < b ? a : b; }
+    static T min(T a, T b) { return a < b ? a : b; }
     template <typename T>
-    static constexpr T max(T a, T b) { return a > b ? a : b; }
+    static T max(T a, T b) { return a > b ? a : b; }
 
     template <typename Out_Provider = void, typename In,
               typename Out = conditional_t< is_same_v<Out_Provider, void>, In, Out_Provider>>
-    static constexpr Out sign(In x) { return cast<Out>((x > 0) - (x < 0)); }
+    static Out sign(In x) { return cast<Out>((x > 0) - (x < 0)); }
 
-    static constexpr i32 ceil(f32 x) {
+    static i32 ceil(f32 x) {
         i32 x_trunc = cast<i32>(x);
         return x_trunc + (x_trunc < x);
     }
 
-    static constexpr i32 floor(f32 x) {
+    static i32 floor(f32 x) {
         i32 x_trunc = cast<i32>(x);
         return x_trunc - (x_trunc > x);
     }
 
     template <typename Out = f32>
-    static constexpr Out round(f32 x) {
+    static Out round(f32 x) {
         return cast<Out>(cast<i32>(x + 0.5f * sign(x)));
     }
     
     template <typename Out = f32>
     __forceinline // because of draw_pixels
-    static constexpr Out round_positive(f32 x) {
+    static Out round_positive(f32 x) {
         assert(x >= 0);
         return cast<Out>(cast<i32>(x + 0.5f));
     }
 
     template <typename T>
-    static constexpr T abs(T x) {
+    static T abs(T x) {
         if constexpr (MSVC_COMPILER) {
             auto result = std::abs(x);
             return cast<T>(result);
@@ -53,7 +53,7 @@ namespace hm {
         }
     }
 
-    static i32 strlen(const char* string) {
+    static i32 strlen(cstr string) {
         if constexpr (MSVC_COMPILER) {
             auto result = std::strlen(string);
             return cast<i32>(result);
@@ -64,7 +64,7 @@ namespace hm {
         }
     }
 
-    static void strcat(slice<char> dst_slice, const char* src) {
+    static void strcat(slice<char> dst_slice, cstr src) {
         char* dst = dst_slice.ptr;
         assert(strlen(dst) + strlen(src) + 1 <= dst_slice.count);
 

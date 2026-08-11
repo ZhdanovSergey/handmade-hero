@@ -21,6 +21,7 @@ using i64 = int64_t;
 using u64 = uint64_t;
 using f32 = float;
 using f64 = double;
+using cstr = const char *;
 
 template <typename T> struct remove_ref      { using type = T; };
 template <typename T> struct remove_ref<T&>  { using type = T; };
@@ -108,10 +109,12 @@ struct Array {
     T* begin() { return ptr; }
     T* end()   { return ptr + N; }
     __forceinline
-    T& operator()(i32 index) {
+    const T& operator()(i32 index) const {
         assert(index >= 0 && index < N);
         return ptr[index];
     }
+    __forceinline
+    T& operator()(i32 index) { return cast<T&>(cast<const Array&>(*this)(index)); }
 };
 
 template <typename T, i32 Count_X, i32 Count_Y = 1, i32 Count_Z = 1>
@@ -180,6 +183,8 @@ struct slice {
     slice() = default;
     template <typename T, i64 X>
     slice(T (&arr)[X]) : slice{arr, X } {}
+    template <typename U>
+    slice(slice<U>& other) : slice{other.ptr, other.count } {}
     template <typename U>
     slice(U* ptr, i64 count) {
         // финальный конструктор для возможной конвертации в u8

@@ -118,5 +118,5 @@ static void wait_until_end_of_frame(i64 flip_timestamp);
 static f32 get_seconds_elapsed(i64 start);
 static i64 get_timestamp();
 
-static void get_build_file_path(slice<char> result, const char* file_name);
-static FILETIME get_file_write_time(const char* file_name);
+static void get_build_file_path(slice<char> result, cstr file_name);
+static FILETIME get_file_write_time(cstr file_name);

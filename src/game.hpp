@@ -50,10 +50,10 @@ namespace Game {
 	
     struct Thread {};
 
-    static slice<u8> read_entire_file(Thread& thread, const char* file_name);
+    static slice<u8> read_entire_file(Thread& thread, cstr file_name);
     using Read_Entire_File = decltype(read_entire_file);
 
-    static void write_entire_file(Thread& thread, const char* file_name, slice<u8> file);
+    static void write_entire_file(Thread& thread, cstr file_name, slice<u8> file);
     using Write_Entire_File = decltype(write_entire_file);
 
     static void free_file_memory(Thread& thread, void*& memory);
@@ -138,7 +138,7 @@ namespace Game {
 	extern "C" void get_sound_samples(Thread& thread, Memory& memory, Sound& sound);
 	using Get_Sound_Samples = decltype(get_sound_samples);
 
-	static slice2<u32> load_bmp(Thread& thread, Read_Entire_File* read_entire_file, const char* file_name);
+	static slice2<u32> load_bmp(Thread& thread, Read_Entire_File* read_entire_file, cstr file_name);
 	static void draw_pixels(slice2<u32> dst, slice2<u32> src, f32 min_x_f32, f32 min_y_f32, i32 align_x = 0, i32 align_y = 0);
 	static void draw_rectangle(slice2<u32> dst, color color, f32 min_x_f32, f32 min_y_f32, f32 max_x_f32, f32 max_y_f32);
 	static f32 get_pixels_per_unit(slice2<u32> screen);
