@@ -164,7 +164,6 @@ namespace Game {
 	};
 
 	static void draw_pixels(slice2<u32> dst, slice2<u32> src, f32 min_x_f32, f32 min_y_f32, i32 align_x, i32 align_y) {
-		// LATER: масштабирование через pixels_per_unit не работает
 		f32 pixels_per_unit = get_pixels_per_unit(dst);
 
 		i32 src_min_x = hm::round<i32>(min_x_f32 * pixels_per_unit - align_x);

@@ -10,13 +10,15 @@
 #include <xinput.h>
 
 using Direct_Sound_Create = HRESULT WINAPI(LPGUID lpGuid, LPDIRECTSOUND* ppDS, LPUNKNOWN pUnkOuter);
-using Xinput_Get_State = DWORD(DWORD dwUserIndex, XINPUT_STATE *pState);
-using Xinput_Set_State = DWORD(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration);
+using X_Input_Get_State = DWORD(DWORD dwUserIndex, XINPUT_STATE *pState);
+using X_Input_Set_State = DWORD(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration);
+
+static constexpr i32 INITIAL_WINDOW_WIDTH = 960;
+static constexpr i32 INITIAL_WINDOW_HEIGHT = 540;
+static constexpr i32 TARGET_FPS = 60;
 
 static i64 get_perf_frequency();
 static f32 get_target_seconds_per_frame();
-static constexpr i32 INITIAL_WINDOW_WIDTH = 960;
-static constexpr i32 INITIAL_WINDOW_HEIGHT = 540;
 static const i64 PERF_FREQUENCY = get_perf_frequency();
 static const f32 SLEEP_GRANULARITY_SECONDS = (f32)(timeBeginPeriod(1) == TIMERR_NOERROR) / 1000.0f;
 static const f32 TARGET_SECONDS_PER_FRAME = get_target_seconds_per_frame();
@@ -33,8 +35,8 @@ struct Game_Code {
 
 struct Input {
 	Game::Input game_input;
-	Xinput_Get_State* XInputGetState;
-	Xinput_Set_State* XInputSetState;
+	X_Input_Get_State* XInputGetState;
+	X_Input_Set_State* XInputSetState;
 };
 
 enum struct Replayer_State {
@@ -81,6 +83,7 @@ struct Sound {
 
 static HWND create_window(HINSTANCE hInstance);
 static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
+static void toggle_full_screen(HWND hwnd, WINDOWPLACEMENT& window_placement);
 
 static Game::Memory create_game_memory();
 

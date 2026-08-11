@@ -8,15 +8,17 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     BOOL ok_priority = SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
 	assert(ok_priority);
 
-	Game::Thread thread = {};
+	bool is_pause = false;
 	HWND window = create_window(hInstance);
+	WINDOWPLACEMENT window_placement = { sizeof(window_placement) };
+
+	Game::Thread thread = {};
 	auto input = create_input();
 	auto sound = create_sound(window);
 	auto game_code = create_game_code();
 	auto game_memory = create_game_memory();
 	auto replayer = create_replayer(game_memory);
 
-	bool is_pause = false;
 	i64 flip_timestamp = get_timestamp();
 	// u64 flip_cycle_counter = __rdtsc();
 
@@ -29,11 +31,16 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
 		MSG message;
 		while (PeekMessageA(&message, nullptr, 0, 0, PM_REMOVE)) {
+			bool is_key_pressed  = !(message.lParam & (1u << 31));
+			bool was_key_pressed =   message.lParam & (1u << 30);
+			bool is_alt_pressed  =   message.lParam & (1u << 29);
+
 			switch (message.message) {
+				case WM_QUIT: {
+					return cast<int>(message.wParam);
+				} break;
 				case WM_KEYUP:
 				case WM_KEYDOWN: {
-					bool is_key_pressed  = !(message.lParam & (1U << 31));
-					bool was_key_pressed =   message.lParam & (1U << 30);
 					if (is_key_pressed == was_key_pressed) continue;
 
 					collect_keyboard_button_input(input, message.wParam, is_key_pressed);
@@ -44,10 +51,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 						if (message.wParam == 'R') replayer_next_state(replayer, game_memory, input.game_input);
 					}
 				} break;
-				case WM_QUIT: {
-					return (int)message.wParam;
-				} break;
 				default: {
+					if (message.message == WM_SYSKEYDOWN && is_alt_pressed && message.wParam == VK_RETURN && !was_key_pressed) {
+						toggle_full_screen(message.hwnd, window_placement);
+						continue;
+					}
 					TranslateMessage(&message);
 					DispatchMessageA(&message);
 				}
@@ -93,6 +101,7 @@ static HWND create_window(HINSTANCE hInstance) {
 	window_class.style = CS_HREDRAW | CS_VREDRAW;
 	window_class.lpfnWndProc = WindowProc;
 	window_class.hInstance = hInstance;
+	window_class.hCursor = LoadCursorA(nullptr, IDC_ARROW);
 	window_class.lpszClassName = "Handmade_Hero";
 	ATOM ok_register = RegisterClassA(&window_class);
 	assert(ok_register);
@@ -114,6 +123,9 @@ static HWND create_window(HINSTANCE hInstance) {
 
 static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
+		case WM_DESTROY: {
+			PostQuitMessage(0);
+		} break;
 		case WM_PAINT: {
 			PAINTSTRUCT paint;
 			HDC device_context = BeginPaint(window, &paint);
@@ -124,14 +136,44 @@ static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
 			}
 			assert(device_context && ok_release);
 		} break;
-		case WM_DESTROY: {
-			PostQuitMessage(0);
-		} break;
-		default:
+		default: {
+			if (message == WM_SETCURSOR && !DEV_MODE) {
+				SetCursor(nullptr);
+				return 0;
+			}
 			return DefWindowProcA(window, message, wParam, lParam);
+		}
 	}
 
 	return 0;
+}
+
+// Raymond Chen method https://devblogs.microsoft.com/oldnewthing/20100412-00/?p=14353
+static void toggle_full_screen(HWND hwnd, WINDOWPLACEMENT& window_placement) {
+  LONG dwStyle = GetWindowLongA(hwnd, GWL_STYLE);
+
+  if (dwStyle & WS_OVERLAPPEDWINDOW) {
+    MONITORINFO mi = { sizeof(mi) };
+    if (GetWindowPlacement(hwnd, &window_placement) &&
+        GetMonitorInfoA(MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY), &mi)) {
+    	SetWindowLongA(hwnd, GWL_STYLE, dwStyle & ~WS_OVERLAPPEDWINDOW);
+    	SetWindowPos(
+			hwnd, HWND_TOP,
+            mi.rcMonitor.left, mi.rcMonitor.top,
+            mi.rcMonitor.right - mi.rcMonitor.left,
+            mi.rcMonitor.bottom - mi.rcMonitor.top,
+            SWP_NOOWNERZORDER | SWP_FRAMECHANGED
+		);
+    }
+  } else {
+    SetWindowLongA(hwnd, GWL_STYLE, dwStyle | WS_OVERLAPPEDWINDOW);
+    SetWindowPlacement(hwnd, &window_placement);
+    SetWindowPos(
+		hwnd, NULL, 0, 0, 0, 0,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+        SWP_NOOWNERZORDER | SWP_FRAMECHANGED
+	);
+  }
 }
 
 static void wait_until_end_of_frame(i64 flip_timestamp) {
@@ -177,7 +219,7 @@ static f32 get_seconds_elapsed(i64 start) {
 }
 
 static f32 get_target_seconds_per_frame() {
-	f32 target_fps = 60.0f;
+	f32 target_fps = cast<f32>(TARGET_FPS);
 
 	// синхронизация с частотой монитора
 	// f32 min_fps = 30.0f;
@@ -215,7 +257,6 @@ static Game::Memory create_game_memory() {
 	constexpr i64 transient_size = 1_GB;
 	static_assert(permanent_size >= size_of(Game::Game_State));
 
-	// LATER: проверить эффект использования MEM_LARGE_PAGES и AdjustTokenPrivileges в 64-битном билде
 	void* base_address = DEV_MODE && UINTPTR_MAX == UINT64_MAX ? (void*)1024_GB : nullptr;
 	u8* game_storage = cast<u8*>(VirtualAlloc(base_address, cast<SIZE_T>(permanent_size + transient_size), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
 	assert(game_storage);
@@ -285,8 +326,8 @@ static Input create_input() {
 	input.game_input.frame_dt = TARGET_SECONDS_PER_FRAME;
 	HMODULE xinput_dll = LoadLibraryA("xinput1_3.dll");
 	if (xinput_dll) {
-		input.XInputGetState = cast<Xinput_Get_State*>(GetProcAddress(xinput_dll, "XInputGetState"));
-		input.XInputSetState = cast<Xinput_Set_State*>(GetProcAddress(xinput_dll, "XInputSetState"));
+		input.XInputGetState = cast<X_Input_Get_State*>(GetProcAddress(xinput_dll, "XInputGetState"));
+		input.XInputSetState = cast<X_Input_Set_State*>(GetProcAddress(xinput_dll, "XInputSetState"));
 		assert(input.XInputGetState);
 		assert(input.XInputSetState);
 	} else {
@@ -535,12 +576,26 @@ static void submit_screen(Screen& screen, HWND window, HDC device_context) {
 
 	int src_width  = screen.game_screen.count_x;
 	int src_height = screen.game_screen.count_y;
-	int dst_width  = client_rect.right  - client_rect.left;
-	int dst_height = client_rect.bottom - client_rect.top;
+	int full_width  = client_rect.right  - client_rect.left;
+	int full_height = client_rect.bottom - client_rect.top;
 
-	// выводим пиксели 1 к 1 на время разработки рендерера
-	dst_width  = src_width;
-	dst_height = src_height;
+	int dst_width  = full_width;
+	int dst_height = full_height;
+
+	if constexpr (DEV_MODE) {
+		// на время разработки рендерера
+		if (dst_width >= src_width  * 2 && dst_height >= src_height * 2) {
+			dst_width  = src_width  * 2;
+			dst_height = src_height * 2;
+		} else {
+			dst_width  = src_width;
+			dst_height = src_height;
+		}
+	}
+		
+	BOOL ok_blackness_right  = PatBlt(device_context, dst_width, 0, full_width - dst_width, dst_height, BLACKNESS);
+	BOOL ok_blackness_bottom = PatBlt(device_context, 0, dst_height, full_width, full_height - dst_height, BLACKNESS);
+	assert(ok_blackness_right && ok_blackness_bottom);
 
 	int ok_stretch = StretchDIBits(device_context,
 		0, 0, dst_width, dst_height,
