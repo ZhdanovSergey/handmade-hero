@@ -1,5 +1,4 @@
 #include "tiles.hpp"
-#include "random.hpp"
 
 namespace Tiles {
 	static bool check_same_tile(Position& pos1, Position& pos2) {

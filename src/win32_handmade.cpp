@@ -87,12 +87,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		// if constexpr (DEV_MODE) draw_sound_sync(global_screen, sound);
 
 		HDC device_context = GetDC(window);
-		int ok_release = false;
 		if (device_context) {
-			defer(ok_release = ReleaseDC(window, device_context));
+			defer(ReleaseDC(window, device_context));
 			submit_screen(global_screen, window, device_context);
 		}
-		assert(device_context && ok_release);
 	}
 }
 
@@ -129,12 +127,10 @@ static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
 		case WM_PAINT: {
 			PAINTSTRUCT paint;
 			HDC device_context = BeginPaint(window, &paint);
-			BOOL ok_release = false;
 			if (device_context) {
-				defer(ok_release = EndPaint(window, &paint));
+				defer(EndPaint(window, &paint));
 				submit_screen(global_screen, window, device_context);
 			}
-			assert(device_context && ok_release);
 		} break;
 		default: {
 			if (message == WM_SETCURSOR && !DEV_MODE) {
@@ -224,16 +220,14 @@ static f32 get_target_seconds_per_frame() {
 	// синхронизация с частотой монитора
 	// f32 min_fps = 30.0f;
     // HDC device_context = GetDC(nullptr);
-	// int ok_release = false;
 	// if (device_context) {
-	// 	defer(ok_release = ReleaseDC(0, device_context));
+	// 	defer(ReleaseDC(0, device_context));
 	// 	f32 refresh_rate = cast<f32>(GetDeviceCaps(device_context, VREFRESH));
 	// 	if (refresh_rate > 1) {
 	// 		f32 sync_fps = refresh_rate / hm::ceil(refresh_rate / target_fps);
 	// 		if (sync_fps >= min_fps) target_fps = sync_fps;
 	// 	}
 	// }
-	// assert(device_context && ok_release);
 
 	return 1.0f / target_fps;
 }
@@ -630,31 +624,20 @@ static Sound create_sound(HWND window) {
 
 	sound.game_sound.samples_per_second = cast<i32>(sound.wave_format.nSamplesPerSec);
 	sound.game_sound.samples.ptr = cast<Game::Sound_Sample*>(VirtualAlloc(nullptr, sound.buffer_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
-	if (!sound.game_sound.samples.ptr) {
-		assert(false);
-		return {};
-	}
+	if (!sound.game_sound.samples.ptr) return {};
 
 	HMODULE direct_sound_dll = LoadLibraryA("dsound.dll");
-	if (!direct_sound_dll) {
-		assert(false);
-		return {};
-	}
+	if (!direct_sound_dll) return {};
 
 	auto* DirectSoundCreate = cast<Direct_Sound_Create*>(GetProcAddress(direct_sound_dll, "DirectSoundCreate"));
-	if (!DirectSoundCreate) {
-		assert(false);
-		return {};
-	}
+	if (!DirectSoundCreate) return {};
 
 	IDirectSound* direct_sound;
 	if (DirectSoundCreate(nullptr, &direct_sound, nullptr) != DS_OK) {
-		assert(false);
 		return {};
 	}
 
 	if (direct_sound->SetCooperativeLevel(window, DSSCL_PRIORITY) != DS_OK) {
-		assert(false);
 		return {};
 	}
 
@@ -664,12 +647,10 @@ static Sound create_sound(HWND window) {
 
 	IDirectSoundBuffer* primary_buffer;
 	if (direct_sound->CreateSoundBuffer(&primary_buffer_desc, &primary_buffer, nullptr) != DS_OK) {
-		assert(false);
 		return {};
 	}
 
 	if (primary_buffer->SetFormat(&sound.wave_format) != DS_OK) {
-		assert(false);
 		return {};
 	}
 
@@ -678,25 +659,19 @@ static Sound create_sound(HWND window) {
 	sound_buffer_desc.dwBufferBytes = sound.buffer_size;
 	sound_buffer_desc.lpwfxFormat = &sound.wave_format;
 	if (direct_sound->CreateSoundBuffer(&sound_buffer_desc, &sound.buffer, nullptr) != DS_OK) {
-		assert(false);
 		return {};
 	}
 
 	void *region1, *region2; DWORD region1_size, region2_size;
-	BOOL ok_lock = sound.buffer->Lock(0, sound.buffer_size, &region1, &region1_size, &region2, &region2_size, 0) == DS_OK;
-	BOOL ok_unlock = false;
-	if (ok_lock) {
-		defer(ok_unlock = sound.buffer->Unlock(region1, region1_size, region2, region2_size) == DS_OK);
+	if (sound.buffer->Lock(0, sound.buffer_size, &region1, &region1_size, &region2, &region2_size, 0) == DS_OK) {
+		defer(sound.buffer->Unlock(region1, region1_size, region2, region2_size));
 		memset(region1, 0, region1_size);
 		memset(region2, 0, region2_size);
-	}
-	if (!ok_lock || !ok_unlock) {
-		assert(false);
+	} else {
 		return {};
 	}
 
 	if (sound.buffer->Play(0, 0, DSBPLAY_LOOPING) != DS_OK) {
-		assert(false);
 		return {};
 	}
 
@@ -708,7 +683,7 @@ static void calc_sound_samples_to_write(Sound& sound, i64 flip_timestamp) {
 	if (!sound.is_playing) return;
 
 	// Определяем величину, на размер которой может отличаться время цикла (safety_bytes). Когда мы просыпаемся чтобы писать звук,
-	// смотрим где находится play_cursor и делаем прогноз где от будет находиться при смене кадра (expected_flip_play_cursor_unwrapped).
+	// смотрим где находится play_cursor и делаем прогноз где он будет находиться при смене кадра (expected_flip_play_cursor_unwrapped).
 	// Если write_cursor + safety_bytes < expected_flip_play_cursor_unwrapped, то это значит что у нас звуковая карта с маленькой задержкой
 	// и мы успеваем писать звук синхронно с изображением, поэтому пишем звук до конца следующего фрейма.
 	// Если write_cursor + safety_bytes >= expected_flip_play_cursor_unwrapped, то полностью синхронизировать звук и изображение не получится,
@@ -753,21 +728,20 @@ static void submit_sound(Sound& sound) {
 
 	DWORD bytes_to_lock = cast<DWORD>(sound.game_sound.samples.get_size());
 	void *region1, *region2; DWORD region1_size, region2_size;
-	BOOL ok_lock = sound.buffer->Lock(sound.output_location, bytes_to_lock, &region1, &region1_size, &region2, &region2_size, 0) == DS_OK;
-	BOOL ok_unlock = false;
-	if (ok_lock) {
-		defer(ok_unlock = sound.buffer->Unlock(region1, region1_size, region2, region2_size) == DS_OK);
+	if (sound.buffer->Lock(sound.output_location, bytes_to_lock, &region1, &region1_size, &region2, &region2_size, 0) == DS_OK) {
+		defer(sound.buffer->Unlock(region1, region1_size, region2, region2_size));
 		hm::memcpy(region1, sound.game_sound.samples.ptr, region1_size);
 		hm::memcpy(region2, cast<u8*>(sound.game_sound.samples.ptr) + region1_size, region2_size);
 		sound.output_location = (sound.output_location + region1_size + region2_size) % sound.buffer_size;
 	}
-	assert(ok_lock && ok_unlock);
 }
 
 static void draw_sound_sync(Screen& screen, Sound& sound) {
 	if (!sound.is_playing) return;
 
-	defer(sound.dev_markers_index = (sound.dev_markers_index + 1) % sound.dev_markers.get_count());
+	defer(
+		sound.dev_markers_index = (sound.dev_markers_index + 1) % sound.dev_markers.get_count();
+	);
 
 	f32 horizontal_scaling = cast<f32>(screen.game_screen.count_x) / cast<f32>(sound.buffer_size);
 	for (auto& marker : sound.dev_markers) {
@@ -818,10 +792,7 @@ namespace Game {
 
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
 		assert(file_handle != INVALID_HANDLE_VALUE);
-		defer(
-			BOOL ok_close = CloseHandle(file_handle);
-			assert(ok_close);
-		);
+		defer(CloseHandle(file_handle));
 
 		LARGE_INTEGER file_size_struct = {};
 		BOOL ok_size = GetFileSizeEx(file_handle, &file_size_struct);
@@ -851,10 +822,7 @@ namespace Game {
 
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
 		assert(file_handle != INVALID_HANDLE_VALUE);
-		defer(
-			BOOL ok_close = CloseHandle(file_handle);
-			assert(ok_close);
-		);
+		defer(CloseHandle(file_handle));
 
 		DWORD bytes_written = 0;
 		BOOL ok_write = WriteFile(file_handle, file.ptr, file_size_casted, &bytes_written, nullptr);

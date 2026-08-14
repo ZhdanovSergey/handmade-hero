@@ -16,8 +16,8 @@ namespace Game {
 			i16 value = cast<i16>(std::sinf(sound_t_sin) * volume);
 			sample.left  = value;
 			sample.right = value;
-			sound_t_sin += DOUBLE_PI32 / samples_per_wave_period;
-			if (sound_t_sin >= DOUBLE_PI32) sound_t_sin -= DOUBLE_PI32;
+			sound_t_sin += TWO_PI / samples_per_wave_period;
+			if (sound_t_sin >= TWO_PI) sound_t_sin -= TWO_PI;
 		}
 	}
 
@@ -53,6 +53,11 @@ namespace Game {
 			if (controller.move_down.is_pressed) {
 				game_state.hero_direction = Hero_Direction::Front;
 				player_dy = - player_speed;
+			}
+
+			if (player_dx && player_dy) {
+				player_dx *= ONE_OVER_SQRT_2;
+				player_dy *= ONE_OVER_SQRT_2;
 			}
 			
 			new_hero_pos.tile_rel_x += player_dx * input.frame_dt;
@@ -92,7 +97,7 @@ namespace Game {
 		}
 
 		draw_rectangle(
-			screen, color{ 1.0f, 0.0f, 1.0f },
+			screen, Color{ 1.0f, 0.0f, 1.0f },
 			0.0f, 0.0f,
 			SCENES_PER_SCREEN * SCENE_WIDTH_TILES  * Tiles::TILE_DIM,
 			SCENES_PER_SCREEN * SCENE_HEIGHT_TILES * Tiles::TILE_DIM
@@ -105,7 +110,7 @@ namespace Game {
 			for (i32 x = camera_pos.abs_x - half_screen_width_tiles  - 1; x <= camera_pos.abs_x + half_screen_width_tiles  + 1; ++x) {
 				auto tile = Tiles::get_tile(tile_map, x, y, camera_pos.abs_z);
 
-				color color = {};
+				Color color = {};
 				switch (tile) {
 					case Tiles::Tile::Not_Initialized: color = { 1.0f, 0.0f, 0.0f };    break;
 					case Tiles::Tile::Floor:           color = { 0.5f, 0.5f, 0.5f };    break;
@@ -142,7 +147,7 @@ namespace Game {
 		draw_pixels(screen, hero_bitmap.head,  player_ground_x, player_ground_y, hero_bitmap.align_x, hero_bitmap.align_y);
 	};
 
-	static void draw_rectangle(slice2<u32> dst, color color, f32 min_x_f32, f32 min_y_f32, f32 max_x_f32, f32 max_y_f32) {
+	static void draw_rectangle(slice2<u32> dst, Color color, f32 min_x_f32, f32 min_y_f32, f32 max_x_f32, f32 max_y_f32) {
 		f32 pixels_per_unit = get_pixels_per_unit(dst);
 
 		i32 min_x = hm::round<i32>(min_x_f32 * pixels_per_unit);
@@ -364,7 +369,7 @@ namespace Game {
 		memory.is_initialized = true;
 	}
 
-	static u32 get_hex_color(color color) {
+	static u32 get_hex_color(Color color) {
 		assert(color.red   >= 0 && color.red   <= 1);
 		assert(color.green >= 0 && color.green <= 1);
 		assert(color.blue  >= 0 && color.blue  <= 1);

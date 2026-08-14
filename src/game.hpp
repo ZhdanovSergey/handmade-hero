@@ -1,6 +1,7 @@
 #pragma once
 
 #include "globals.hpp"
+#include "random.hpp"
 #include "tiles.hpp"
 
 namespace Game {
@@ -68,7 +69,7 @@ namespace Game {
     	Free_File_Memory* free_file_memory;
 	};
 
-	struct color {
+	struct Color {
 		f32 red, green, blue;
 	};
 
@@ -140,9 +141,9 @@ namespace Game {
 
 	static slice2<u32> load_bmp(Thread& thread, Read_Entire_File* read_entire_file, cstr file_name);
 	static void draw_pixels(slice2<u32> dst, slice2<u32> src, f32 min_x_f32, f32 min_y_f32, i32 align_x = 0, i32 align_y = 0);
-	static void draw_rectangle(slice2<u32> dst, color color, f32 min_x_f32, f32 min_y_f32, f32 max_x_f32, f32 max_y_f32);
+	static void draw_rectangle(slice2<u32> dst, Color color, f32 min_x_f32, f32 min_y_f32, f32 max_x_f32, f32 max_y_f32);
 	static f32 get_pixels_per_unit(slice2<u32> screen);
-	static u32 get_hex_color(color color);
+	static u32 get_hex_color(Color color);
 	
 	static void init_memory(Thread& thread, Memory& memory);
 	static Game_State& get_game_state(Memory& memory);

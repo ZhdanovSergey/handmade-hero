@@ -14,11 +14,12 @@
 namespace hm {
     template <typename T>
     static T min(T a, T b) { return a < b ? a : b; }
+    
     template <typename T>
     static T max(T a, T b) { return a > b ? a : b; }
 
     template <typename Out_Provider = void, typename In,
-              typename Out = conditional_t< is_same_v<Out_Provider, void>, In, Out_Provider>>
+                typename Out = conditional_t< is_same_v<Out_Provider, void>, In, Out_Provider>>
     static Out sign(In x) { return cast<Out>((x > 0) - (x < 0)); }
 
     static i32 ceil(f32 x) {
@@ -35,14 +36,14 @@ namespace hm {
     static Out round(f32 x) {
         return cast<Out>(cast<i32>(x + 0.5f * sign(x)));
     }
-    
+
     template <typename Out = f32>
     __forceinline // because of draw_pixels
     static Out round_positive(f32 x) {
         assert(x >= 0);
         return cast<Out>(cast<i32>(x + 0.5f));
     }
-
+    
     template <typename T>
     static T abs(T x) {
         if constexpr (MSVC_COMPILER) {

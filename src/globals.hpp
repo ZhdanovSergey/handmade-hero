@@ -84,9 +84,10 @@ static constexpr Out cast(In&& value) {
     return (Out)(In&&)value;
 }
 
-static constexpr f64 PI64 = 3.14159265358979323846;
-static constexpr f32 PI32 = cast<f32>(PI64);
-static constexpr f32 DOUBLE_PI32 = 2.0f * PI32;
+static constexpr f32 PI = 3.1415927f;
+static constexpr f32 TWO_PI = 2.0f * PI;
+static constexpr f32 SQRT_2 = 1.41421356f;
+static constexpr f32 ONE_OVER_SQRT_2 = 1.0f / SQRT_2;
 
 static constexpr i64 operator ""_KB(u64 value) { return cast<i64>(value << 10); }
 static constexpr i64 operator ""_MB(u64 value) { return cast<i64>(value << 20); }
@@ -213,6 +214,17 @@ struct slice {
     }
 };
 
+template <typename T>
+struct vec2 {
+    T x, y;
+};
+
+template <typename T> static bool    operator==(vec2<T> a, vec2<T> b) { return a.x == b.x && a.y == b.y; }
+template <typename T> static vec2<T> operator+ (vec2<T> a, vec2<T> b) { return { a.x + b.x, a.y + b.y }; }
+template <typename T> static vec2<T> operator- (vec2<T> a, vec2<T> b) { return { a.x - b.x, a.y - b.y }; }
+template <typename T> static vec2<T> operator* (vec2<T> a, T num)     { return { a.x * num, a.y * num }; }
+template <typename T> static vec2<T> operator- (vec2<T> a)            { return { - a.x, - a.y }; }
+
 struct Arena {
     u8* ptr;
     i64 size;
@@ -238,9 +250,3 @@ struct result {
 
 template <typename T>
 static void swap(T& a, T& b) { T temp = a; a = b; b = temp; }
-
-__forceinline
-static void assert_no_overlap(slice<u8> a, slice<u8> b) {
-    assert((a.end() <= b.begin()) ||
-           (b.end() <= a.begin()));
-}
