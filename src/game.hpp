@@ -5,8 +5,7 @@
 #include "tiles.hpp"
 
 namespace Game {
-	static constexpr i32 SCENE_WIDTH_TILES = 17;
-	static constexpr i32 SCENE_HEIGHT_TILES = 9;
+	static constexpr vec2<i32> SCENE_DIM_TILES = { 17, 9 };
 	static constexpr i32 SCENES_PER_SCREEN = 1;
 
 	struct Controller_Button {
@@ -15,15 +14,15 @@ namespace Game {
 	};
 
 	struct Controller {
-		Controller_Button start, back;
+		Controller_Button start_btn, back_btn;
 		Controller_Button left_shoulder, right_shoulder;
 		Controller_Button move_up, move_down, move_left, move_right;
 		Controller_Button action_up, action_down, action_left, action_right;
-		f32 start_x, start_y;
-		f32 end_x, end_y;
-		f32 average_x, average_y;
-		f32 min_x, min_y;
-		f32 max_x, max_y;
+		vec2<f32> start;
+		vec2<f32> end;
+		vec2<f32> average;
+		vec2<f32> min;
+		vec2<f32> max;
 		bool is_connected, is_analog;
 	};
 
@@ -80,7 +79,7 @@ namespace Game {
 
 	struct Hero_Side_Bitmap {
 		slice2<u32> head, cape, torso;
-		i32 align_x, align_y;
+		vec2<i32> align;
 	};
 
 	namespace Hero_Direction {
@@ -140,8 +139,8 @@ namespace Game {
 	using Get_Sound_Samples = decltype(get_sound_samples);
 
 	static slice2<u32> load_bmp(Thread& thread, Read_Entire_File* read_entire_file, cstr file_name);
-	static void draw_pixels(slice2<u32> dst, slice2<u32> src, f32 min_x_f32, f32 min_y_f32, i32 align_x = 0, i32 align_y = 0);
-	static void draw_rectangle(slice2<u32> dst, Color color, f32 min_x_f32, f32 min_y_f32, f32 max_x_f32, f32 max_y_f32);
+	static void draw_pixels(slice2<u32> dst, slice2<u32> src, vec2<f32> min_f32, vec2<i32> align = {0, 0});
+	static void draw_rectangle(slice2<u32> dst, Color color, vec2<f32> min_f32, vec2<f32> max_f32);
 	static f32 get_pixels_per_unit(slice2<u32> screen);
 	static u32 get_hex_color(Color color);
 	

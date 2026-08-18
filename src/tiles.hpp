@@ -28,23 +28,20 @@ namespace Tiles {
 		slice3<Chunk> chunks;
     };
 
-	// LATER: сделать сеттеры и конструктор с нормализацией после введения векторов
 	struct Position {
-		i32 abs_x, abs_y; // нижние CHUNK_LOOKUP_KEY_SHIFT бит это координаты ячейки внутри чанка, верхние биты это координаты чанка в мире
-		i32 abs_z;        // просто координата чанка в мире
-		f32 tile_rel_x, tile_rel_y;
-	};
+		vec2<i32> abs_xy;   // нижние CHUNK_LOOKUP_KEY_SHIFT бит это координаты ячейки внутри чанка, верхние биты это координаты чанка в мире
+		i32 abs_z;          // просто координата чанка в мире
+		vec2<f32> tile_rel;
 
-	struct Positions_Diff {
-		f32 dx, dy;
+		void normalize();
+		void tile_rel_add(vec2<f32> value) {
+			tile_rel += value;
+			normalize();
+		};
 	};
 
 	struct Chunk_Lookup_Key {
 		i32 x, y, z;
-	};
-
-	struct Chunk_Rel_Position {
-		i32 x, y;
 	};
 
 	static bool check_same_tile(Position& pos1, Position& pos2);
@@ -55,8 +52,7 @@ namespace Tiles {
 
 	static Chunk* get_chunk(Map& map, i32 abs_x, i32 abs_y, i32 abs_z);
 	static Chunk_Lookup_Key get_chunk_lookup_key(i32 abs_x, i32 abs_y, i32 abs_z);
-	static Chunk_Rel_Position get_chunk_rel_position(i32 abs_x, i32 abs_y);
+	static vec2<i32> get_chunk_rel_position(i32 abs_x, i32 abs_y);
 	
-	static void normalize_position(Position& pos);
-	static Positions_Diff subtract_positions(Position& a, Position& b);
+	static vec2<f32> subtract_positions(Position& a, Position& b);
 }

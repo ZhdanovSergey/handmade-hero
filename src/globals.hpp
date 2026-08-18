@@ -58,27 +58,16 @@ template <bool C, typename T, typename F> struct conditional           { using t
 template <typename T, typename F>         struct conditional<true,T,F> { using type = T; };
 template <bool C, typename T, typename F> using conditional_t = typename conditional<C,T,F>::type;
 
-enum Cast_Flags : u32 {
-    DEFAULT         = 0,
-    IGNORE_SIGN     = 1 << 0,
-    IGNORE_OVERFLOW = 1 << 1,
-};
-
-template <typename Out, Cast_Flags Flags = DEFAULT, typename In>
+template <typename Out, typename In>
 __forceinline
 static constexpr Out cast(In&& value) {
     using In_Not_Ref = remove_ref_t<In>;
-    if constexpr (!(Flags & IGNORE_SIGN) && is_number_v<In_Not_Ref> && is_number_v<Out>) {
-        assert((value == 0 && (Out)value == 0) ||
-               (value >  0 && (Out)value >= 0) ||
-               (value <  0 && (Out)value <= 0));
-    }
-    if constexpr (!(Flags & IGNORE_OVERFLOW) && is_number_v<In_Not_Ref> && is_number_v<Out>) {
+    if constexpr (is_number_v<In_Not_Ref> && is_number_v<Out>) {
         if constexpr (is_same_v<In_Not_Ref, f32> || is_same_v<In_Not_Ref, f64>) {
-            assert(value - (In_Not_Ref)(Out)value > -1 &&
-                   value - (In_Not_Ref)(Out)value <  1);
+            assert(value -  (In_Not_Ref)(Out)value > -1);
+            assert(value -  (In_Not_Ref)(Out)value <  1);
         } else {
-            assert((value == (In_Not_Ref)(Out)value));
+            assert(value == (In_Not_Ref)(Out)value);
         }
     }
     return (Out)(In&&)value;
@@ -87,7 +76,6 @@ static constexpr Out cast(In&& value) {
 static constexpr f32 PI = 3.1415927f;
 static constexpr f32 TWO_PI = 2.0f * PI;
 static constexpr f32 SQRT_2 = 1.41421356f;
-static constexpr f32 ONE_OVER_SQRT_2 = 1.0f / SQRT_2;
 
 static constexpr i64 operator ""_KB(u64 value) { return cast<i64>(value << 10); }
 static constexpr i64 operator ""_MB(u64 value) { return cast<i64>(value << 20); }
@@ -100,6 +88,46 @@ template <typename F> Deferrer(F) -> Deferrer<F>;
 #define defer(code) Deferrer CONCAT(defer_, __LINE__){[&](){ code; }}
 
 #define size_of(value) cast<i64>(sizeof(value))
+
+template <typename T>
+struct vec2 {
+    T x, y;
+
+    template <typename U>
+    explicit operator vec2<U>() {
+        return { cast<U>(x), cast<U>(y) };
+    }
+    explicit operator bool() {
+        static_assert(is_same_v<T, bool>);
+        return x && y;
+    }
+
+    __forceinline
+    const T& operator()(i32 index) const {
+        assert(index >= 0 && index < 2);
+        return cast<T*>(this)[index];
+    }
+
+    __forceinline
+    T& operator()(i32 index) {
+        const T& const_result = cast<const vec2<T>&>(*this)(index);
+        return cast<T&>(const_result);
+    }
+
+    friend vec2<bool> operator==(vec2<T> a, vec2<T> b) { return { a.x == b.x, a.y == b.y }; }
+
+    friend vec2<T> operator+ (vec2<T> a, vec2<T> b) { return { a.x + b.x, a.y + b.y }; }
+    friend vec2<T> operator- (vec2<T> a, vec2<T> b) { return { a.x - b.x, a.y - b.y }; }
+    friend vec2<T> operator* (vec2<T> a, T num)     { return { a.x * num, a.y * num }; }
+    friend vec2<T> operator* (T num, vec2<T> a)     { return { a.x * num, a.y * num }; }
+    friend vec2<T> operator/ (vec2<T> a, T num)     { return { a.x / num, a.y / num }; }
+    friend vec2<T> operator- (vec2<T> a)            { return { - a.x, - a.y }; }
+
+    friend void operator+=(vec2<T>& a, vec2<T> b) { a = a + b; }
+    friend void operator-=(vec2<T>& a, vec2<T> b) { a = a - b; }
+    friend void operator*=(vec2<T>& a, T num)     { a = a * num; }
+    friend void operator/=(vec2<T>& a, T num)     { a = a / num; }
+};
 
 template <typename T, i32 N>
 struct Array {
@@ -161,18 +189,17 @@ struct slice3 {
 template <typename T>
 struct slice2 {
     T* ptr;
-    i32 count_x;
-    i32 count_y;
+    vec2<i32> count;
 
-    i64 get_size() { return size_of(T) * count_x * count_y; }
+    i64 get_size() { return size_of(T) * count.x * count.y; }
 
     T* begin() { return ptr; }
-    T* end()   { return ptr + count_x * count_y; }
+    T* end()   { return ptr + count.x * count.y; }
     __forceinline
     T& operator()(i32 x, i32 y) {
-        assert(x >= 0 && x < count_x);
-        assert(y >= 0 && y < count_y);
-        return ptr[y * count_x + x];
+        assert(x >= 0 && x < count.x);
+        assert(y >= 0 && y < count.y);
+        return ptr[y * count.x + x];
     }
 };
 
@@ -213,17 +240,6 @@ struct slice {
         return ptr[index];
     }
 };
-
-template <typename T>
-struct vec2 {
-    T x, y;
-};
-
-template <typename T> static bool    operator==(vec2<T> a, vec2<T> b) { return a.x == b.x && a.y == b.y; }
-template <typename T> static vec2<T> operator+ (vec2<T> a, vec2<T> b) { return { a.x + b.x, a.y + b.y }; }
-template <typename T> static vec2<T> operator- (vec2<T> a, vec2<T> b) { return { a.x - b.x, a.y - b.y }; }
-template <typename T> static vec2<T> operator* (vec2<T> a, T num)     { return { a.x * num, a.y * num }; }
-template <typename T> static vec2<T> operator- (vec2<T> a)            { return { - a.x, - a.y }; }
 
 struct Arena {
     u8* ptr;

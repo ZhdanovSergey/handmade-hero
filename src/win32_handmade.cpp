@@ -338,24 +338,22 @@ static void collect_gamepad_input(Input& input) {
 	controller.is_connected = !input.XInputGetState(0, &xinput_state);
 	if (!controller.is_connected) return;
 
-	controller.start_x = controller.end_x;
-	controller.start_y = controller.end_y;
-	controller.end_x = get_normalized_gamepad_stick_value(xinput_state.Gamepad.sThumbLX);
-	controller.end_y = get_normalized_gamepad_stick_value(xinput_state.Gamepad.sThumbLY);
+	controller.start = controller.end;
+	controller.end.x = get_normalized_gamepad_stick_value(xinput_state.Gamepad.sThumbLX);
+	controller.end.y = get_normalized_gamepad_stick_value(xinput_state.Gamepad.sThumbLY);
 
-	controller.min_x = min(controller.start_x, controller.end_x);
-	controller.min_y = min(controller.start_y, controller.end_y);
-	controller.max_x = max(controller.start_x, controller.end_x);
-	controller.max_y = max(controller.start_y, controller.end_y);
-	controller.average_x = (controller.start_x + controller.end_x) / 2;
-	controller.average_y = (controller.start_y + controller.end_y) / 2;
+	controller.min.x = min(controller.start.x, controller.end.x);
+	controller.min.y = min(controller.start.y, controller.end.y);
+	controller.max.x = max(controller.start.x, controller.end.x);
+	controller.max.y = max(controller.start.y, controller.end.y);
+	controller.average = (controller.start + controller.end) / 2;
 
-	controller.is_analog = controller.start_x || controller.start_y || controller.end_x || controller.end_y;
+	controller.is_analog = controller.start.x || controller.start.y || controller.end.x || controller.end.y;
 	if (controller.is_analog) {
-		process_gamepad_button_input(controller.move_left,  controller.average_x < 0);
-		process_gamepad_button_input(controller.move_right, controller.average_x > 0);
-		process_gamepad_button_input(controller.move_down,  controller.average_y < 0);
-		process_gamepad_button_input(controller.move_up,    controller.average_y > 0);
+		process_gamepad_button_input(controller.move_left,  controller.average.x < 0);
+		process_gamepad_button_input(controller.move_right, controller.average.x > 0);
+		process_gamepad_button_input(controller.move_down,  controller.average.y < 0);
+		process_gamepad_button_input(controller.move_up,    controller.average.y > 0);
 	} else {
 		process_gamepad_button_input(controller.move_left,  xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_LEFT);
 		process_gamepad_button_input(controller.move_right, xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT);
@@ -363,8 +361,8 @@ static void collect_gamepad_input(Input& input) {
 		process_gamepad_button_input(controller.move_up, 	xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_UP);
 	}
 
-	process_gamepad_button_input(controller.start,		    xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_START);
-	process_gamepad_button_input(controller.back,			xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_BACK);
+	process_gamepad_button_input(controller.start_btn,		xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_START);
+	process_gamepad_button_input(controller.back_btn,		xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_BACK);
 	process_gamepad_button_input(controller.left_shoulder,  xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER);
 	process_gamepad_button_input(controller.right_shoulder, xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER);
 
@@ -390,8 +388,8 @@ static void collect_keyboard_button_input(Input& input, WPARAM key_code, bool is
 
 	Game::Controller_Button* button = nullptr;
 	switch (key_code) {
-		case VK_RETURN: button = &controller.start;		     break;
-		case VK_ESCAPE: button = &controller.back;		     break;
+		case VK_RETURN: button = &controller.start_btn;	     break;
+		case VK_ESCAPE: button = &controller.back_btn;	     break;
 		case VK_UP: 	button = &controller.move_up;	     break;
 		case VK_DOWN: 	button = &controller.move_down;	     break;
 		case VK_LEFT: 	button = &controller.move_left;	     break;
@@ -530,8 +528,8 @@ static void reset_input_counters(Input& input) {
 	input.game_input.mouse.right_button.transitions_count = 0;
 
 	for (auto& controller : input.game_input.controllers) {
-		controller.start.transitions_count = 0;
-		controller.back.transitions_count = 0;
+		controller.start_btn.transitions_count = 0;
+		controller.back_btn.transitions_count = 0;
 		controller.left_shoulder.transitions_count = 0;
 		controller.right_shoulder.transitions_count = 0;
 
@@ -556,8 +554,7 @@ static void resize_screen(Screen& screen, i32 width, i32 height) {
 	screen.bitmap_info.bmiHeader.biWidth = width;
 	screen.bitmap_info.bmiHeader.biHeight = - height; // отрицательный чтобы верхний левый пиксель был первым в буфере
 
-	screen.game_screen.count_x = width;
-	screen.game_screen.count_y = height;
+	screen.game_screen.count = { width, height };
 	SIZE_T memory_size = cast<SIZE_T>(screen.game_screen.get_size());
 	screen.game_screen.ptr = cast<u32*>(VirtualAlloc(nullptr, memory_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
 	assert(screen.game_screen.ptr);
@@ -568,8 +565,8 @@ static void submit_screen(Screen& screen, HWND window, HDC device_context) {
 	BOOL ok_rect = GetClientRect(window, &client_rect);
 	assert(ok_rect);
 
-	int src_width  = screen.game_screen.count_x;
-	int src_height = screen.game_screen.count_y;
+	int src_width  = screen.game_screen.count.x;
+	int src_height = screen.game_screen.count.y;
 	int full_width  = client_rect.right  - client_rect.left;
 	int full_height = client_rect.bottom - client_rect.top;
 
@@ -601,10 +598,10 @@ static void submit_screen(Screen& screen, HWND window, HDC device_context) {
 }
 
 static void draw_vertical_line(Screen& screen, i32 x, i32 top, i32 bottom, u32 color) {
-	u32* pixel = screen.game_screen.ptr + top * screen.game_screen.count_x + x;
+	u32* pixel = &screen.game_screen(x, top);
 	for (i32 y = top; y < bottom; ++y) {
 		*pixel = color;
-		pixel += screen.game_screen.count_x;
+		pixel += screen.game_screen.count.x;
 	}
 }
 
@@ -743,10 +740,10 @@ static void draw_sound_sync(Screen& screen, Sound& sound) {
 		sound.dev_markers_index = (sound.dev_markers_index + 1) % sound.dev_markers.get_count();
 	);
 
-	f32 horizontal_scaling = cast<f32>(screen.game_screen.count_x) / cast<f32>(sound.buffer_size);
+	f32 horizontal_scaling = cast<f32>(screen.game_screen.count.x) / cast<f32>(sound.buffer_size);
 	for (auto& marker : sound.dev_markers) {
 		i32 top = 0;
-		i32 bottom = screen.game_screen.count_y * 1/4;
+		i32 bottom = screen.game_screen.count.y * 1/4;
 		i32 historic_output_play_cursor_x  = cast<i32>(cast<f32>(marker.output_play_cursor)  * horizontal_scaling);
 		i32 historic_output_write_cursor_x = cast<i32>(cast<f32>(marker.output_write_cursor) * horizontal_scaling);
 		draw_vertical_line(screen, historic_output_play_cursor_x,  top, bottom, 0xffffff);
@@ -758,31 +755,31 @@ static void draw_sound_sync(Screen& screen, Sound& sound) {
 	assert(ok_position);
 
 	i32 expected_flip_play_cursor_x = cast<i32>(cast<f32>(current_marker.expected_flip_play_cursor) * horizontal_scaling);
-	draw_vertical_line(screen, expected_flip_play_cursor_x, 0, screen.game_screen.count_y, 0xffff00);
+	draw_vertical_line(screen, expected_flip_play_cursor_x, 0, screen.game_screen.count.y, 0xffff00);
 
 	{
-		i32 top 	= screen.game_screen.count_y * 1/4;
-		i32 bottom  = screen.game_screen.count_y * 2/4;
+		i32 top 	= screen.game_screen.count.y * 1/4;
+		i32 bottom  = screen.game_screen.count.y * 2/4;
 		i32 output_play_cursor_x  = cast<i32>(cast<f32>(current_marker.output_play_cursor)  * horizontal_scaling);
 		i32 output_write_cursor_x = cast<i32>(cast<f32>(current_marker.output_write_cursor) * horizontal_scaling);
 		draw_vertical_line(screen, output_play_cursor_x,  top, bottom, 0xffffff);
 		draw_vertical_line(screen, output_write_cursor_x, top, bottom, 0xff0000);
 	}
 	{
-		i32 top 	= screen.game_screen.count_y * 2/4;
-		i32 bottom  = screen.game_screen.count_y * 3/4;
+		i32 top 	= screen.game_screen.count.y * 2/4;
+		i32 bottom  = screen.game_screen.count.y * 3/4;
 		i32 output_location_x   = (i32)(cast<f32>(current_marker.output_location)   * horizontal_scaling);
 		i32 output_byte_count_x = (i32)(cast<f32>(current_marker.output_byte_count) * horizontal_scaling);
 		draw_vertical_line(screen, output_location_x, top, bottom, 0xffffff);
-		draw_vertical_line(screen, (output_location_x + output_byte_count_x) % screen.game_screen.count_x, top, bottom, 0xff0000);
+		draw_vertical_line(screen, (output_location_x + output_byte_count_x) % screen.game_screen.count.x, top, bottom, 0xff0000);
 	}
 	{
-		i32 top 	= screen.game_screen.count_y * 3/4;
-		i32 bottom  = screen.game_screen.count_y;
+		i32 top 	= screen.game_screen.count.y * 3/4;
+		i32 bottom  = screen.game_screen.count.y;
 		i32 flip_play_cursor_x = cast<i32>(cast<f32>(current_marker.flip_play_cursor) * horizontal_scaling);
 		i32 safety_bytes_x     = cast<i32>(cast<f32>(sound.safety_bytes)              * horizontal_scaling);
-		draw_vertical_line(screen, (flip_play_cursor_x - safety_bytes_x / 2) % screen.game_screen.count_x, top, bottom, 0xffffff);
-		draw_vertical_line(screen, (flip_play_cursor_x + safety_bytes_x / 2) % screen.game_screen.count_x, top, bottom, 0xffffff);
+		draw_vertical_line(screen, (flip_play_cursor_x - safety_bytes_x / 2) % screen.game_screen.count.x, top, bottom, 0xffffff);
+		draw_vertical_line(screen, (flip_play_cursor_x + safety_bytes_x / 2) % screen.game_screen.count.x, top, bottom, 0xffffff);
 	}
 }
 
