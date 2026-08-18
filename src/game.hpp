@@ -29,7 +29,7 @@ namespace Game {
 	struct Mouse {
 		Controller_Button left_button;
 		Controller_Button right_button;
-		i32 x, y;
+		vec2<i32> coord;
 	};
 
 	struct Input {
