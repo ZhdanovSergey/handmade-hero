@@ -104,7 +104,7 @@ static HWND create_window(HINSTANCE hInstance) {
 	window_class.hCursor = LoadCursorA(nullptr, IDC_ARROW);
 	window_class.lpszClassName = "Handmade_Hero";
 	ATOM ok_register = RegisterClassA(&window_class);
-	assert(ok_register);
+	assert_or_return(ok_register);
 
 	RECT window_rect = {};
 	window_rect.right = INITIAL_WINDOW_WIDTH;
@@ -193,7 +193,7 @@ static void get_build_file_path(slice<char> result, cstr file_name) {
 	SetLastError(0);
 	GetModuleFileNameA(nullptr, result.ptr, cast<DWORD>(result.get_size()));
 	// LATER: обработать пути длиннее MAX_PATH
-	assert(GetLastError() != ERROR_INSUFFICIENT_BUFFER);
+	assert_or_return_void(GetLastError() != ERROR_INSUFFICIENT_BUFFER);
 
 	i64 folder_path_size = 0;
 	for (i64 i = result.count - 1; i >= 0; --i) {
@@ -259,7 +259,7 @@ static Game::Memory create_game_memory() {
 
 	void* base_address = DEV_MODE && UINTPTR_MAX == UINT64_MAX ? (void*)1024_GB : nullptr;
 	u8* game_storage = cast<u8*>(VirtualAlloc(base_address, cast<SIZE_T>(permanent_size + transient_size), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
-	assert(game_storage);
+	assert_or_return(game_storage);
 
 	Game::Memory game_memory = {};
 	game_memory.permanent         = { game_storage,                  permanent_size };
@@ -272,6 +272,8 @@ static Game::Memory create_game_memory() {
 
 static Game_Code create_game_code() {
 	Game_Code game_code = {};
+	game_code.update_and_render = [](auto...){};
+	game_code.get_sound_samples = [](auto...){};
 	get_build_file_path(game_code.dll_path, "game.dll");
 	get_build_file_path(game_code.copy_dll_path, "game_copy.dll");
 	get_build_file_path(game_code.lock_path, "lock.tmp");
@@ -285,6 +287,8 @@ static void reload_game_code_if_recompiled(Game_Code& game_code) {
 		BOOL ok_free = FreeLibrary(game_code.dll);
 		assert(ok_free);
 		game_code.dll = nullptr;
+		game_code.update_and_render = [](auto...){};
+		game_code.get_sound_samples = [](auto...){};
 		load_game_code(game_code);
 	}
 }
@@ -300,7 +304,7 @@ static void load_game_code(Game_Code& game_code) {
 			} else {
 				// загружаем копию чтобы компилятор мог писать в оригинальный файл
 				BOOL ok_copy = CopyFileA(game_code.dll_path, game_code.copy_dll_path, FALSE);
-				assert(ok_copy);
+				assert_or_return_void(ok_copy);
 				path_to_load = game_code.copy_dll_path;
 				break;
 			}
@@ -308,32 +312,28 @@ static void load_game_code(Game_Code& game_code) {
 	}
 
 	HMODULE loaded_dll = LoadLibraryA(path_to_load);
-	if (loaded_dll) {
-		game_code.dll = loaded_dll;
-		game_code.write_time = get_file_write_time(game_code.dll_path);
-		game_code.update_and_render = cast<Game::Update_And_Render*>(GetProcAddress(loaded_dll, "update_and_render"));
-		game_code.get_sound_samples = cast<Game::Get_Sound_Samples*>(GetProcAddress(loaded_dll, "get_sound_samples"));
-		assert(game_code.update_and_render);
-		assert(game_code.get_sound_samples);
-	} else {
-		game_code.update_and_render = [](auto...){};
-		game_code.get_sound_samples = [](auto...){};
-	}
+	assert_or_return_void(loaded_dll);
+
+	game_code.dll = loaded_dll;
+	game_code.write_time = get_file_write_time(game_code.dll_path);
+	game_code.update_and_render = cast<Game::Update_And_Render*>(GetProcAddress(loaded_dll, "update_and_render"));
+	game_code.get_sound_samples = cast<Game::Get_Sound_Samples*>(GetProcAddress(loaded_dll, "get_sound_samples"));
 }
 
 static Input create_input() {
 	Input input = {};
 	input.game_input.frame_dt = TARGET_SECONDS_PER_FRAME;
+	input.XInputGetState = [](auto...){ return 1ul; };
+	input.XInputSetState = [](auto...){ return 1ul; };
+
 	HMODULE xinput_dll = LoadLibraryA("xinput1_3.dll");
+	assert(xinput_dll);
+	
 	if (xinput_dll) {
 		input.XInputGetState = cast<X_Input_Get_State*>(GetProcAddress(xinput_dll, "XInputGetState"));
 		input.XInputSetState = cast<X_Input_Set_State*>(GetProcAddress(xinput_dll, "XInputSetState"));
-		assert(input.XInputGetState);
-		assert(input.XInputSetState);
-	} else {
-		input.XInputGetState = [](auto...){ return 1ul; };
-		input.XInputSetState = [](auto...){ return 1ul; };
 	}
+	
 	return input;
 }
 
@@ -416,10 +416,10 @@ static void collect_keyboard_button_input(Input& input, WPARAM key_code, bool is
 static void collect_mouse_input(Input& input, HWND window) {
 	POINT point = {};	
 	BOOL ok_cursor = GetCursorPos(&point);
-	assert(ok_cursor);
+	assert_or_return_void(ok_cursor);
 	
 	BOOL ok_transform = ScreenToClient(window, &point);
-	assert(ok_transform);
+	assert_or_return_void(ok_transform);
 
 	auto& mouse = input.game_input.mouse;
 	mouse.coord.x = point.x;
@@ -479,8 +479,8 @@ static void replayer_record_or_replace(Replayer& replayer, Game::Memory& game_me
 static void replayer_start_record(Replayer& replayer, Game::Memory& game_memory) {
 	DWORD state_handle_ptr = SetFilePointer(replayer.state_handle, 0, 0, FILE_BEGIN);
 	DWORD input_handle_ptr = SetFilePointer(replayer.input_handle, 0, 0, FILE_BEGIN);
-	assert(state_handle_ptr != INVALID_SET_FILE_POINTER);
-	assert(input_handle_ptr != INVALID_SET_FILE_POINTER);
+	assert_or_return_void(state_handle_ptr != INVALID_SET_FILE_POINTER);
+	assert_or_return_void(input_handle_ptr != INVALID_SET_FILE_POINTER);
 
 	DWORD game_memory_size = cast<DWORD>(game_memory.permanent.get_size() + game_memory.transient.get_size());
 	DWORD bytes_written = 0;
@@ -497,8 +497,8 @@ static void replayer_record(Replayer& replayer, Game::Input& game_input) {
 static void replayer_start_play(Replayer& replayer, Game::Memory& game_memory) {
 	DWORD state_handle_ptr = SetFilePointer(replayer.state_handle, 0, 0, FILE_BEGIN);
 	DWORD input_handle_ptr = SetFilePointer(replayer.input_handle, 0, 0, FILE_BEGIN);
-	assert(state_handle_ptr != INVALID_SET_FILE_POINTER);
-	assert(input_handle_ptr != INVALID_SET_FILE_POINTER);
+	assert_or_return_void(state_handle_ptr != INVALID_SET_FILE_POINTER);
+	assert_or_return_void(input_handle_ptr != INVALID_SET_FILE_POINTER);
 
 	DWORD game_memory_size = cast<DWORD>(game_memory.permanent.get_size() + game_memory.transient.get_size());
 	DWORD bytes_read = 0;
@@ -509,12 +509,12 @@ static void replayer_start_play(Replayer& replayer, Game::Memory& game_memory) {
 static void replayer_play(Replayer& replayer, Game::Memory& game_memory, Game::Input& game_input) {
 	DWORD bytes_read = 0;
 	BOOL ok_read = ReadFile(replayer.input_handle, &game_input, sizeof(game_input), &bytes_read, nullptr);
-	assert(ok_read);
+	assert_or_return_void(ok_read);
 
 	if (!bytes_read) {
 		replayer_start_play(replayer, game_memory);
 		BOOL ok_read_2 = ReadFile(replayer.input_handle, &game_input, sizeof(game_input), &bytes_read, nullptr);
-		assert(ok_read_2);
+		assert_or_return_void(ok_read_2);
 	}
 	assert(bytes_read == sizeof(game_input));
 }
@@ -555,6 +555,7 @@ static void resize_screen(Screen& screen, i32 width, i32 height) {
 	if (screen.game_screen.ptr) {
 		BOOL ok_free = VirtualFree(screen.game_screen.ptr, 0, MEM_RELEASE);
 		assert(ok_free);
+		screen.game_screen.ptr = nullptr;
 	}
 
 	screen.bitmap_info.bmiHeader.biWidth = width;
@@ -569,7 +570,7 @@ static void resize_screen(Screen& screen, i32 width, i32 height) {
 static void submit_screen(Screen& screen, HWND window, HDC device_context) {
 	RECT client_rect = {};
 	BOOL ok_rect = GetClientRect(window, &client_rect);
-	assert(ok_rect);
+	assert_or_return_void(ok_rect);
 
 	int src_width  = screen.game_screen.count.x;
 	int src_height = screen.game_screen.count.y;
@@ -624,57 +625,38 @@ static Sound create_sound(HWND window) {
 
 	sound.game_sound.samples_per_second = cast<i32>(sound.wave_format.nSamplesPerSec);
 	sound.game_sound.samples.ptr = cast<Game::Sound_Sample*>(VirtualAlloc(nullptr, sound.buffer_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
-	if (!sound.game_sound.samples.ptr) {
-		assert(false);
-		return {};
-	}
+	assert_or_return(sound.game_sound.samples.ptr);
 
 	HMODULE direct_sound_dll = LoadLibraryA("dsound.dll");
-	if (!direct_sound_dll) {
-		assert(false);
-		return {};
-	}
+	assert_or_return(direct_sound_dll);
 
 	auto* DirectSoundCreate = cast<Direct_Sound_Create*>(GetProcAddress(direct_sound_dll, "DirectSoundCreate"));
-	if (!DirectSoundCreate) {
-		assert(false);
-		return {};
-	}
+	assert_or_return(DirectSoundCreate);
 
 	IDirectSound* direct_sound;
-	if (DirectSoundCreate(nullptr, &direct_sound, nullptr) != DS_OK) {
-		assert(false);
-		return {};
-	}
+	BOOL ok_create_ds = DirectSoundCreate(nullptr, &direct_sound, nullptr) == DS_OK;
+	assert_or_return(ok_create_ds);
 
-	if (direct_sound->SetCooperativeLevel(window, DSSCL_PRIORITY) != DS_OK) {
-		assert(false);
-		return {};
-	}
+	BOOL ok_coop_level = direct_sound->SetCooperativeLevel(window, DSSCL_PRIORITY) == DS_OK;
+	assert_or_return(ok_coop_level);
 
 	DSBUFFERDESC primary_buffer_desc = {};
 	primary_buffer_desc.dwSize = sizeof(primary_buffer_desc);
 	primary_buffer_desc.dwFlags = DSBCAPS_PRIMARYBUFFER;
 
 	IDirectSoundBuffer* primary_buffer;
-	if (direct_sound->CreateSoundBuffer(&primary_buffer_desc, &primary_buffer, nullptr) != DS_OK) {
-		assert(false);
-		return {};
-	}
+	BOOL ok_create_primary = direct_sound->CreateSoundBuffer(&primary_buffer_desc, &primary_buffer, nullptr) == DS_OK;
+	assert_or_return(ok_create_primary);
 
-	if (primary_buffer->SetFormat(&sound.wave_format) != DS_OK) {
-		assert(false);
-		return {};
-	}
+	BOOL ok_format = primary_buffer->SetFormat(&sound.wave_format) == DS_OK;
+	assert_or_return(ok_format);
 
 	DSBUFFERDESC sound_buffer_desc = {};
 	sound_buffer_desc.dwSize = sizeof(sound_buffer_desc);
 	sound_buffer_desc.dwBufferBytes = sound.buffer_size;
 	sound_buffer_desc.lpwfxFormat = &sound.wave_format;
-	if (direct_sound->CreateSoundBuffer(&sound_buffer_desc, &sound.buffer, nullptr) != DS_OK) {
-		assert(false);
-		return {};
-	}
+	BOOL ok_create_buffer = direct_sound->CreateSoundBuffer(&sound_buffer_desc, &sound.buffer, nullptr) == DS_OK;
+	assert_or_return(ok_create_buffer);
 
 	BOOL ok_lock = false, ok_unlock = false;
 	void *region1, *region2; DWORD region1_size, region2_size;
@@ -684,15 +666,10 @@ static Sound create_sound(HWND window) {
 		memset(region2, 0, region2_size);
 		ok_unlock = sound.buffer->Unlock(region1, region1_size, region2, region2_size) == DS_OK;
 	}
-	if (!ok_lock || !ok_unlock) {
-		assert(false);
-		return {};
-	}
+	assert_or_return(ok_lock && ok_unlock);
 
-	if (sound.buffer->Play(0, 0, DSBPLAY_LOOPING) != DS_OK) {
-		assert(false);
-		return {};
-	}
+	BOOL ok_play = sound.buffer->Play(0, 0, DSBPLAY_LOOPING) == DS_OK;
+	assert_or_return(ok_play);
 
 	sound.is_playing = true;
 	return sound;
@@ -709,11 +686,10 @@ static void calc_sound_samples_to_write(Sound& sound, i64 flip_timestamp) {
 	// просто пишем количество сэмплов, равное bytes_per_frame + safety_bytes
 
 	DWORD play_cursor = 0, write_cursor = 0;
-	if (sound.buffer->GetCurrentPosition(&play_cursor, &write_cursor) != DS_OK) {
-		assert(false);
+	BOOL ok_position = sound.buffer->GetCurrentPosition(&play_cursor, &write_cursor) == DS_OK;
+	assert_or_return_void(ok_position, {
 		sound.game_sound.samples.count = 0;
-		return;
-	}
+	});
 
 	f32 from_flip_to_audio_seconds = get_seconds_elapsed(flip_timestamp);
 	DWORD expected_bytes_until_flip = sound.bytes_per_frame - cast<DWORD>(cast<f32>(sound.wave_format.nAvgBytesPerSec) * from_flip_to_audio_seconds);
@@ -778,7 +754,7 @@ static void draw_sound_sync(Screen& screen, Sound& sound) {
 
 	auto& current_marker = sound.dev_markers(sound.dev_markers_index);
 	BOOL ok_current_pos = sound.buffer->GetCurrentPosition(&current_marker.flip_play_cursor, nullptr) == DS_OK;
-	assert(ok_current_pos);
+	assert_or_return_void(ok_current_pos);
 
 	i32 expected_flip_play_cursor_x = cast<i32>(cast<f32>(current_marker.expected_flip_play_cursor) * horizontal_scaling);
 	draw_vertical_line(screen, expected_flip_play_cursor_x, 0, screen.game_screen.count.y, 0xffff00);
@@ -814,40 +790,26 @@ namespace Game {
 		slice<u8> result = {};
 
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+		assert_or_return(file_handle != INVALID_HANDLE_VALUE);
 		defer(CloseHandle(file_handle));
-		if (file_handle == INVALID_HANDLE_VALUE) {
-			assert(false);
-			return {};
-		}
 
 		LARGE_INTEGER file_size_struct = {};
 		BOOL ok_size = GetFileSizeEx(file_handle, &file_size_struct);
 		DWORD file_size_casted = cast<DWORD>(file_size_struct.QuadPart);
 		result.set_size(file_size_casted);
-		if (!ok_size) {
-			assert(false);
-			return {};
-		}
+		assert_or_return(ok_size);
 
 		HANDLE heap_handle = GetProcessHeap();
-		if (!heap_handle) {
-			assert(false);
-			return {};
-		}
+		assert_or_return(heap_handle);
 
 		result.ptr = cast<u8*>(HeapAlloc(heap_handle, 0, file_size_casted));
-		if (!result.ptr) {
-			assert(false);
-			return {};
-		}
+		assert_or_return(result.ptr);
 
 		DWORD bytes_read = 0;
 		BOOL ok_read = ReadFile(file_handle, result.ptr, file_size_casted, &bytes_read, nullptr);
-		if (!ok_read || (bytes_read != file_size_casted)) {
-			assert(false);
+		assert_or_return(ok_read && bytes_read == file_size_casted, {
 			HeapFree(heap_handle, 0, result.ptr);
-			return {};
-		}
+		});
 
 		return result;
 	}
@@ -856,11 +818,8 @@ namespace Game {
 		DWORD file_size_casted = cast<DWORD>(file.get_size());
 
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
+		assert_or_return_void(file_handle != INVALID_HANDLE_VALUE);
 		defer(CloseHandle(file_handle));
-		if (file_handle == INVALID_HANDLE_VALUE) {
-			assert(false);
-			return;
-		}
 
 		DWORD bytes_written = 0;
 		BOOL ok_write = WriteFile(file_handle, file.ptr, file_size_casted, &bytes_written, nullptr);
@@ -871,10 +830,7 @@ namespace Game {
 		defer(memory = nullptr);
 
 		HANDLE heap_handle = GetProcessHeap();
-		if (!heap_handle) {
-			assert(false);
-			return;
-		}
+		assert_or_return_void(heap_handle);
 		
 		BOOL ok_free = HeapFree(heap_handle, 0, memory);
 		assert(ok_free);

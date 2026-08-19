@@ -89,6 +89,20 @@ template <typename F> Deferrer(F) -> Deferrer<F>;
 
 #define size_of(value) cast<i64>(sizeof(value))
 
+#define assert_or_return(condition, ...) \
+    if (!(condition)) {                  \
+        assert(false && #condition);     \
+        __VA_ARGS__;                     \
+        return {};                       \
+    }
+
+#define assert_or_return_void(condition, ...) \
+    if (!(condition)) {                       \
+        assert(false && #condition);          \
+        __VA_ARGS__;                          \
+        return;                               \
+    }
+
 template <typename T>
 struct vec2 {
     T x, y;
