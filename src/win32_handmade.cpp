@@ -752,8 +752,7 @@ static void draw_sound_sync(Screen& screen, Sound& sound) {
 	}
 
 	auto& current_marker = sound.dev_markers(sound.dev_markers_index);
-	BOOL ok_current_pos = sound.buffer->GetCurrentPosition(&current_marker.flip_play_cursor, nullptr) == DS_OK;
-	assert(ok_current_pos);
+	sound.buffer->GetCurrentPosition(&current_marker.flip_play_cursor, nullptr);
 
 	i32 expected_flip_play_cursor_x = cast<i32>(cast<f32>(current_marker.expected_flip_play_cursor) * horizontal_scaling);
 	draw_vertical_line(screen, expected_flip_play_cursor_x, 0, screen.game_screen.count.y, 0xffff00);

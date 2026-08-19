@@ -28,46 +28,50 @@ namespace Game {
 		}
 
 		auto& game_state = get_game_state(memory);
-		auto& hero_pos = game_state.hero_position;
-		auto& camera_pos = game_state.camera_position;
+		auto& hero_dir   = game_state.hero_dir;
+		auto& hero_pos   = game_state.hero_pos;
+		auto& d_hero_pos = game_state.d_hero_pos;
+		auto& camera_pos = game_state.camera_pos;
 		auto& tile_map   = game_state.world.tile_map;
+		auto& frame_dt   = input.frame_dt;
 
 		auto new_hero_pos = hero_pos;
 		for (auto& controller : input.controllers) {
-			f32 player_speed = controller.action_down.is_pressed ? 20.0f : 5.0f;
-			vec2<f32> player_dpos = {};
+			vec2<f32> dd_hero_pos = {};
+			f32 dd_hero_amp = controller.action_down.is_pressed ? 50.0f : 10.0f;
 
 			if (controller.move_left.is_pressed) {
-				game_state.hero_direction = Hero_Direction::Left;
-				player_dpos.x -= player_speed;
+				hero_dir = Hero_Direction::Left;
+				dd_hero_pos.x -= dd_hero_amp;
 			}
 			if (controller.move_right.is_pressed) {
-				game_state.hero_direction = Hero_Direction::Right;
-				player_dpos.x += player_speed;
+				hero_dir = Hero_Direction::Right;
+				dd_hero_pos.x += dd_hero_amp;
 			}
 			if (controller.move_up.is_pressed) {
-				game_state.hero_direction = Hero_Direction::Back;
-				player_dpos.y += player_speed;
+				hero_dir = Hero_Direction::Back;
+				dd_hero_pos.y += dd_hero_amp;
 			}
 			if (controller.move_down.is_pressed) {
-				game_state.hero_direction = Hero_Direction::Front;
-				player_dpos.y -= player_speed;
+				hero_dir = Hero_Direction::Front;
+				dd_hero_pos.y -= dd_hero_amp;
 			}
+			if (dd_hero_pos.x && dd_hero_pos.y) {
+				dd_hero_pos /= SQRT_2;
+			}
+			dd_hero_pos -= 2.0f * d_hero_pos;
 
-			if (player_dpos.x && player_dpos.y) {
-				player_dpos /= SQRT_2;
-			}
-			
-			new_hero_pos.tile_rel_add(player_dpos * input.frame_dt);
+			new_hero_pos.tile_rel_add(dd_hero_pos / 2 * frame_dt * frame_dt + d_hero_pos * frame_dt);
+			d_hero_pos += dd_hero_pos * frame_dt;
 		}
 
-		f32 player_width  = 1.0f;
+		f32 hero_width  = 1.0f;
 
 		auto new_hero_pos_left = new_hero_pos;
-		new_hero_pos_left.tile_rel_add({ - player_width / 2, 0 });
+		new_hero_pos_left.tile_rel_add({ - hero_width / 2, 0 });
 
 		auto new_hero_pos_right = new_hero_pos;
-		new_hero_pos_left.tile_rel_add({   player_width / 2, 0 });
+		new_hero_pos_left.tile_rel_add({   hero_width / 2, 0 });
 
 		if (Tiles::check_walkable_tile(tile_map, new_hero_pos_left) &&
 		    Tiles::check_walkable_tile(tile_map, new_hero_pos)      &&
@@ -127,14 +131,14 @@ namespace Game {
 		}
 
 		vec2<f32> hero_camera_diff = Tiles::subtract_positions(hero_pos, camera_pos);
-		vec2<f32> player_ground = hero_camera_diff;
-		player_ground.y = Tiles::TILE_DIM - player_ground.y;
-		player_ground += cast<vec2<f32>>(half_screen_tiles) * Tiles::TILE_DIM;
+		vec2<f32> hero_ground = hero_camera_diff;
+		hero_ground.y = Tiles::TILE_DIM - hero_ground.y;
+		hero_ground += cast<vec2<f32>>(half_screen_tiles) * Tiles::TILE_DIM;
 
-		auto hero_bitmap = game_state.hero_bitmaps(game_state.hero_direction);
-		draw_pixels(screen, hero_bitmap.torso, player_ground, hero_bitmap.align);
-		draw_pixels(screen, hero_bitmap.cape,  player_ground, hero_bitmap.align);
-		draw_pixels(screen, hero_bitmap.head,  player_ground, hero_bitmap.align);
+		auto hero_bitmap = game_state.hero_bitmaps(game_state.hero_dir);
+		draw_pixels(screen, hero_bitmap.torso, hero_ground, hero_bitmap.align);
+		draw_pixels(screen, hero_bitmap.cape,  hero_ground, hero_bitmap.align);
+		draw_pixels(screen, hero_bitmap.head,  hero_ground, hero_bitmap.align);
 	};
 
 	static void draw_rectangle(slice2<u32> dst, Color color, vec2<f32> min_f32, vec2<f32> max_f32) {
@@ -225,8 +229,8 @@ namespace Game {
 
 	static void init_memory(Thread& thread, Memory& memory) {
 		auto& game_state  = get_game_state(memory);
-		auto& hero_pos    = game_state.hero_position;
-		auto& camera_pos  = game_state.camera_position;
+		auto& hero_pos    = game_state.hero_pos;
+		auto& camera_pos  = game_state.camera_pos;
 		auto& tile_map    = game_state.world.tile_map;
 		auto& tile_chunks = game_state.world.tile_map.chunks;
 		auto& world_arena = game_state.world.arena;

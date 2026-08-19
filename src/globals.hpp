@@ -109,10 +109,7 @@ struct vec2 {
     }
 
     __forceinline
-    T& operator()(i32 index) {
-        const T& const_result = cast<const vec2<T>&>(*this)(index);
-        return cast<T&>(const_result);
-    }
+    T& operator()(i32 index) { return cast<T&>(cast<const vec2<T>&>(*this)(index)); }
 
     friend vec2<bool> operator==(vec2<T> a, vec2<T> b) { return { a.x == b.x, a.y == b.y }; }
 
@@ -134,16 +131,18 @@ struct Array {
     T ptr[N];
 
     i32 get_count() { return N; }
-
     T* begin() { return ptr; }
     T* end()   { return ptr + N; }
+
     __forceinline
     const T& operator()(i32 index) const {
         assert(index >= 0 && index < N);
         return ptr[index];
     }
     __forceinline
-    T& operator()(i32 index) { return cast<T&>(cast<const Array&>(*this)(index)); }
+    T& operator()(i32 index) {
+        return cast<T&>(cast<const Array&>(*this)(index));
+    }
 };
 
 template <typename T, i32 Count_X, i32 Count_Y = 1, i32 Count_Z = 1>
@@ -174,9 +173,9 @@ struct slice3 {
     i32 count_z;
 
     i64 get_size() { return size_of(T) * count_x * count_y * count_z; }
-
     T* begin() { return ptr; }
     T* end()   { return ptr + count_x * count_y * count_z; }
+
     __forceinline
     T& operator()(i32 x, i32 y, i32 z) {
         assert(x >= 0 && x < count_x);
@@ -192,9 +191,9 @@ struct slice2 {
     vec2<i32> count;
 
     i64 get_size() { return size_of(T) * count.x * count.y; }
-
     T* begin() { return ptr; }
     T* end()   { return ptr + count.x * count.y; }
+    
     __forceinline
     T& operator()(i32 x, i32 y) {
         assert(x >= 0 && x < count.x);

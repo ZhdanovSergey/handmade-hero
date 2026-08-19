@@ -96,9 +96,10 @@ namespace Game {
 		World world;
 		slice2<u32> background_bitmap;
 		Array<Hero_Side_Bitmap, Hero_Direction::Count> hero_bitmaps;
-		Hero_Direction::Type hero_direction;
-		Tiles::Position hero_position;
-		Tiles::Position camera_position;
+		Hero_Direction::Type hero_dir;
+		Tiles::Position camera_pos;
+		Tiles::Position hero_pos;
+		vec2<f32> d_hero_pos;
 		f32 pixels_per_unit;
 		f32 sound_t_sin;
 	};
