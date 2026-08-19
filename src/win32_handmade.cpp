@@ -5,7 +5,8 @@ static Screen global_screen = create_screen(); // глобальный из-за
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
 	static_assert(DEV_MODE || !SLOW_MODE);
 
-    SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
+    BOOL ok_priority = SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
+	assert(ok_priority);
 
 	bool is_pause = false;
 	HWND window = create_window(hInstance);
@@ -86,10 +87,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		// if constexpr (DEV_MODE) draw_sound_sync(global_screen, sound);
 
 		HDC device_context = GetDC(window);
+		int ok_release = false;
 		if (device_context) {
 			submit_screen(global_screen, window, device_context);
-			ReleaseDC(window, device_context);
+			ok_release = ReleaseDC(window, device_context);
 		}
+		assert(device_context && ok_release);
 	}
 }
 
@@ -100,18 +103,22 @@ static HWND create_window(HINSTANCE hInstance) {
 	window_class.hInstance = hInstance;
 	window_class.hCursor = LoadCursorA(nullptr, IDC_ARROW);
 	window_class.lpszClassName = "Handmade_Hero";
-	if (!RegisterClassA(&window_class)) return nullptr;
+	ATOM ok_register = RegisterClassA(&window_class);
+	assert(ok_register);
 
 	RECT window_rect = {};
 	window_rect.right = INITIAL_WINDOW_WIDTH;
 	window_rect.bottom = INITIAL_WINDOW_HEIGHT;
 	DWORD dwStyle = WS_TILEDWINDOW | WS_VISIBLE;
-	AdjustWindowRectEx(&window_rect, dwStyle, FALSE, 0);
+	BOOL ok_adjust = AdjustWindowRectEx(&window_rect, dwStyle, FALSE, 0);
+	assert(ok_adjust);
 
 	int window_width = window_rect.right - window_rect.left;
 	int window_height = window_rect.bottom - window_rect.top;
-	return CreateWindowExA(0, window_class.lpszClassName, "Handmade Hero", dwStyle,
+	HWND window = CreateWindowExA(0, window_class.lpszClassName, "Handmade Hero", dwStyle,
 		CW_USEDEFAULT, CW_USEDEFAULT, window_width, window_height, nullptr, nullptr, hInstance, nullptr);
+	assert(window);
+	return window;
 }
 
 static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -122,10 +129,12 @@ static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
 		case WM_PAINT: {
 			PAINTSTRUCT paint;
 			HDC device_context = BeginPaint(window, &paint);
+			BOOL ok_release = false;
 			if (device_context) {
 				submit_screen(global_screen, window, device_context);
-				EndPaint(window, &paint);
+				ok_release = EndPaint(window, &paint);
 			}
+			assert(device_context && ok_release);
 		} break;
 		default: {
 			if (message == WM_SETCURSOR && !DEV_MODE) {
@@ -200,7 +209,8 @@ static void get_build_file_path(slice<char> result, cstr file_name) {
 
 static FILETIME get_file_write_time(cstr file_name) {
 	WIN32_FILE_ATTRIBUTE_DATA file_data = {};
-	GetFileAttributesExA(file_name, GetFileExInfoStandard, &file_data);
+	BOOL ok_attributes = GetFileAttributesExA(file_name, GetFileExInfoStandard, &file_data);
+	assert(ok_attributes);
 	return file_data.ftLastWriteTime;
 }
 
@@ -214,27 +224,31 @@ static f32 get_target_seconds_per_frame() {
 	// синхронизация с частотой монитора
 	// f32 min_fps = 30.0f;
     // HDC device_context = GetDC(nullptr);
+	// int ok_release = false;
 	// if (device_context) {
-	// 	defer(ReleaseDC(0, device_context));
+	// 	defer(ok_release = ReleaseDC(0, device_context));
 	// 	f32 refresh_rate = cast<f32>(GetDeviceCaps(device_context, VREFRESH));
 	// 	if (refresh_rate > 1) {
 	// 		f32 sync_fps = refresh_rate / hm::ceil(refresh_rate / target_fps);
 	// 		if (sync_fps >= min_fps) target_fps = sync_fps;
 	// 	}
 	// }
+	// assert(device_context && ok_release);
 
 	return 1.0f / target_fps;
 }
 
 static i64 get_perf_frequency() {
 	LARGE_INTEGER query_result = {};
-	QueryPerformanceFrequency(&query_result);
+	BOOL ok_query = QueryPerformanceFrequency(&query_result);
+	assert(ok_query);
 	return query_result.QuadPart;
 }
 
 static i64 get_timestamp() {
 	LARGE_INTEGER performance_counter_result = {};
-	QueryPerformanceCounter(&performance_counter_result);
+	BOOL ok_query = QueryPerformanceCounter(&performance_counter_result);
+	assert(ok_query);
 	return performance_counter_result.QuadPart;
 }
 
@@ -245,6 +259,7 @@ static Game::Memory create_game_memory() {
 
 	void* base_address = DEV_MODE && UINTPTR_MAX == UINT64_MAX ? (void*)1024_GB : nullptr;
 	u8* game_storage = cast<u8*>(VirtualAlloc(base_address, cast<SIZE_T>(permanent_size + transient_size), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+	assert(game_storage);
 
 	Game::Memory game_memory = {};
 	game_memory.permanent         = { game_storage,                  permanent_size };
@@ -267,7 +282,8 @@ static Game_Code create_game_code() {
 static void reload_game_code_if_recompiled(Game_Code& game_code) {
 	FILETIME dll_write_time = get_file_write_time(game_code.dll_path);
 	if (CompareFileTime(&dll_write_time, &game_code.write_time) > 0) {
-		FreeLibrary(game_code.dll);
+		BOOL ok_free = FreeLibrary(game_code.dll);
+		assert(ok_free);
 		game_code.dll = nullptr;
 		load_game_code(game_code);
 	}
@@ -283,7 +299,8 @@ static void load_game_code(Game_Code& game_code) {
 				Sleep(1);
 			} else {
 				// загружаем копию чтобы компилятор мог писать в оригинальный файл
-				CopyFileA(game_code.dll_path, game_code.copy_dll_path, FALSE);
+				BOOL ok_copy = CopyFileA(game_code.dll_path, game_code.copy_dll_path, FALSE);
+				assert(ok_copy);
 				path_to_load = game_code.copy_dll_path;
 				break;
 			}
@@ -296,6 +313,8 @@ static void load_game_code(Game_Code& game_code) {
 		game_code.write_time = get_file_write_time(game_code.dll_path);
 		game_code.update_and_render = cast<Game::Update_And_Render*>(GetProcAddress(loaded_dll, "update_and_render"));
 		game_code.get_sound_samples = cast<Game::Get_Sound_Samples*>(GetProcAddress(loaded_dll, "get_sound_samples"));
+		assert(game_code.update_and_render);
+		assert(game_code.get_sound_samples);
 	} else {
 		game_code.update_and_render = [](auto...){};
 		game_code.get_sound_samples = [](auto...){};
@@ -309,6 +328,8 @@ static Input create_input() {
 	if (xinput_dll) {
 		input.XInputGetState = cast<X_Input_Get_State*>(GetProcAddress(xinput_dll, "XInputGetState"));
 		input.XInputSetState = cast<X_Input_Set_State*>(GetProcAddress(xinput_dll, "XInputSetState"));
+		assert(input.XInputGetState);
+		assert(input.XInputSetState);
 	} else {
 		input.XInputGetState = [](auto...){ return 1ul; };
 		input.XInputSetState = [](auto...){ return 1ul; };
@@ -393,9 +414,12 @@ static void collect_keyboard_button_input(Input& input, WPARAM key_code, bool is
 }
 
 static void collect_mouse_input(Input& input, HWND window) {
-	POINT point = {};
-	GetCursorPos(&point);
-	ScreenToClient(window, &point);
+	POINT point = {};	
+	BOOL ok_cursor = GetCursorPos(&point);
+	assert(ok_cursor);
+	
+	BOOL ok_transform = ScreenToClient(window, &point);
+	assert(ok_transform);
 
 	auto& mouse = input.game_input.mouse;
 	mouse.coord.x = point.x;
@@ -529,7 +553,8 @@ static void reset_input_counters(Input& input) {
 
 static void resize_screen(Screen& screen, i32 width, i32 height) {
 	if (screen.game_screen.ptr) {
-		VirtualFree(screen.game_screen.ptr, 0, MEM_RELEASE);
+		BOOL ok_free = VirtualFree(screen.game_screen.ptr, 0, MEM_RELEASE);
+		assert(ok_free);
 	}
 
 	screen.bitmap_info.bmiHeader.biWidth = width;
@@ -538,11 +563,13 @@ static void resize_screen(Screen& screen, i32 width, i32 height) {
 	screen.game_screen.count = { width, height };
 	SIZE_T memory_size = cast<SIZE_T>(screen.game_screen.get_size());
 	screen.game_screen.ptr = cast<u32*>(VirtualAlloc(nullptr, memory_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+	assert(screen.game_screen.ptr);
 }
 
 static void submit_screen(Screen& screen, HWND window, HDC device_context) {
 	RECT client_rect = {};
-	GetClientRect(window, &client_rect);
+	BOOL ok_rect = GetClientRect(window, &client_rect);
+	assert(ok_rect);
 
 	int src_width  = screen.game_screen.count.x;
 	int src_height = screen.game_screen.count.y;
@@ -563,15 +590,15 @@ static void submit_screen(Screen& screen, HWND window, HDC device_context) {
 		}
 	}
 		
-	PatBlt(device_context, dst_width, 0, full_width - dst_width, dst_height, BLACKNESS);    // right
-	PatBlt(device_context, 0, dst_height, full_width, full_height - dst_height, BLACKNESS); // bottom
-
-	StretchDIBits(device_context,
+	BOOL ok_blackness_right  = PatBlt(device_context, dst_width, 0, full_width - dst_width, dst_height, BLACKNESS);
+	BOOL ok_blackness_bottom = PatBlt(device_context, 0, dst_height, full_width, full_height - dst_height, BLACKNESS);
+	int ok_stretch = StretchDIBits(device_context,
 		0, 0, dst_width, dst_height,
 		0, 0, src_width, src_height,
 		screen.game_screen.ptr, &screen.bitmap_info,
 		DIB_RGB_COLORS, SRCCOPY
 	);
+	assert(ok_blackness_right && ok_blackness_bottom && ok_stretch);
 }
 
 static void draw_vertical_line(Screen& screen, i32 x, i32 top, i32 bottom, u32 color) {
@@ -649,8 +676,7 @@ static Sound create_sound(HWND window) {
 		return {};
 	}
 
-	BOOL ok_lock = false;
-	BOOL ok_unlock = false;
+	BOOL ok_lock = false, ok_unlock = false;
 	void *region1, *region2; DWORD region1_size, region2_size;
 	ok_lock = sound.buffer->Lock(0, sound.buffer_size, &region1, &region1_size, &region2, &region2_size, 0) == DS_OK;
 	if (ok_lock) {
@@ -719,11 +745,10 @@ static void calc_sound_samples_to_write(Sound& sound, i64 flip_timestamp) {
 static void submit_sound(Sound& sound) {
 	if (!sound.is_playing) return;
 
-	BOOL ok_lock = false;
-	BOOL ok_unlock = false;
-	void *region1, *region2; DWORD region1_size, region2_size;
 	DWORD bytes_to_lock = cast<DWORD>(sound.game_sound.samples.get_size());
-
+	
+	BOOL ok_lock = false, ok_unlock = false;
+	void *region1, *region2; DWORD region1_size, region2_size;
 	ok_lock = sound.buffer->Lock(sound.output_location, bytes_to_lock, &region1, &region1_size, &region2, &region2_size, 0) == DS_OK;
 	if (ok_lock) {
 		hm::memcpy(region1, sound.game_sound.samples.ptr, region1_size);
@@ -752,7 +777,8 @@ static void draw_sound_sync(Screen& screen, Sound& sound) {
 	}
 
 	auto& current_marker = sound.dev_markers(sound.dev_markers_index);
-	sound.buffer->GetCurrentPosition(&current_marker.flip_play_cursor, nullptr);
+	BOOL ok_current_pos = sound.buffer->GetCurrentPosition(&current_marker.flip_play_cursor, nullptr) == DS_OK;
+	assert(ok_current_pos);
 
 	i32 expected_flip_play_cursor_x = cast<i32>(cast<f32>(current_marker.expected_flip_play_cursor) * horizontal_scaling);
 	draw_vertical_line(screen, expected_flip_play_cursor_x, 0, screen.game_screen.count.y, 0xffff00);
@@ -804,6 +830,11 @@ namespace Game {
 		}
 
 		HANDLE heap_handle = GetProcessHeap();
+		if (!heap_handle) {
+			assert(false);
+			return {};
+		}
+
 		result.ptr = cast<u8*>(HeapAlloc(heap_handle, 0, file_size_casted));
 		if (!result.ptr) {
 			assert(false);
@@ -837,8 +868,15 @@ namespace Game {
 	}
 	
 	static void free_file_memory(Thread& thread, void*& memory) {
+		defer(memory = nullptr);
+
 		HANDLE heap_handle = GetProcessHeap();
-		HeapFree(heap_handle, 0, memory);
-		memory = nullptr;
+		if (!heap_handle) {
+			assert(false);
+			return;
+		}
+		
+		BOOL ok_free = HeapFree(heap_handle, 0, memory);
+		assert(ok_free);
 	}
 }
