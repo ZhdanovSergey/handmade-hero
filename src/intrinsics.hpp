@@ -16,15 +16,13 @@ namespace hm {
     static T min(T a, T b) { return a < b ? a : b; }
 
     template <typename T>
-    __forceinline
-    static vec2<T> min(vec2<T> a, vec2<T> b) { return vec2<T>{ min(a.x, b.x), min(a.y, b.y) }; }
+    static v2<T> min(v2<T> a, v2<T> b) { return v2<T>{ min(a.x, b.x), min(a.y, b.y) }; }
     
     template <typename T>
     static T max(T a, T b) { return a > b ? a : b; }
 
     template <typename T>
-    __forceinline
-    static vec2<T> max(vec2<T> a, vec2<T> b) { return vec2<T>{ max(a.x, b.x), max(a.y, b.y) }; }
+    static v2<T> max(v2<T> a, v2<T> b) { return v2<T>{ max(a.x, b.x), max(a.y, b.y) }; }
 
     template <typename Out_Provider = void, typename In,
                 typename Out = conditional_t< is_same_v<Out_Provider, void>, In, Out_Provider>>
@@ -45,14 +43,13 @@ namespace hm {
         return cast<Out>(cast<i32>(x + 0.5f * sign(x)));
     }
 
-    template <typename Out = vec2<f32>>
-    __forceinline
-    static Out round(vec2<f32> vec) {
-        return cast<Out>(vec2<f32>{ round(vec.x), round(vec.y) });
+    template <typename Out = v2<f32>>
+    static Out round(v2<f32> vec) {
+        return cast<Out>(v2<f32>{ round(vec.x), round(vec.y) });
     }
 
     template <typename Out = f32>
-    __forceinline // because of draw_pixels
+    __forceinline // draw_pixels
     static Out round_positive(f32 x) {
         assert(x >= 0);
         return cast<Out>(cast<i32>(x + 0.5f));

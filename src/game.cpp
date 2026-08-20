@@ -37,7 +37,7 @@ namespace Game {
 
 		auto new_hero_pos = hero_pos;
 		for (auto& controller : input.controllers) {
-			vec2<f32> dd_hero_pos = {};
+			v2<f32> dd_hero_pos = {};
 			f32 dd_hero_amp = controller.action_down.is_pressed ? 50.0f : 10.0f;
 
 			if (controller.move_left.is_pressed) {
@@ -66,16 +66,23 @@ namespace Game {
 		}
 
 		f32 hero_width  = 1.0f;
-
 		auto new_hero_pos_left = new_hero_pos;
 		new_hero_pos_left.tile_rel_add({ - hero_width / 2, 0 });
-
 		auto new_hero_pos_right = new_hero_pos;
 		new_hero_pos_left.tile_rel_add({   hero_width / 2, 0 });
 
-		if (Tiles::check_walkable_tile(tile_map, new_hero_pos_left) &&
-		    Tiles::check_walkable_tile(tile_map, new_hero_pos)      &&
-		    Tiles::check_walkable_tile(tile_map, new_hero_pos_right)) {
+		result<Tiles::Position> collision_pos = {};
+		if (!Tiles::check_walkable_tile(tile_map, new_hero_pos_left))  collision_pos = { true, new_hero_pos_left };
+		if (!Tiles::check_walkable_tile(tile_map, new_hero_pos))       collision_pos = { true, new_hero_pos };
+		if (!Tiles::check_walkable_tile(tile_map, new_hero_pos_right)) collision_pos = { true, new_hero_pos_right };
+
+		if (collision_pos.ok) {
+			v2<i32> hero_xy = hero_pos.abs_xy;
+			v2<i32> collided_xy = collision_pos.value.abs_xy;
+			v2<f32> norm_vec = { hm::sign<f32>(hero_xy.x - collided_xy.x), hm::sign<f32>(hero_xy.y - collided_xy.y) };
+			if (norm_vec.x && norm_vec.y) norm_vec /= SQRT_2;
+			d_hero_pos -= norm_vec * dot(d_hero_pos, norm_vec);
+		} else {
 			if (!Tiles::check_same_tile(hero_pos, new_hero_pos)) {
 				auto new_tile = Tiles::get_tile(tile_map, new_hero_pos.abs_xy.x, new_hero_pos.abs_xy.y, new_hero_pos.abs_z);
 				if (new_tile == Tiles::Tile::Stairs_Up)   new_hero_pos.abs_z += 1;
@@ -94,15 +101,15 @@ namespace Game {
 
 		draw_rectangle(
 			screen, Color{ 1.0f, 0.0f, 1.0f },
-			vec2<f32>{0.0f, 0.0f},
-			cast<vec2<f32>>(SCENES_PER_SCREEN * SCENE_DIM_TILES) * Tiles::TILE_DIM
+			v2<f32>{0.0f, 0.0f},
+			cast<v2<f32>>(SCENES_PER_SCREEN * SCENE_DIM_TILES) * Tiles::TILE_DIM
 		);		
-		draw_pixels(screen, game_state.background_bitmap, vec2<f32>{0, 0});
+		draw_pixels(screen, game_state.background_bitmap, v2<f32>{0, 0});
 
-		vec2<i32> half_screen_tiles = SCENES_PER_SCREEN * SCENE_DIM_TILES / 2;
+		v2<i32> half_screen_tiles = SCENES_PER_SCREEN * SCENE_DIM_TILES / 2;
 		for (    i32 y = camera_pos.abs_xy.y - half_screen_tiles.y - 1; y <= camera_pos.abs_xy.y + half_screen_tiles.y + 1; ++y) {
 			for (i32 x = camera_pos.abs_xy.x - half_screen_tiles.x - 1; x <= camera_pos.abs_xy.x + half_screen_tiles.x + 1; ++x) {
-				vec2<i32> xy = {x, y};
+				v2<i32> xy = {x, y};
 
 				auto tile = Tiles::get_tile(tile_map, x, y, camera_pos.abs_z);
 				Color color = {};
@@ -119,21 +126,21 @@ namespace Game {
 				}
 
 				if (xy == hero_pos.abs_xy || (tile != Tiles::Tile::Not_Initialized && tile != Tiles::Tile::Floor)) {
-					vec2<f32> rect_min = cast<vec2<f32>>(xy - camera_pos.abs_xy) * Tiles::TILE_DIM - camera_pos.tile_rel;
+					v2<f32> rect_min = cast<v2<f32>>(xy - camera_pos.abs_xy) * Tiles::TILE_DIM - camera_pos.tile_rel;
 					rect_min.y = - rect_min.y;
-					rect_min += cast<vec2<f32>>(half_screen_tiles) * Tiles::TILE_DIM;
+					rect_min += cast<v2<f32>>(half_screen_tiles) * Tiles::TILE_DIM;
 
-					vec2<f32> rect_max = rect_min + vec2<f32>{Tiles::TILE_DIM, Tiles::TILE_DIM};
+					v2<f32> rect_max = rect_min + v2<f32>{Tiles::TILE_DIM, Tiles::TILE_DIM};
 					draw_rectangle(screen, color, rect_min, rect_max);
 				}
 
 			}
 		}
 
-		vec2<f32> hero_camera_diff = Tiles::subtract_positions(hero_pos, camera_pos);
-		vec2<f32> hero_ground = hero_camera_diff;
+		v2<f32> hero_camera_diff = Tiles::subtract_positions(hero_pos, camera_pos);
+		v2<f32> hero_ground = hero_camera_diff;
 		hero_ground.y = Tiles::TILE_DIM - hero_ground.y;
-		hero_ground += cast<vec2<f32>>(half_screen_tiles) * Tiles::TILE_DIM;
+		hero_ground += cast<v2<f32>>(half_screen_tiles) * Tiles::TILE_DIM;
 
 		auto hero_bitmap = game_state.hero_bitmaps(game_state.hero_dir);
 		draw_pixels(screen, hero_bitmap.torso, hero_ground, hero_bitmap.align);
@@ -141,13 +148,13 @@ namespace Game {
 		draw_pixels(screen, hero_bitmap.head,  hero_ground, hero_bitmap.align);
 	};
 
-	static void draw_rectangle(slice2<u32> dst, Color color, vec2<f32> min_f32, vec2<f32> max_f32) {
+	static void draw_rectangle(slice2<u32> dst, Color color, v2<f32> min_f32, v2<f32> max_f32) {
 		f32 pixels_per_unit = get_pixels_per_unit(dst);
 
-		vec2<i32> min = hm::round<vec2<i32>>(min_f32 * pixels_per_unit);
-		vec2<i32> max = hm::round<vec2<i32>>(max_f32 * pixels_per_unit);
+		v2<i32> min = hm::round<v2<i32>>(min_f32 * pixels_per_unit);
+		v2<i32> max = hm::round<v2<i32>>(max_f32 * pixels_per_unit);
 
-		min = hm::max(min, vec2<i32>{0, 0});
+		min = hm::max(min, v2<i32>{0, 0});
 		max = hm::min(max, dst.count);
 
 		u32 hex_color = get_hex_color(color);
@@ -158,14 +165,14 @@ namespace Game {
 		}
 	};
 
-	static void draw_pixels(slice2<u32> dst, slice2<u32> src, vec2<f32> min_f32, vec2<i32> align) {
+	static void draw_pixels(slice2<u32> dst, slice2<u32> src, v2<f32> min_f32, v2<i32> align) {
 		f32 pixels_per_unit = get_pixels_per_unit(dst);
 
-		vec2<i32> src_min = hm::round<vec2<i32>>(min_f32 * pixels_per_unit - cast<vec2<f32>>(align));
-		vec2<i32> src_max = src_min + src.count;
+		v2<i32> src_min = hm::round<v2<i32>>(min_f32 * pixels_per_unit - cast<v2<f32>>(align));
+		v2<i32> src_max = src_min + src.count;
 
-		vec2<i32> dst_min = hm::max(src_min, vec2<i32>{0, 0});
-		vec2<i32> dst_max = hm::min(src_max, dst.count);
+		v2<i32> dst_min = hm::max(src_min, v2<i32>{0, 0});
+		v2<i32> dst_max = hm::min(src_max, dst.count);
 
 		for (    i32 dst_y = dst_min.y; dst_y < dst_max.y; ++dst_y) {
 			for (i32 dst_x = dst_min.x; dst_x < dst_max.x; ++dst_x) {
@@ -244,7 +251,7 @@ namespace Game {
 		tile_chunks.ptr = world_arena.push<Tiles::Chunk>(tile_chunks.get_size());
 
 		i32 abs_tile_z = 0;
-		vec2<i32> scene = {};
+		v2<i32> scene = {};
 		bool is_door_left = false, is_door_right  = false;
 		bool is_door_top  = false, is_door_bottom = false;
 		bool is_stairs_up = false, is_stairs_down = false;

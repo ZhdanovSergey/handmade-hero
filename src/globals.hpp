@@ -77,9 +77,9 @@ static constexpr f32 PI = 3.1415927f;
 static constexpr f32 TWO_PI = 2.0f * PI;
 static constexpr f32 SQRT_2 = 1.41421356f;
 
-static constexpr i64 operator ""_KB(u64 value) { return cast<i64>(value << 10); }
-static constexpr i64 operator ""_MB(u64 value) { return cast<i64>(value << 20); }
-static constexpr i64 operator ""_GB(u64 value) { return cast<i64>(value << 30); }
+__forceinline static constexpr i64 operator ""_KB(u64 value) { return cast<i64>(value << 10); }
+__forceinline static constexpr i64 operator ""_MB(u64 value) { return cast<i64>(value << 20); }
+__forceinline static constexpr i64 operator ""_GB(u64 value) { return cast<i64>(value << 30); }
 
 template <typename F> struct Deferrer { F f; ~Deferrer() { f(); } };
 template <typename F> Deferrer(F) -> Deferrer<F>;
@@ -104,13 +104,15 @@ template <typename F> Deferrer(F) -> Deferrer<F>;
     }
 
 template <typename T>
-struct vec2 {
+struct v2 {
     T x, y;
 
     template <typename U>
-    explicit operator vec2<U>() {
+    __forceinline
+    explicit operator v2<U>() {
         return { cast<U>(x), cast<U>(y) };
     }
+    __forceinline
     explicit operator bool() {
         static_assert(is_same_v<T, bool>);
         return x && y;
@@ -121,23 +123,26 @@ struct vec2 {
         assert(index >= 0 && index < 2);
         return cast<T*>(this)[index];
     }
-
     __forceinline
-    T& operator()(i32 index) { return cast<T&>(cast<const vec2<T>&>(*this)(index)); }
+    T& operator()(i32 index) {
+        return cast<T&>(cast<const v2<T>&>(*this)(index));
+    }
 
-    friend vec2<bool> operator==(vec2<T> a, vec2<T> b) { return { a.x == b.x, a.y == b.y }; }
+    __forceinline friend v2<bool> operator==(v2<T> a, v2<T> b) { return { a.x == b.x, a.y == b.y }; }
 
-    friend vec2<T> operator+ (vec2<T> a, vec2<T> b) { return { a.x + b.x, a.y + b.y }; }
-    friend vec2<T> operator- (vec2<T> a, vec2<T> b) { return { a.x - b.x, a.y - b.y }; }
-    friend vec2<T> operator* (vec2<T> a, T num)     { return { a.x * num, a.y * num }; }
-    friend vec2<T> operator* (T num, vec2<T> a)     { return { a.x * num, a.y * num }; }
-    friend vec2<T> operator/ (vec2<T> a, T num)     { return { a.x / num, a.y / num }; }
-    friend vec2<T> operator- (vec2<T> a)            { return { - a.x, - a.y }; }
+    __forceinline friend v2<T> operator+ (v2<T> a, v2<T> b) { return { a.x + b.x, a.y + b.y }; }
+    __forceinline friend v2<T> operator- (v2<T> a, v2<T> b) { return { a.x - b.x, a.y - b.y }; }
+    __forceinline friend v2<T> operator* (v2<T> a, T num)   { return { a.x * num, a.y * num }; }
+    __forceinline friend v2<T> operator* (T num, v2<T> a)   { return { a.x * num, a.y * num }; }
+    __forceinline friend v2<T> operator/ (v2<T> a, T num)   { return { a.x / num, a.y / num }; }
+    __forceinline friend v2<T> operator- (v2<T> a)          { return { - a.x, - a.y }; }
 
-    friend void operator+=(vec2<T>& a, vec2<T> b) { a = a + b; }
-    friend void operator-=(vec2<T>& a, vec2<T> b) { a = a - b; }
-    friend void operator*=(vec2<T>& a, T num)     { a = a * num; }
-    friend void operator/=(vec2<T>& a, T num)     { a = a / num; }
+    __forceinline friend void operator+=(v2<T>& a, v2<T> b) { a = a + b; }
+    __forceinline friend void operator-=(v2<T>& a, v2<T> b) { a = a - b; }
+    __forceinline friend void operator*=(v2<T>& a, T num)   { a = a * num; }
+    __forceinline friend void operator/=(v2<T>& a, T num)   { a = a / num; }
+
+    friend T dot(v2<T> a, v2<T> b) { return a.x * b.x + a.y * b.y; }
 };
 
 template <typename T, i32 N>
@@ -170,6 +175,7 @@ struct static_slice {
 
     T* begin() { return ptr; }
     T* end()   { return ptr + Count_X * Count_Y * Count_Z; }
+
     __forceinline
     T& operator()(i32 x, i32 y = 0, i32 z = 0) {
         assert(x >= 0 && x < Count_X);
@@ -202,7 +208,7 @@ struct slice3 {
 template <typename T>
 struct slice2 {
     T* ptr;
-    vec2<i32> count;
+    v2<i32> count;
 
     i64 get_size() { return size_of(T) * count.x * count.y; }
     T* begin() { return ptr; }
@@ -247,6 +253,7 @@ struct slice {
 
     T* begin() { return ptr; }
     T* end()   { return ptr + count; }
+
     __forceinline
     T& operator()(i64 index) {
         assert(index >= 0 && index < count);

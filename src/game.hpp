@@ -5,7 +5,7 @@
 #include "tiles.hpp"
 
 namespace Game {
-	static constexpr vec2<i32> SCENE_DIM_TILES = { 17, 9 };
+	static constexpr v2<i32> SCENE_DIM_TILES = { 17, 9 };
 	static constexpr i32 SCENES_PER_SCREEN = 1;
 
 	struct Controller_Button {
@@ -18,18 +18,18 @@ namespace Game {
 		Controller_Button left_shoulder, right_shoulder;
 		Controller_Button move_up, move_down, move_left, move_right;
 		Controller_Button action_up, action_down, action_left, action_right;
-		vec2<f32> start;
-		vec2<f32> end;
-		vec2<f32> average;
-		vec2<f32> min;
-		vec2<f32> max;
+		v2<f32> start;
+		v2<f32> end;
+		v2<f32> average;
+		v2<f32> min;
+		v2<f32> max;
 		bool is_connected, is_analog;
 	};
 
 	struct Mouse {
 		Controller_Button left_button;
 		Controller_Button right_button;
-		vec2<i32> coord;
+		v2<i32> coord;
 	};
 
 	struct Input {
@@ -79,7 +79,7 @@ namespace Game {
 
 	struct Hero_Side_Bitmap {
 		slice2<u32> head, cape, torso;
-		vec2<i32> align;
+		v2<i32> align;
 	};
 
 	namespace Hero_Direction {
@@ -99,7 +99,7 @@ namespace Game {
 		Hero_Direction::Type hero_dir;
 		Tiles::Position camera_pos;
 		Tiles::Position hero_pos;
-		vec2<f32> d_hero_pos;
+		v2<f32> d_hero_pos;
 		f32 pixels_per_unit;
 		f32 sound_t_sin;
 	};
@@ -140,8 +140,8 @@ namespace Game {
 	using Get_Sound_Samples = decltype(get_sound_samples);
 
 	static slice2<u32> load_bmp(Thread& thread, Read_Entire_File* read_entire_file, cstr file_name);
-	static void draw_pixels(slice2<u32> dst, slice2<u32> src, vec2<f32> min_f32, vec2<i32> align = {0, 0});
-	static void draw_rectangle(slice2<u32> dst, Color color, vec2<f32> min_f32, vec2<f32> max_f32);
+	static void draw_pixels(slice2<u32> dst, slice2<u32> src, v2<f32> min_f32, v2<i32> align = {0, 0});
+	static void draw_rectangle(slice2<u32> dst, Color color, v2<f32> min_f32, v2<f32> max_f32);
 	static f32 get_pixels_per_unit(slice2<u32> screen);
 	static u32 get_hex_color(Color color);
 	

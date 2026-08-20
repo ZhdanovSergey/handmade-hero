@@ -29,12 +29,12 @@ namespace Tiles {
     };
 
 	struct Position {
-		vec2<i32> abs_xy;   // нижние CHUNK_LOOKUP_KEY_SHIFT бит это координаты ячейки внутри чанка, верхние биты это координаты чанка в мире
+		v2<i32> abs_xy;   // нижние CHUNK_LOOKUP_KEY_SHIFT бит это координаты ячейки внутри чанка, верхние биты это координаты чанка в мире
 		i32 abs_z;          // просто координата чанка в мире
-		vec2<f32> tile_rel;
+		v2<f32> tile_rel;
 
 		void normalize();
-		void tile_rel_add(vec2<f32> value) {
+		void tile_rel_add(v2<f32> value) {
 			tile_rel += value;
 			normalize();
 		};
@@ -52,7 +52,7 @@ namespace Tiles {
 
 	static Chunk* get_chunk(Map& map, i32 abs_x, i32 abs_y, i32 abs_z);
 	static Chunk_Lookup_Key get_chunk_lookup_key(i32 abs_x, i32 abs_y, i32 abs_z);
-	static vec2<i32> get_chunk_rel_position(i32 abs_x, i32 abs_y);
+	static v2<i32> get_chunk_rel_position(i32 abs_x, i32 abs_y);
 	
-	static vec2<f32> subtract_positions(Position& a, Position& b);
+	static v2<f32> subtract_positions(Position& a, Position& b);
 }

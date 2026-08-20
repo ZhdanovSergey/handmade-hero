@@ -19,7 +19,7 @@ namespace Tiles {
 		auto* chunk_ptr = get_chunk(map, abs_x, abs_y, abs_z);
 		if (!chunk_ptr || !chunk_ptr->tiles.ptr) return {};
 		
-		vec2<i32> chunk_rel_pos = get_chunk_rel_position(abs_x, abs_y);
+		v2<i32> chunk_rel_pos = get_chunk_rel_position(abs_x, abs_y);
 		return chunk_ptr->tiles(chunk_rel_pos.x, chunk_rel_pos.y);
 	};
 
@@ -37,7 +37,7 @@ namespace Tiles {
 				tile = Tiles::Tile::Floor;
 			}
 		}
-		vec2<i32> chunk_rel_pos = get_chunk_rel_position(abs_x, abs_y);
+		v2<i32> chunk_rel_pos = get_chunk_rel_position(abs_x, abs_y);
 		chunk.tiles(chunk_rel_pos.x, chunk_rel_pos.y) = value;
 	}
 
@@ -61,8 +61,8 @@ namespace Tiles {
 		return result;
 	}
 	
-	static vec2<i32> get_chunk_rel_position(i32 abs_x, i32 abs_y) {
-		vec2<i32> result = {};
+	static v2<i32> get_chunk_rel_position(i32 abs_x, i32 abs_y) {
+		v2<i32> result = {};
 		result.x = abs_x & CHUNK_REL_POSITION_MASK;
 		result.y = abs_y & CHUNK_REL_POSITION_MASK;
 		return result;
@@ -84,7 +84,7 @@ namespace Tiles {
 		assert((pos.tile_rel.y >= 0 && pos.tile_rel.y <= TILE_DIM));
 	}
 
-	static vec2<f32> subtract_positions(Position& a, Position& b) {
-		return cast<vec2<f32>>(a.abs_xy - b.abs_xy) * TILE_DIM + (a.tile_rel - b.tile_rel);
+	static v2<f32> subtract_positions(Position& a, Position& b) {
+		return cast<v2<f32>>(a.abs_xy - b.abs_xy) * TILE_DIM + (a.tile_rel - b.tile_rel);
 	}
 }

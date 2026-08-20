@@ -327,13 +327,10 @@ static Input create_input() {
 	input.XInputSetState = [](auto...){ return 1ul; };
 
 	HMODULE xinput_dll = LoadLibraryA("xinput1_3.dll");
-	assert(xinput_dll);
-	
 	if (xinput_dll) {
 		input.XInputGetState = cast<X_Input_Get_State*>(GetProcAddress(xinput_dll, "XInputGetState"));
 		input.XInputSetState = cast<X_Input_Set_State*>(GetProcAddress(xinput_dll, "XInputSetState"));
-	}
-	
+	}	
 	return input;
 }
 
