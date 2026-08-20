@@ -264,9 +264,9 @@ static Game::Memory create_game_memory() {
 	Game::Memory game_memory = {};
 	game_memory.permanent         = { game_storage,                  permanent_size };
 	game_memory.transient         = { game_storage + permanent_size, transient_size };
-	game_memory.read_entire_file  = Game::read_entire_file;
-	game_memory.write_entire_file = Game::write_entire_file;
-	game_memory.free_file_memory  = Game::free_file_memory;
+	game_memory.read_file  = Game::read_file;
+	game_memory.write_file = Game::write_file;
+	game_memory.free_file  = Game::free_file;
 	return game_memory;
 }
 
@@ -783,7 +783,7 @@ static void draw_sound_sync(Screen& screen, Sound& sound) {
 }
 
 namespace Game {
-	static slice<u8> read_entire_file(Thread& thread, cstr file_name) {
+	static slice<u8> read_file(Thread& thread, cstr file_name) {
 		slice<u8> result = {};
 
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
@@ -811,7 +811,7 @@ namespace Game {
 		return result;
 	}
 
-	static void write_entire_file(Thread& thread, cstr file_name, slice<u8> file) {
+	static void write_file(Thread& thread, cstr file_name, slice<u8> file) {
 		DWORD file_size_casted = cast<DWORD>(file.get_size());
 
 		HANDLE file_handle = CreateFileA(file_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
@@ -823,7 +823,7 @@ namespace Game {
 		assert(ok_write && bytes_written == file_size_casted);
 	}
 	
-	static void free_file_memory(Thread& thread, void*& memory) {
+	static void free_file(Thread& thread, void*& memory) {
 		defer(memory = nullptr);
 
 		HANDLE heap_handle = GetProcessHeap();

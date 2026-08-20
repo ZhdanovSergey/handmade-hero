@@ -205,8 +205,8 @@ namespace Game {
 		}
 	}
 
-	static slice2<u32> load_bmp(Thread& thread, Read_Entire_File* read_entire_file, cstr file_name) {
-		slice<u8> read_result = read_entire_file(thread, file_name);
+	static slice2<u32> load_bmp(Thread& thread, Read_File* read_file, cstr file_name) {
+		slice<u8> read_result = read_file(thread, file_name);
 		if (!read_result.ptr) return {};
 
 		auto& header = cast<Bmp_Header&>(*read_result.ptr);
@@ -329,26 +329,26 @@ namespace Game {
 		camera_pos.abs_z = hero_pos.abs_z;
 		camera_pos.tile_rel.x = Tiles::TILE_DIM / 2;
 
-		game_state.background_bitmap = load_bmp(thread, memory.read_entire_file, "test/test_background.bmp");
+		game_state.background_bitmap = load_bmp(thread, memory.read_file, "test/test_background.bmp");
 
-		game_state.hero_bitmaps(Hero_Direction::Front).head  = load_bmp(thread, memory.read_entire_file, "test/test_hero_front_head.bmp");
-		game_state.hero_bitmaps(Hero_Direction::Front).cape  = load_bmp(thread, memory.read_entire_file, "test/test_hero_front_cape.bmp");
-		game_state.hero_bitmaps(Hero_Direction::Front).torso = load_bmp(thread, memory.read_entire_file, "test/test_hero_front_torso.bmp");
+		game_state.hero_bitmaps(Hero_Direction::Front).head  = load_bmp(thread, memory.read_file, "test/test_hero_front_head.bmp");
+		game_state.hero_bitmaps(Hero_Direction::Front).cape  = load_bmp(thread, memory.read_file, "test/test_hero_front_cape.bmp");
+		game_state.hero_bitmaps(Hero_Direction::Front).torso = load_bmp(thread, memory.read_file, "test/test_hero_front_torso.bmp");
 		game_state.hero_bitmaps(Hero_Direction::Front).align = {72, 182};
 
-		game_state.hero_bitmaps(Hero_Direction::Back).head   = load_bmp(thread, memory.read_entire_file, "test/test_hero_back_head.bmp");
-		game_state.hero_bitmaps(Hero_Direction::Back).cape   = load_bmp(thread, memory.read_entire_file, "test/test_hero_back_cape.bmp");
-		game_state.hero_bitmaps(Hero_Direction::Back).torso  = load_bmp(thread, memory.read_entire_file, "test/test_hero_back_torso.bmp");
+		game_state.hero_bitmaps(Hero_Direction::Back).head   = load_bmp(thread, memory.read_file, "test/test_hero_back_head.bmp");
+		game_state.hero_bitmaps(Hero_Direction::Back).cape   = load_bmp(thread, memory.read_file, "test/test_hero_back_cape.bmp");
+		game_state.hero_bitmaps(Hero_Direction::Back).torso  = load_bmp(thread, memory.read_file, "test/test_hero_back_torso.bmp");
 		game_state.hero_bitmaps(Hero_Direction::Back).align  = {72, 182};
 
-		game_state.hero_bitmaps(Hero_Direction::Left).head   = load_bmp(thread, memory.read_entire_file, "test/test_hero_left_head.bmp");
-		game_state.hero_bitmaps(Hero_Direction::Left).cape   = load_bmp(thread, memory.read_entire_file, "test/test_hero_left_cape.bmp");
-		game_state.hero_bitmaps(Hero_Direction::Left).torso  = load_bmp(thread, memory.read_entire_file, "test/test_hero_left_torso.bmp");
+		game_state.hero_bitmaps(Hero_Direction::Left).head   = load_bmp(thread, memory.read_file, "test/test_hero_left_head.bmp");
+		game_state.hero_bitmaps(Hero_Direction::Left).cape   = load_bmp(thread, memory.read_file, "test/test_hero_left_cape.bmp");
+		game_state.hero_bitmaps(Hero_Direction::Left).torso  = load_bmp(thread, memory.read_file, "test/test_hero_left_torso.bmp");
 		game_state.hero_bitmaps(Hero_Direction::Left).align  = {72, 182};
 
-		game_state.hero_bitmaps(Hero_Direction::Right).head  = load_bmp(thread, memory.read_entire_file, "test/test_hero_right_head.bmp");
-		game_state.hero_bitmaps(Hero_Direction::Right).cape  = load_bmp(thread, memory.read_entire_file, "test/test_hero_right_cape.bmp");
-		game_state.hero_bitmaps(Hero_Direction::Right).torso = load_bmp(thread, memory.read_entire_file, "test/test_hero_right_torso.bmp");
+		game_state.hero_bitmaps(Hero_Direction::Right).head  = load_bmp(thread, memory.read_file, "test/test_hero_right_head.bmp");
+		game_state.hero_bitmaps(Hero_Direction::Right).cape  = load_bmp(thread, memory.read_file, "test/test_hero_right_cape.bmp");
+		game_state.hero_bitmaps(Hero_Direction::Right).torso = load_bmp(thread, memory.read_file, "test/test_hero_right_torso.bmp");
 		game_state.hero_bitmaps(Hero_Direction::Right).align = {72, 182};
 		
 		memory.is_initialized = true;

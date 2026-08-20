@@ -50,22 +50,22 @@ namespace Game {
 	
     struct Thread {};
 
-    static slice<u8> read_entire_file(Thread& thread, cstr file_name);
-    using Read_Entire_File = decltype(read_entire_file);
+    static slice<u8> read_file(Thread& thread, cstr file_name);
+    using Read_File = decltype(read_file);
 
-    static void write_entire_file(Thread& thread, cstr file_name, slice<u8> file);
-    using Write_Entire_File = decltype(write_entire_file);
+    static void write_file(Thread& thread, cstr file_name, slice<u8> file);
+    using Write_File = decltype(write_file);
 
-    static void free_file_memory(Thread& thread, void*& memory);
-    using Free_File_Memory = decltype(free_file_memory);
+    static void free_file(Thread& thread, void*& memory);
+    using Free_File = decltype(free_file);
 
 	struct Memory {
 		bool is_initialized;
 		slice<u8> permanent;
 		slice<u8> transient;
-    	Read_Entire_File* read_entire_file;
-    	Write_Entire_File* write_entire_file;
-    	Free_File_Memory* free_file_memory;
+    	Read_File* read_file;
+    	Write_File* write_file;
+    	Free_File* free_file;
 	};
 
 	struct Color {
@@ -139,7 +139,7 @@ namespace Game {
 	extern "C" void get_sound_samples(Thread& thread, Memory& memory, Sound& sound);
 	using Get_Sound_Samples = decltype(get_sound_samples);
 
-	static slice2<u32> load_bmp(Thread& thread, Read_Entire_File* read_entire_file, cstr file_name);
+	static slice2<u32> load_bmp(Thread& thread, Read_File* read_file, cstr file_name);
 	static void draw_pixels(slice2<u32> dst, slice2<u32> src, v2<f32> min_f32, v2<i32> align = {0, 0});
 	static void draw_rectangle(slice2<u32> dst, Color color, v2<f32> min_f32, v2<f32> max_f32);
 	static f32 get_pixels_per_unit(slice2<u32> screen);
